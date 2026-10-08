@@ -1,4 +1,14 @@
-const BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:3001/api';
+const HOSTED_API = 'https://spinner-be.onrender.com/api';
+
+function apiBase() {
+  const fromEnv = String(import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+  const hosted = typeof window !== 'undefined' && !/^(localhost|127\.0\.0\.1)$/.test(window.location.hostname);
+  if (hosted) return fromEnv && !/localhost|127\.0\.0\.1/.test(fromEnv) ? fromEnv : HOSTED_API;
+  return fromEnv || 'http://127.0.0.1:3001/api';
+}
+
+const BASE = apiBase();
+const API_ORIGIN = BASE.replace(/\/api\/?$/, '');
 
 export type Role = 'SuperAdmin' | 'BusinessAdmin' | 'Customer';
 export interface User {
@@ -18,7 +28,7 @@ export async function api<T = any>(path: string, options: RequestInit = {}): Pro
   const bearer = token();
   if (bearer) headers.set('Authorization', `Bearer ${bearer}`);
   const controller = !options.signal ? new AbortController() : null;
-  const timer = controller ? window.setTimeout(() => controller.abort(), 20_000) : undefined;
+  const timer = controller ? window.setTimeout(() => controller.abort(), 60_000) : undefined;
   try {
     const response = await fetch(`${BASE}${path}`, { ...options, headers, credentials: 'include', signal: options.signal || controller?.signal });
     const data = await response.json().catch(() => ({}));
@@ -37,7 +47,7 @@ export async function api<T = any>(path: string, options: RequestInit = {}): Pro
     }
     if (error instanceof TypeError) {
       const { toastErr } = await import('../lib/toast');
-      toastErr('Cannot reach the API. Is it running on 127.0.0.1:3001?');
+      toastErr('Cannot reach the API. If this is the first open, the server may still be waking up.');
     }
     throw error;
   } finally {
@@ -65,5 +75,5 @@ export const client = {
 export function asset(path?: string | null) {
   if (!path) return '';
   if (path.startsWith('http')) return path;
-  return `http://127.0.0.1:3001${path}`;
+  return `${API_ORIGIN}${path.startsWith('/') ? path : `/${path}`}`;
 }
