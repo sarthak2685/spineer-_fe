@@ -289,9 +289,9 @@ export function RegisterPage() {
   ];
   return (
     <Marketing>
-      <section className="relative overflow-hidden px-5 py-12 lg:py-16">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(720px_320px_at_15%_0%,rgba(234,88,12,.18),transparent_55%),radial-gradient(520px_280px_at_90%_20%,rgba(245,158,11,.14),transparent_50%)]" />
-        <div className="relative mx-auto grid max-w-6xl gap-10 lg:grid-cols-[1.08fr_0.92fr] lg:items-stretch">
+      <section className="relative overflow-hidden px-5 py-10 lg:py-14">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(720px_320px_at_50%_0%,rgba(234,88,12,.16),transparent_55%)]" />
+        <div className="relative mx-auto max-w-3xl">
           <Lift className="rounded-[28px] border border-stone-200 bg-white/95 p-6 shadow-xl shadow-stone-950/10 sm:p-8">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-orange-600">For shop owners</p>
             <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight text-stone-950 sm:text-4xl">Create your business</h1>
@@ -369,23 +369,6 @@ export function RegisterPage() {
             <p className="mt-6 text-sm text-stone-500">Already have a shop? <Link className="font-semibold text-orange-600" to="/login">Sign in</Link></p>
           </div>
           </Lift>
-          <Rise className="flex flex-col justify-center rounded-[28px] border border-orange-200/80 bg-gradient-to-br from-orange-50 via-white to-amber-50 p-7 sm:p-9">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-orange-600">RewardSpinner</p>
-            <h2 className="mt-3 font-display text-3xl font-semibold leading-tight tracking-tight text-stone-950 sm:text-4xl">Open your shop from one counter QR.</h2>
-            <p className="mt-3 max-w-lg text-sm leading-relaxed text-stone-600 sm:text-base">Three short steps. The poster link stays the same after you print it.</p>
-            <ul className="mt-8 space-y-5">
-              {shopPoints.map((point, index) => (
-                <li key={point.title} className="flex gap-4">
-                  <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-orange-600 text-xs font-bold text-white">{String(index + 1).padStart(2, '0')}</span>
-                  <span>
-                    <span className="block text-sm font-semibold text-stone-950">{point.title}</span>
-                    <span className="mt-1 block text-sm leading-relaxed text-stone-600">{point.text}</span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-            <p className="mt-8 text-sm text-stone-500">Already a guest? <Link className="font-semibold text-orange-600" to="/customer-register">Create a customer account</Link></p>
-          </Rise>
         </div>
       </section>
     </Marketing>

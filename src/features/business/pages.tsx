@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, asset } from '../../api/client';
 import { ListToolbar, Pager, usePagedQuery } from '../../components/list';
-import { ActionIcon, Alert, Button, Card, Field, Form, IconButton, Modal, PageTitle, Quick, Select, Stat, Status, Area, Table } from '../../components/ui';
+import { ActionIcon, Alert, Button, Card, Field, Form, Modal, PageTitle, Quick, RowMenu, Select, Stat, Status, Area, Table } from '../../components/ui';
 import { toastOk } from '../../lib/toast';
 
 function Frame({ children }: { children: React.ReactNode }) {
@@ -72,10 +72,7 @@ export function CustomersPage() {
       { key: 'totalcoins', label: 'Coins' },
       { key: 'email', label: 'Email' },
       { key: 'createddate', label: 'Joined', render: (row) => String(row.createddate || '').slice(0, 10) },
-      { key: 'actions', label: '', render: (row) => <>
-        <IconButton kind="soft" label="Edit" onClick={() => openEdit(row)}><ActionIcon name="edit" /></IconButton>
-        <IconButton kind="ghost" label="Delete" onClick={() => remove(row)}><ActionIcon name="trash" /></IconButton>
-      </> },
+      { key: 'actions', label: '', render: (row) => <RowMenu items={[{ label: 'Edit', onClick: () => openEdit(row) }, { label: 'Delete', danger: true, onClick: () => remove(row) }]} /> },
     ]} />
     <Pager page={list.page} pageSize={list.pageSize} total={list.total} onPage={list.setPage} />
     {open && (
@@ -131,7 +128,7 @@ export function RewardsAdminPage() {
     const form = Object.fromEntries(new FormData(event.currentTarget).entries());
     try { await api('/business/rewards', { method: 'POST', body: JSON.stringify(form) }); setEditing(null); setError(''); toastOk(editing ? 'Reward updated.' : 'Reward added.'); load(); } catch (err) { setError(err instanceof Error ? err.message : 'Save failed.'); }
   }
-  return <Frame><PageTitle title="Rewards" text="Add one here. Click a row to edit it." /><Form key={editing?.rewardid || 'new'} className="mb-5 grid gap-3 rounded-2xl border border-stone-200 bg-white p-5 shadow-sm md:grid-cols-2" onSubmit={onSubmit}>{editing && <input type="hidden" name="id" value={editing.rewardid} />}<Field label="Reward name" name="rewardName" defaultValue={editing?.rewardname} required /><Field label="Coins required" name="coinsRequired" defaultValue={editing?.coinsrequired} required /><div className="md:col-span-2"><Area label="Description" name="description" defaultValue={editing?.description} /></div><div className="flex items-center gap-2"><Button type="submit">{editing ? 'Update reward' : 'Add reward'}</Button>{error && <Alert text={error} />}</div></Form><Table rows={rows} columns={[{ key: 'rewardname', label: 'Reward', render: (row) => <button type="button" className="font-medium text-orange-600" onClick={() => setEditing(row)}>{row.rewardname}</button> }, { key: 'coinsrequired', label: 'Coins' }, { key: 'description', label: 'Description' }, { key: 'actions', label: '', render: (row) => <IconButton kind="ghost" label="Remove" onClick={() => api(`/business/rewards/${row.rewardid}/delete`, { method: 'POST' }).then(load)}><ActionIcon name="trash" /></IconButton> }]} /></Frame>;
+  return <Frame><PageTitle title="Rewards" text="Add one here. Click a row to edit it." /><Form key={editing?.rewardid || 'new'} className="mb-5 grid gap-3 rounded-2xl border border-stone-200 bg-white p-5 shadow-sm md:grid-cols-2" onSubmit={onSubmit}>{editing && <input type="hidden" name="id" value={editing.rewardid} />}<Field label="Reward name" name="rewardName" defaultValue={editing?.rewardname} required /><Field label="Coins required" name="coinsRequired" defaultValue={editing?.coinsrequired} required /><div className="md:col-span-2"><Area label="Description" name="description" defaultValue={editing?.description} /></div><div className="flex items-center gap-2"><Button type="submit">{editing ? 'Update reward' : 'Add reward'}</Button>{error && <Alert text={error} />}</div></Form><Table rows={rows} columns={[{ key: 'rewardname', label: 'Reward', render: (row) => <button type="button" className="font-medium text-orange-600" onClick={() => setEditing(row)}>{row.rewardname}</button> }, { key: 'coinsrequired', label: 'Coins' }, { key: 'description', label: 'Description' }, { key: 'actions', label: '', render: (row) => <RowMenu items={[{ label: 'Remove', danger: true, onClick: () => api(`/business/rewards/${row.rewardid}/delete`, { method: 'POST' }).then(load) }]} /> }]} /></Frame>;
 }
 export function RedemptionsPage() {
   const list = usePagedQuery<any>('/business/redemptions');
@@ -142,10 +139,10 @@ export function RedemptionsPage() {
       { key: 'rewardname', label: 'Reward' },
       { key: 'customername', label: 'Customer' },
       { key: 'status', label: 'Status', render: (row) => <Status value={row.status} /> },
-      { key: 'actions', label: '', render: (row) => <>
-        <IconButton label="Approve" onClick={() => api(`/business/redemptions/${row.rewardredemptionid}`, { method: 'POST', body: JSON.stringify({ status: 'Approved' }) }).then(() => { toastOk('Approved.'); list.reload(); })}><ActionIcon name="check" /></IconButton>
-        <IconButton kind="ghost" label="Reject" onClick={() => api(`/business/redemptions/${row.rewardredemptionid}`, { method: 'POST', body: JSON.stringify({ status: 'Rejected' }) }).then(() => { toastOk('Rejected.'); list.reload(); })}><ActionIcon name="close" /></IconButton>
-      </> },
+      { key: 'actions', label: '', render: (row) => <RowMenu items={[
+        { label: 'Approve', onClick: () => api(`/business/redemptions/${row.rewardredemptionid}`, { method: 'POST', body: JSON.stringify({ status: 'Approved' }) }).then(() => { toastOk('Approved.'); list.reload(); }) },
+        { label: 'Reject', danger: true, onClick: () => api(`/business/redemptions/${row.rewardredemptionid}`, { method: 'POST', body: JSON.stringify({ status: 'Rejected' }) }).then(() => { toastOk('Rejected.'); list.reload(); }) },
+      ]} /> },
     ]} />
     <Pager page={list.page} pageSize={list.pageSize} total={list.total} onPage={list.setPage} />
   </Frame>;
@@ -160,10 +157,10 @@ export function BusinessClaimsPage() {
       { key: 'purchaseamount', label: 'Amount', render: (row) => `₹${row.purchaseamount}` },
       { key: 'coins', label: 'Coins' },
       { key: 'status', label: 'Status', render: (row) => <Status value={row.status} /> },
-      { key: 'actions', label: '', render: (row) => row.status === 'Pending' ? <>
-        <IconButton label="Approve" onClick={() => api(`/business/claims/${row.purchaseclaimid}`, { method: 'POST', body: JSON.stringify({ action: 'approve' }) }).then(() => { toastOk('Claim approved.'); list.reload(); })}><ActionIcon name="check" /></IconButton>
-        <IconButton kind="danger" label="Reject" onClick={() => api(`/business/claims/${row.purchaseclaimid}`, { method: 'POST', body: JSON.stringify({ action: 'reject', reason: 'Not accepted' }) }).then(() => { toastOk('Claim rejected.'); list.reload(); })}><ActionIcon name="close" /></IconButton>
-      </> : null },
+      { key: 'actions', label: '', render: (row) => row.status === 'Pending' ? <RowMenu items={[
+        { label: 'Approve', onClick: () => api(`/business/claims/${row.purchaseclaimid}`, { method: 'POST', body: JSON.stringify({ action: 'approve' }) }).then(() => { toastOk('Claim approved.'); list.reload(); }) },
+        { label: 'Reject', danger: true, onClick: () => api(`/business/claims/${row.purchaseclaimid}`, { method: 'POST', body: JSON.stringify({ action: 'reject', reason: 'Not accepted' }) }).then(() => { toastOk('Claim rejected.'); list.reload(); }) },
+      ]} /> : null },
     ]} />
     <Pager page={list.page} pageSize={list.pageSize} total={list.total} onPage={list.setPage} />
   </Frame>;
@@ -240,7 +237,7 @@ function CategoryPanel({ onChange }: { onChange: () => void }) {
   const [editing, setEditing] = useState<any>(null);
   function load() { api<any[]>('/business/menu/categories').then(setRows); }
   useEffect(load, []);
-  return <Card><p className="mb-2 text-sm font-semibold">Categories</p><Form key={editing?.categoryid || 'new'} className="mb-3 grid gap-2" onSubmit={(e) => { e.preventDefault(); return api('/business/menu/categories', { method: 'POST', body: JSON.stringify(Object.fromEntries(new FormData(e.currentTarget).entries())) }).then(() => { setEditing(null); toastOk(editing ? 'Category updated.' : 'Category added.'); load(); onChange(); }); }}>{editing && <input type="hidden" name="id" value={editing.categoryid} />}<Field label="Name" name="categoryName" defaultValue={editing?.categoryname} required /><div className="flex items-end gap-2"><Field label="Order" name="displayOrder" defaultValue={editing?.displayorder ?? 0} /><Button type="submit">{editing ? 'Update' : 'Add'}</Button></div></Form><Table rows={rows} columns={[{ key: 'categoryname', label: 'Category', render: (row) => <button type="button" className="font-medium text-orange-600" onClick={() => setEditing(row)}>{row.categoryname}</button> }, { key: 'displayorder', label: 'Order' }, { key: 'actions', label: '', render: (row) => <IconButton kind="ghost" label="Delete" onClick={() => api(`/business/menu/categories/${row.categoryid}/delete`, { method: 'POST' }).then(() => { toastOk('Category removed.'); load(); })}><ActionIcon name="trash" /></IconButton> }]} /></Card>;
+  return <Card><p className="mb-2 text-sm font-semibold">Categories</p><Form key={editing?.categoryid || 'new'} className="mb-3 grid gap-2" onSubmit={(e) => { e.preventDefault(); return api('/business/menu/categories', { method: 'POST', body: JSON.stringify(Object.fromEntries(new FormData(e.currentTarget).entries())) }).then(() => { setEditing(null); toastOk(editing ? 'Category updated.' : 'Category added.'); load(); onChange(); }); }}>{editing && <input type="hidden" name="id" value={editing.categoryid} />}<Field label="Name" name="categoryName" defaultValue={editing?.categoryname} required /><div className="flex items-end gap-2"><Field label="Order" name="displayOrder" defaultValue={editing?.displayorder ?? 0} /><Button type="submit">{editing ? 'Update' : 'Add'}</Button></div></Form><Table rows={rows} columns={[{ key: 'categoryname', label: 'Category', render: (row) => <button type="button" className="font-medium text-orange-600" onClick={() => setEditing(row)}>{row.categoryname}</button> }, { key: 'displayorder', label: 'Order' }, { key: 'actions', label: '', render: (row) => <RowMenu items={[{ label: 'Delete', danger: true, onClick: () => api(`/business/menu/categories/${row.categoryid}/delete`, { method: 'POST' }).then(() => { toastOk('Category removed.'); load(); }) }]} /> }]} /></Card>;
 }
 export function ItemsPage() { return <MenuStudio />; }
 function ItemPanel({ tick }: { tick: number }) {
@@ -295,7 +292,7 @@ function ItemPanel({ tick }: { tick: number }) {
         </button>
       ) },
       { key: 'price', label: 'Price', render: (row) => `₹${row.price}` },
-      { key: 'actions', label: '', render: (row) => <IconButton kind="ghost" label="Delete" onClick={() => api(`/business/menu/items/${row.itemid}/delete`, { method: 'POST' }).then(() => { toastOk('Item removed.'); load(); })}><ActionIcon name="trash" /></IconButton> },
+      { key: 'actions', label: '', render: (row) => <RowMenu items={[{ label: 'Delete', danger: true, onClick: () => api(`/business/menu/items/${row.itemid}/delete`, { method: 'POST' }).then(() => { toastOk('Item removed.'); load(); }) }]} /> },
     ]} />
   </Card>;
 }
@@ -325,7 +322,7 @@ export function OrdersPage() {
       { key: 'tablenumber', label: 'Station' },
       { key: 'totalamount', label: 'Total', render: (row) => `₹${Number(row.totalamount || 0).toFixed(2)}` },
       { key: 'status', label: 'Status', render: (row) => <Status value={row.status} /> },
-      { key: 'actions', label: '', render: (row) => <>{(orderActions[row.status] || []).map(([command, label, kind, icon]) => <IconButton key={command} kind={kind} label={label} onClick={() => act(row.orderid, command)}><ActionIcon name={icon} /></IconButton>)}</> },
+      { key: 'actions', label: '', render: (row) => <RowMenu items={(orderActions[row.status] || []).map(([command, label, kind]) => ({ label, danger: kind === 'danger', onClick: () => act(row.orderid, command) }))} /> },
     ]} />
     <Pager page={list.page} pageSize={list.pageSize} total={list.total} onPage={list.setPage} />
   </Frame>;
@@ -374,7 +371,7 @@ export function BusinessReviewsPage() {
     <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">Public reviews</h2>
     <Table empty="No guest reviews yet." rows={reviews} columns={[{ key: 'customername', label: 'Guest' }, { key: 'rating', label: 'Stars' }, { key: 'body', label: 'Review' }]} />
     <h2 className="mb-3 mt-8 text-sm font-semibold uppercase tracking-wider text-stone-400">Private feedback</h2>
-    <Table empty="No private feedback yet." rows={feedback} columns={[{ key: 'customername', label: 'Guest' }, { key: 'rating', label: 'Stars' }, { key: 'message', label: 'Message' }, { key: 'status', label: 'Status', render: (row) => <Status value={row.status === 'resolved' ? 'Completed' : row.status === 'read' ? 'Accepted' : 'Pending'} /> }, { key: 'actions', label: '', render: (row) => <IconButton kind="ghost" label={row.status === 'resolved' ? 'Reopen' : 'Resolve'} onClick={() => api(`/business/guest-feedback/${row.feedbackid}`, { method: 'POST', body: JSON.stringify({ status: row.status === 'resolved' ? 'read' : 'resolved' }) }).then(load)}><ActionIcon name={row.status === 'resolved' ? 'play' : 'check'} /></IconButton> }]} />
+    <Table empty="No private feedback yet." rows={feedback} columns={[{ key: 'customername', label: 'Guest' }, { key: 'rating', label: 'Stars' }, { key: 'message', label: 'Message' }, { key: 'status', label: 'Status', render: (row) => <Status value={row.status === 'resolved' ? 'Completed' : row.status === 'read' ? 'Accepted' : 'Pending'} /> }, { key: 'actions', label: '', render: (row) => <RowMenu items={[{ label: row.status === 'resolved' ? 'Reopen' : 'Resolve', onClick: () => api(`/business/guest-feedback/${row.feedbackid}`, { method: 'POST', body: JSON.stringify({ status: row.status === 'resolved' ? 'read' : 'resolved' }) }).then(load) }]} /> }]} />
   </Frame>;
 }
 

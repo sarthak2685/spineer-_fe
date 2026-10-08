@@ -235,7 +235,7 @@ export function SuperTypes() {
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-orange-600">{editing ? 'Edit type' : 'New type'}</p>
                 <h2 className="mt-1 font-display text-xl font-semibold tracking-tight">{editing ? `Edit ${editing.typename}` : 'Add type'}</h2>
               </div>
-              <button type="button" onClick={close} aria-label="Close" className="grid h-9 w-9 place-items-center rounded-full bg-stone-100 text-stone-600 hover:bg-stone-200"><ActionIcon name="close" /></button>
+              <button type="button" onClick={close} aria-label="Close" className="grid h-9 w-9 place-items-center rounded-full bg-stone-100 text-lg text-stone-600 hover:bg-stone-200">×</button>
             </div>
             <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
               <div className="rounded-2xl border border-orange-100 bg-orange-50 p-4">
