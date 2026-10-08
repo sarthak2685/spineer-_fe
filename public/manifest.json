@@ -1,0 +1,14 @@
+{
+  "name": "RewardSpinner - Scan, Play & Earn",
+  "short_name": "RewardSpinner",
+  "description": "Engage customers with interactive preview games, digital menus, rewards, and reviews.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#fff7ed",
+  "theme_color": "#ea580c",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

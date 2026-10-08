@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root { @apply min-h-full bg-orange-50 text-stone-950; }
+
+@keyframes public-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes public-sheet-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: none; }
+}
+
+.public-enter { animation: public-rise 280ms ease-out both; }
+.public-sheet { animation: public-sheet-up 220ms ease-out both; }
+
+.public-card,
+.public-enter a,
+.public-enter button {
+  transition: color 200ms ease, background-color 200ms ease, border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .public-enter,
+  .public-sheet { animation: none; }
+  .public-card,
+  .public-enter a,
+  .public-enter button { transition: none; }
+  .public-enter .animate-pulse { animation: none; }
+}
