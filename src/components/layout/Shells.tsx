@@ -126,37 +126,65 @@ export function Workspace({ groups, children, title, mobile, variant = 'default'
     .sort((a, b) => b.to.length - a.to.length)[0];
   const heading = meta?.title || current?.label || 'RewardSpinner';
   const name = accountName(auth.user?.name);
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => { setMenuOpen(false); }, [location.pathname]);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previous; };
+  }, [menuOpen]);
+  function Sidebar() {
+    return (
+    <>
+      <div className="flex items-center justify-between px-5 pb-2 pt-6">
+        <Brand />
+        <button type="button" className="grid h-10 w-10 place-items-center rounded-full border border-stone-200 text-stone-600 lg:hidden" aria-label="Close menu" onClick={() => setMenuOpen(false)}>
+          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M6 6l12 12M18 6L6 18" /></svg>
+        </button>
+      </div>
+      <nav className="mt-4 min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain px-3 pb-4">
+        {groups.map((group) => (
+          <div key={group.heading}>
+            <p className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-stone-400">{group.heading}</p>
+            <div className="space-y-0.5">
+              {group.items.map((item) => (
+                <NavLink key={item.to} to={item.to} end={!item.match} onClick={() => setMenuOpen(false)} className={({ isActive }) => {
+                  const active = item.match ? location.pathname.startsWith(item.match) : isActive;
+                  const on = platform ? 'bg-orange-100 text-orange-700' : 'bg-white text-orange-700 shadow-sm';
+                  const off = platform ? 'text-stone-600 hover:bg-orange-50 hover:text-stone-950' : 'text-stone-600 hover:bg-stone-200/80 hover:text-stone-950';
+                  return `flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium transition ${active ? on : off}`;
+                }}>
+                  {platform && <NavGlyph name={platformIcon(item.to)} />}
+                  {item.label}
+                </NavLink>
+              ))}
+            </div>
+          </div>
+        ))}
+      </nav>
+      <div className={`mt-auto border-t border-stone-200 px-4 py-4 ${platform ? 'bg-white' : 'bg-stone-100'}`}>
+        <p className="truncate text-sm font-semibold text-stone-950">{name}</p>
+        <p className="text-xs text-stone-500">{roleLabel(auth.user?.role, title)}</p>
+        <button className="mt-3 text-sm font-medium text-stone-500 transition hover:text-orange-600" onClick={() => auth.clear().then(() => navigate('/login'))}>Sign out</button>
+      </div>
+    </>
+    );
+  }
   return (
     <PageMetaContext.Provider value={setMeta}>
       <div className={`min-h-screen bg-orange-50 lg:grid ${platform ? 'lg:grid-cols-[240px_1fr]' : 'lg:grid-cols-[248px_1fr]'}`}>
-        <aside className={`sticky top-0 hidden h-screen flex-col border-r border-stone-200 lg:flex ${platform ? 'bg-white' : 'bg-stone-100'}`}>
-          <div className="px-5 pb-2 pt-6"><Brand /></div>
-          <nav className="mt-4 flex-1 space-y-6 overflow-y-auto px-3 pb-4">
-            {groups.map((group) => (
-              <div key={group.heading}>
-                <p className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-stone-400">{group.heading}</p>
-                <div className="space-y-0.5">
-                  {group.items.map((item) => (
-                    <NavLink key={item.to} to={item.to} end={!item.match} className={({ isActive }) => {
-                      const active = item.match ? location.pathname.startsWith(item.match) : isActive;
-                      const on = platform ? 'bg-orange-100 text-orange-700' : 'bg-white text-orange-700 shadow-sm';
-                      const off = platform ? 'text-stone-600 hover:bg-orange-50 hover:text-stone-950' : 'text-stone-600 hover:bg-stone-200/80 hover:text-stone-950';
-                      return `flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition ${active ? on : off}`;
-                    }}>
-                      {platform && <NavGlyph name={platformIcon(item.to)} />}
-                      {item.label}
-                    </NavLink>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </nav>
-          <div className={`sticky bottom-0 mt-auto border-t border-stone-200 px-4 py-4 ${platform ? 'bg-white' : 'bg-stone-100'}`}>
-            <p className="truncate text-sm font-semibold text-stone-950">{name}</p>
-            <p className="text-xs text-stone-500">{roleLabel(auth.user?.role, title)}</p>
-            <button className="mt-3 text-sm font-medium text-stone-500 transition hover:text-orange-600" onClick={() => auth.clear().then(() => navigate('/login'))}>Sign out</button>
-          </div>
+        <aside className={`sticky top-0 hidden h-dvh min-h-0 flex-col border-r border-stone-200 lg:flex ${platform ? 'bg-white' : 'bg-stone-100'}`}>
+          <Sidebar />
         </aside>
+        {menuOpen && (
+          <div className="fixed inset-0 z-40 lg:hidden">
+            <button type="button" className="absolute inset-0 bg-stone-950/40" aria-label="Close menu" onClick={() => setMenuOpen(false)} />
+            <aside className={`relative flex h-dvh w-[min(20rem,88vw)] flex-col shadow-2xl ${platform ? 'bg-white' : 'bg-stone-100'}`}>
+              <Sidebar />
+            </aside>
+          </div>
+        )}
         <div className="min-w-0">
           <header className={`sticky top-0 z-20 border-b border-stone-200 px-4 backdrop-blur sm:px-6 ${platform ? 'bg-white py-3' : 'bg-stone-100/95 py-4 sm:px-8'}`}>
             <div className="flex items-center justify-between gap-4">
@@ -167,6 +195,9 @@ export function Workspace({ groups, children, title, mobile, variant = 'default'
                 {meta?.text && <p className={`mt-0.5 max-w-2xl text-sm ${meta.gold ? 'font-semibold text-amber-500' : 'text-stone-500'}`}>{meta.text}</p>}
               </div>
               <div className="flex shrink-0 items-center gap-2">
+                <button type="button" className="grid h-10 w-10 place-items-center rounded-full border border-stone-300 bg-white text-stone-700 lg:hidden" aria-label="Open menu" onClick={() => setMenuOpen(true)}>
+                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+                </button>
                 {meta?.actions}
                 {platform && (
                   <div className="hidden items-center gap-2 rounded-full bg-orange-50 py-1 pl-1 pr-3 sm:flex">
@@ -208,38 +239,16 @@ export const businessNav = businessGroups.flatMap((group) => group.items);
 export const customerNav = customerGroups.flatMap((group) => group.items);
 export const superNav = superGroups.flatMap((group) => group.items);
 
-export const businessMobile: NavItem[] = [
-  { to: '/business/dashboard', label: 'Home' },
-  { to: '/business/customers', label: 'Guests' },
-  { to: '/business/menu', label: 'Menu' },
-  { to: '/business/menu/orders', label: 'Orders' },
-  { to: '/business/rewards', label: 'Rewards' },
-];
-
-export const customerMobile: NavItem[] = [
-  { to: '/customer/dashboard', label: 'Home' },
-  { to: '/customer/explore', label: 'Menu' },
-  { to: '/customer/my-orders', label: 'Orders' },
-  { to: '/customer/wallet', label: 'Wallet' },
-  { to: '/customer/notifications', label: 'Alerts' },
-];
-
 export function StoreShell() {
-  return <Workspace groups={businessGroups} title="Store" mobile={businessMobile} />;
+  return <Workspace groups={businessGroups} title="Store" />;
 }
 
 export function WalletShell() {
-  return <Workspace groups={customerGroups} title="Wallet" mobile={customerMobile} />;
+  return <Workspace groups={customerGroups} title="Wallet" />;
 }
 
-export const superMobile: NavItem[] = [
-  { to: '/super/dashboard', label: 'Overview' },
-  { to: '/super/businesses', label: 'Businesses' },
-  { to: '/super/business-types', label: 'Types' },
-];
-
 export function PlatformShell() {
-  return <Workspace groups={superGroups} title="Platform" mobile={superMobile} variant="platform" />;
+  return <Workspace groups={superGroups} title="Platform" variant="platform" />;
 }
 
 export function GuestShell({ children, color = '#ea580c', name }: { children: ReactNode; color?: string; name?: string }) {
@@ -272,8 +281,8 @@ export function GuestShell({ children, color = '#ea580c', name }: { children: Re
 
 export function MobileBar({ items }: { items: NavItem[] }) {
   return (
-    <nav className={`fixed inset-x-0 bottom-0 z-20 grid border-t border-stone-200 bg-white/95 px-1 py-2 backdrop-blur lg:hidden ${items.length <= 3 ? 'grid-cols-3' : items.length === 4 ? 'grid-cols-4' : 'grid-cols-5'}`}>
-      {items.slice(0, 5).map((item) => <NavLink key={item.to} to={item.to} className={({ isActive }) => `truncate px-1 text-center text-[11px] font-medium ${isActive ? 'text-orange-600' : 'text-stone-500'}`}>{item.label}</NavLink>)}
+    <nav className="fixed inset-x-0 bottom-0 z-20 flex gap-1 overflow-x-auto overscroll-contain border-t border-stone-200 bg-white/95 px-2 py-2 backdrop-blur lg:hidden">
+      {items.map((item) => <NavLink key={item.to} to={item.to} className={({ isActive }) => `shrink-0 rounded-full px-3 py-2 text-center text-xs font-semibold ${isActive ? 'bg-orange-600 text-white' : 'text-stone-500'}`}>{item.label}</NavLink>)}
     </nav>
   );
 }
