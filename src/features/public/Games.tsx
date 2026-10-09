@@ -1,25 +1,26 @@
 import { useEffect, useRef, useState } from 'react';
 
 export type PrizeSlice = { name: string; coins: number };
-export type PlayResult = { prizeName: string; coins: number; segmentIndex: number };
+export type PlayResult = { prizeName: string; coins: number; segmentIndex: number; prizes?: PrizeSlice[] };
 
 const colors = ['#2563eb', '#f59e0b', '#7c3aed', '#06b6d4', '#ef4444', '#22c55e', '#f97316', '#e11d48'];
 
 export function GameStage({
-  game, prizes, busy, onPlay,
+  game, prizes, busy, onPlay, onReveal,
 }: {
   game: string;
   prizes: PrizeSlice[];
   busy: boolean;
   onPlay: () => Promise<PlayResult>;
+  onReveal: (result: PlayResult) => void;
 }) {
-  if (game === 'ScratchCard') return <Scratch busy={busy} onPlay={onPlay} />;
-  if (game === 'MysteryGiftBox') return <Gift busy={busy} onPlay={onPlay} />;
-  if (game === 'SlotMachine') return <Slots busy={busy} onPlay={onPlay} />;
-  return <Wheel prizes={prizes} busy={busy} onPlay={onPlay} />;
+  if (game === 'ScratchCard') return <Scratch busy={busy} onPlay={onPlay} onReveal={onReveal} />;
+  if (game === 'MysteryGiftBox') return <Gift busy={busy} onPlay={onPlay} onReveal={onReveal} />;
+  if (game === 'SlotMachine') return <Slots busy={busy} onPlay={onPlay} onReveal={onReveal} />;
+  return <Wheel prizes={prizes} busy={busy} onPlay={onPlay} onReveal={onReveal} />;
 }
 
-function Wheel({ prizes, busy, onPlay }: { prizes: PrizeSlice[]; busy: boolean; onPlay: () => Promise<PlayResult> }) {
+function Wheel({ prizes, busy, onPlay, onReveal }: { prizes: PrizeSlice[]; busy: boolean; onPlay: () => Promise<PlayResult>; onReveal: (result: PlayResult) => void }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const [turn, setTurn] = useState(0);
   const [locked, setLocked] = useState(false);
@@ -68,9 +69,17 @@ function Wheel({ prizes, busy, onPlay }: { prizes: PrizeSlice[]; busy: boolean; 
     setLocked(true);
     try {
       const result = await onPlay();
-      const arc = 360 / slices.length;
-      setTurn((current) => current + 360 * 6 + (360 - ((result.segmentIndex % slices.length) * arc + arc / 2)));
-      window.setTimeout(() => setLocked(false), 4300);
+      const board = result.prizes?.length ? result.prizes : slices;
+      const arc = 360 / board.length;
+      const index = result.segmentIndex % board.length;
+      const target = (360 - (index * arc + arc / 2) + 360) % 360;
+      setTurn((current) => {
+        const normalized = ((current % 360) + 360) % 360;
+        let delta = target - normalized;
+        if (delta < 1) delta += 360;
+        return current + 360 * 5 + delta;
+      });
+      window.setTimeout(() => { setLocked(false); onReveal(result); }, 4200);
     } catch { setLocked(false); }
   }
 
@@ -87,10 +96,13 @@ function Wheel({ prizes, busy, onPlay }: { prizes: PrizeSlice[]; busy: boolean; 
   );
 }
 
-function Scratch({ busy, onPlay }: { busy: boolean; onPlay: () => Promise<PlayResult> }) {
+function Scratch({ busy, onPlay, onReveal }: { busy: boolean; onPlay: () => Promise<PlayResult>; onReveal: (result: PlayResult) => void }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const [prize, setPrize] = useState<PlayResult | null>(null);
   const started = useRef(false);
+  const revealed = useRef(false);
+  const strokes = useRef(0);
+  const held = useRef<PlayResult | null>(null);
   useEffect(() => { paint(); }, []);
 
   function paint() {
@@ -118,6 +130,7 @@ function Scratch({ busy, onPlay }: { busy: boolean; onPlay: () => Promise<PlayRe
       try {
         const result = await onPlay();
         started.current = true;
+        held.current = result;
         setPrize(result);
       } catch {
         return;
@@ -130,6 +143,11 @@ function Scratch({ busy, onPlay }: { busy: boolean; onPlay: () => Promise<PlayRe
     ctx.beginPath();
     ctx.arc(x, y, 22, 0, Math.PI * 2);
     ctx.fill();
+    strokes.current += 1;
+    if (!revealed.current && strokes.current >= 8 && held.current) {
+      revealed.current = true;
+      onReveal(held.current);
+    }
   }
 
   return (
@@ -146,7 +164,7 @@ function Scratch({ busy, onPlay }: { busy: boolean; onPlay: () => Promise<PlayRe
   );
 }
 
-function Gift({ busy, onPlay }: { busy: boolean; onPlay: () => Promise<PlayResult> }) {
+function Gift({ busy, onPlay, onReveal }: { busy: boolean; onPlay: () => Promise<PlayResult>; onReveal: (result: PlayResult) => void }) {
   const [open, setOpen] = useState<number | null>(null);
   const [prize, setPrize] = useState<PlayResult | null>(null);
   async function choose(index: number) {
@@ -155,6 +173,7 @@ function Gift({ busy, onPlay }: { busy: boolean; onPlay: () => Promise<PlayResul
       const result = await onPlay();
       setOpen(index);
       setPrize(result);
+      window.setTimeout(() => onReveal(result), 700);
     } catch { /* the page shows the error and the boxes stay closed */ }
   }
   return (
@@ -174,7 +193,7 @@ function Gift({ busy, onPlay }: { busy: boolean; onPlay: () => Promise<PlayResul
   );
 }
 
-function Slots({ busy, onPlay }: { busy: boolean; onPlay: () => Promise<PlayResult> }) {
+function Slots({ busy, onPlay, onReveal }: { busy: boolean; onPlay: () => Promise<PlayResult>; onReveal: (result: PlayResult) => void }) {
   const symbols = ['7', '★', '◆', '●'];
   const [reels, setReels] = useState(['7', '7', '7']);
   const [spinning, setSpinning] = useState(false);
@@ -189,7 +208,8 @@ function Slots({ busy, onPlay }: { busy: boolean; onPlay: () => Promise<PlayResu
         const symbol = symbols[result.segmentIndex % symbols.length];
         setReels(result.coins > 0 ? [symbol, symbol, symbol] : [symbol, symbols[(result.segmentIndex + 1) % 4], symbols[(result.segmentIndex + 2) % 4]]);
         setSpinning(false);
-      }, 1500);
+        onReveal(result);
+      }, 1600);
     } catch {
       window.clearInterval(timer);
       setSpinning(false);

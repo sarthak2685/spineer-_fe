@@ -224,7 +224,7 @@ export function BusinessProfilePage() {
 export function MenuStudio() {
   const [tick, setTick] = useState(0);
   return <Frame>
-    <PageTitle title="Menu" text="Add a category, then an item. Both stay on this page." />
+    <PageTitle title="Menu" text="Add items one by one, or upload a CSV for the whole menu." />
     <div className="grid items-start gap-3 lg:grid-cols-2">
       <CategoryPanel onChange={() => setTick((value) => value + 1)} />
       <ItemPanel tick={tick} />
@@ -255,6 +255,25 @@ function ItemPanel({ tick }: { tick: number }) {
     setEditing(null);
     load();
   }
+  function sampleCsv() {
+    const csv = 'Category,Item,Price,Description\nStarters,Paneer Tikka,220,Spicy cottage cheese\nDrinks,Masala Chai,40,With ginger\n';
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'menu-sample.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+  async function uploadMenu(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const body = new FormData(e.currentTarget);
+    const file = body.get('file');
+    if (!(file instanceof File) || !file.size) return;
+    const result = await api<{ created: number; categoriesCreated: number }>('/business/menu/items/import', { method: 'POST', body });
+    toastOk(`Added ${result.created} items${result.categoriesCreated ? ` and ${result.categoriesCreated} categories` : ''}.`);
+    e.currentTarget.reset();
+    load();
+  }
   async function saveBulk(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const categoryId = String(new FormData(e.currentTarget).get('categoryId') || '');
@@ -276,6 +295,15 @@ function ItemPanel({ tick }: { tick: number }) {
       <Select label="Category" name="categoryId" defaultValue={editing?.categoryid}>{categories.map((c) => <option key={c.categoryid} value={c.categoryid}>{c.categoryname}</option>)}</Select>
       <label className="text-sm"><span className="mb-1.5 block font-medium text-stone-500">Image</span><input className="block w-full text-sm" type="file" name="image" accept="image/png,image/jpeg,image/webp" /></label>
       <div className="flex items-end sm:col-span-2"><Button type="submit">{editing ? 'Update' : 'Add item'}</Button></div>
+    </Form>
+    <Form className="mb-3 grid gap-2 rounded-xl border border-dashed border-stone-200 bg-stone-50 p-3" onSubmit={uploadMenu}>
+      <p className="text-sm font-semibold text-stone-700">Upload menu file</p>
+      <p className="text-xs text-stone-500">CSV columns: Category, Item, Price, Description. New categories are created from the file. In Excel, use Save As and choose CSV.</p>
+      <input className="block w-full text-sm" type="file" name="file" accept=".csv,text/csv,.txt" required />
+      <div className="flex flex-wrap gap-2">
+        <Button type="submit">Upload CSV</Button>
+        <Button type="button" kind="ghost" onClick={sampleCsv}>Download sample</Button>
+      </div>
     </Form>
     <Form className="mb-4 grid gap-2 rounded-xl border border-dashed border-stone-200 bg-stone-50 p-3" onSubmit={saveBulk}>
       <p className="text-sm font-semibold text-stone-700">Bulk add</p>

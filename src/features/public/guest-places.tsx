@@ -257,11 +257,11 @@ export function PlayPanel() {
 
   async function play() {
     setError('');
+    setResult(null);
     setBusy(true);
     try {
       const data = await api<PlayResult & { prizes?: PrizeSlice[]; accessToken?: string; user?: typeof auth.user }>(`/public/play`, { method: 'POST', body: JSON.stringify({ token, gameCode: game }) });
       if (data.prizes?.length) setPrizes(data.prizes);
-      setResult(data);
       if (data.accessToken && data.user) auth.setSession(data.user, data.accessToken);
       return data;
     } catch (err) {
@@ -283,7 +283,7 @@ export function PlayPanel() {
         ))}
       </div>
       <section className="mt-5 grid min-h-[22rem] place-items-center rounded-3xl bg-stone-100 p-4">
-        <GameStage key={game} game={game} prizes={prizes} busy={busy} onPlay={play} />
+        <GameStage key={game} game={game} prizes={prizes} busy={busy} onPlay={play} onReveal={setResult} />
       </section>
       {error && <p className="mt-4 rounded-2xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
       {result && (
