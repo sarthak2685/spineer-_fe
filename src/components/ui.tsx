@@ -361,16 +361,22 @@ export function Brand({ light = false }: { light?: boolean }) {
 }
 
 export function Modal({ title, text, onClose, children, wide = false }: { title: string; text?: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
-  return (
-    <div className="fixed inset-0 z-50 grid place-items-end p-0 sm:place-items-center sm:p-6">
+  useEffect(() => {
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previous; };
+  }, []);
+  return createPortal(
+    <div className="fixed inset-0 z-[80] grid h-dvh place-items-end overflow-y-auto p-0 sm:place-items-center sm:p-6">
       <button type="button" className="absolute inset-0 bg-stone-900/50" onClick={onClose} aria-label="Close" />
-      <div className={`relative max-h-[92vh] w-full overflow-y-auto rounded-t-3xl bg-white p-5 shadow-2xl sm:rounded-3xl sm:p-6 ${wide ? 'max-w-xl' : 'max-w-md'}`}>
+      <div className={`relative max-h-[92dvh] w-full overflow-y-auto rounded-t-3xl bg-white p-5 shadow-2xl sm:rounded-3xl sm:p-6 ${wide ? 'max-w-xl' : 'max-w-md'}`}>
         <div className="mb-5 flex items-start justify-between gap-3 border-b border-stone-100 pb-4">
           <div><h2 className="font-display text-xl font-semibold tracking-tight text-stone-950">{title}</h2>{text && <p className="mt-1 text-sm text-stone-500">{text}</p>}</div>
           <button type="button" onClick={onClose} className="grid h-9 w-9 place-items-center rounded-full bg-stone-100 text-lg text-stone-600 transition hover:bg-stone-200">×</button>
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

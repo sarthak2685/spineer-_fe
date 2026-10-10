@@ -99,6 +99,38 @@ export function ContactPage() {
   );
 }
 
+export function TermsPage() {
+  return (
+    <Marketing>
+      <section className="px-5 py-12 lg:py-16">
+        <div className="mx-auto max-w-3xl space-y-4 text-sm leading-relaxed text-stone-600">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-orange-600">Terms</p>
+          <h1 className="text-3xl font-semibold tracking-tight text-stone-950">Terms & Conditions</h1>
+          <p>RewardSpinner gives a shop one QR for games, a menu, orders, and reviews. Creating a business means you will use it for your own counter, keep guest mobiles only for orders and rewards, and not post anything unlawful.</p>
+          <p>Coins, offers, and bill claims are decided by the shop. The platform stores the account, the menu, and the order so the counter can run them. You can close the business by contacting support.</p>
+          <p>The service is provided as available. A missed notification or a delayed order does not create a payment obligation on RewardSpinner.</p>
+        </div>
+      </section>
+    </Marketing>
+  );
+}
+
+export function PrivacyPage() {
+  return (
+    <Marketing>
+      <section className="px-5 py-12 lg:py-16">
+        <div className="mx-auto max-w-3xl space-y-4 text-sm leading-relaxed text-stone-600">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-orange-600">Privacy</p>
+          <h1 className="text-3xl font-semibold tracking-tight text-stone-950">Privacy Policy</h1>
+          <p>We store the name, mobile, email, and address you enter so the shop can recognise an order, a game win, and a bill claim. Location search uses the place you type, or your device location only when you tap Near me.</p>
+          <p>Notifications are sent only after you allow them. A home-screen shortcut does not give the app access to your contacts or photos beyond a bill picture you choose to upload.</p>
+          <p>Shop owners see the orders and claims for their own business. They do not see another shop’s guest list.</p>
+        </div>
+      </section>
+    </Marketing>
+  );
+}
+
 export function ErrorPage() {
   const missing = useLocation().pathname !== '/error';
   return (
@@ -142,7 +174,7 @@ export function LoginPage() {
             <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight text-stone-950 sm:text-4xl">Sign in</h1>
             <p className="mt-2 text-sm text-stone-500">Use the 10-digit mobile on the account.</p>
             <Form onSubmit={onSubmit} className="mt-6 space-y-4">
-              <Field label="Mobile" name="mobile" inputMode="numeric" autoComplete="username" required />
+              <Field label="Mobile" name="mobile" inputMode="numeric" autoComplete="username" maxLength={10} pattern="[6-9][0-9]{9}" required />
               <Field label="Password" name="password" type="password" autoComplete="current-password" required />
               <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                 <label className="flex min-h-11 items-center gap-2 text-sm text-stone-600"><input type="checkbox" name="remember" className="h-4 w-4 rounded border-stone-300" /> Remember me</label>
@@ -237,7 +269,13 @@ export function RegisterPage() {
   const [cities, setCities] = useState<{ cityid: number; cityname: string }[]>([]);
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [logo, setLogo] = useState<File | null>(null);
-  useEffect(() => { client.types().then(setTypes); client.countries().then(setCountries); }, []);
+  useEffect(() => {
+    client.types().then(setTypes);
+    client.countries().then((rows) => {
+      setCountries(rows);
+      if (rows.length === 1) setDraft((current) => current.countryId ? current : { ...current, countryId: String(rows[0].countryid) });
+    });
+  }, []);
   useEffect(() => {
     if (!draft.countryId) { setStates([]); return; }
     let live = true;
@@ -332,8 +370,8 @@ export function RegisterPage() {
             </label>
             <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-stone-400 sm:col-span-2">Location</p>
             <div className="sm:col-span-2"><Area label="Address" name="address" required defaultValue={draft.address} /></div>
-            <Select label="Country" name="countryId" value={draft.countryId || ''} onChange={(e) => setDraft((current) => ({ ...current, countryId: e.target.value, stateId: '', districtId: '', cityId: '' }))}><option value="">Select</option>{countries.map((c) => <option key={c.countryid} value={c.countryid}>{c.countryname}</option>)}</Select>
-            <Select label="State" name="stateId" value={draft.stateId || ''} onChange={(e) => setDraft((current) => ({ ...current, stateId: e.target.value, districtId: '', cityId: '' }))}><option value="">Select</option>{states.map((s) => <option key={s.stateid} value={s.stateid}>{s.statename}</option>)}</Select>
+            <Select label="Country" name="countryId" required value={draft.countryId || ''} onChange={(e) => setDraft((current) => ({ ...current, countryId: e.target.value, stateId: '', districtId: '', cityId: '' }))}><option value="">Select</option>{countries.map((c) => <option key={c.countryid} value={c.countryid}>{c.countryname}</option>)}</Select>
+            <Select label="State" name="stateId" required value={draft.stateId || ''} onChange={(e) => setDraft((current) => ({ ...current, stateId: e.target.value, districtId: '', cityId: '' }))}><option value="">Select</option>{states.map((s) => <option key={s.stateid} value={s.stateid}>{s.statename}</option>)}</Select>
             <Select label="District" name="districtId" value={draft.districtId || ''} onChange={(e) => setDraft((current) => ({ ...current, districtId: e.target.value, cityId: '' }))}><option value="">Select</option>{districts.map((d) => <option key={d.districtid} value={d.districtid}>{d.districtname}</option>)}</Select>
             <Select label="City" name="cityId" value={draft.cityId || ''} onChange={(e) => setDraft((current) => ({ ...current, cityId: e.target.value }))}><option value="">Select</option>{cities.map((c) => <option key={c.cityid} value={c.cityid}>{c.cityname}</option>)}</Select>
             <div className="sm:col-span-2"><Button type="submit" className="w-full sm:w-auto">Continue to owner</Button></div>
@@ -342,7 +380,7 @@ export function RegisterPage() {
         {step === 2 && (
           <Form className="grid gap-3" onSubmit={collect}>
             <Field label="Owner name" name="ownerName" required defaultValue={draft.ownerName} />
-            <Field label="Owner mobile" name="ownerMobile" required defaultValue={draft.ownerMobile} />
+            <Field label="Owner mobile" name="ownerMobile" inputMode="numeric" maxLength={10} pattern="[6-9][0-9]{9}" required defaultValue={draft.ownerMobile} />
             <Field label="Owner email" name="ownerEmail" type="email" required defaultValue={draft.ownerEmail} />
             <Field label="Password" name="password" type="password" required minLength={6} defaultValue={draft.password} />
             <p className="-mt-1 text-xs text-stone-500">At least 6 characters.</p>
@@ -362,6 +400,10 @@ export function RegisterPage() {
                 ))}
               </dl>
             </div>
+            <label className="flex items-start gap-3 rounded-2xl border border-stone-200 px-3 py-3 text-sm text-stone-600">
+              <input name="termsAccepted" type="checkbox" required className="mt-0.5 h-4 w-4 rounded border-stone-300" />
+              <span>I accept the <Link className="font-semibold text-orange-600" to="/terms" target="_blank">Terms & Conditions</Link> and <Link className="font-semibold text-orange-600" to="/privacy" target="_blank">Privacy Policy</Link>.</span>
+            </label>
             <div className="flex flex-col gap-2 sm:flex-row"><Button type="button" kind="ghost" className="w-full sm:w-auto" onClick={() => setStep(2)}>Back</Button><Button type="submit" className="w-full sm:w-auto">Create business</Button></div>
           </Form>
         )}
@@ -409,7 +451,7 @@ export function CustomerRegisterPage() {
             <Form onSubmit={onSubmit} className="mt-6 space-y-4">
               {error && <Alert text={error} />}
               <Field label="Full name" name="name" required />
-              <Field label="Mobile" name="mobile" required />
+              <Field label="Mobile" name="mobile" inputMode="numeric" maxLength={10} pattern="[6-9][0-9]{9}" required />
               <Field label="Email" name="email" />
               <Field label="Password" name="password" type="password" required />
               <Field label="Business token, if you scanned a QR" name="token" defaultValue={params.get('token') || auth.user?.businessToken || ''} />

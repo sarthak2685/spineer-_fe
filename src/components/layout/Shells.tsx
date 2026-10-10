@@ -1,22 +1,27 @@
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { ReactNode, useEffect, useState } from 'react';
+import { ReactNode, useEffect, useRef, useState } from 'react';
 import { Rise } from '../motion';
 import { Brand, PageMeta, PageMetaContext } from '../ui';
 import { useAuth } from '../../app/auth';
+import { api } from '../../api/client';
+import { playNotify, unlockSound } from '../../lib/sounds';
+import { toastInfo } from '../../lib/toast';
 
 export type NavItem = { to: string; label: string; match?: string };
 export type NavGroup = { heading: string; items: NavItem[] };
 
 const productLinks = [
+  { hash: 'what', label: 'Product' },
+  { hash: 'features', label: 'Features' },
   { hash: 'how', label: 'How it works' },
-  { hash: 'games', label: 'Games' },
   { hash: 'pricing', label: 'Pricing' },
+  { hash: 'faq', label: 'FAQ' },
 ];
 
-function SectionLink({ hash, children, className, onNavigate, light = false }: { hash: string; children: ReactNode; className?: string; onNavigate?: () => void; light?: boolean }) {
+function SectionLink({ hash, children, className, onNavigate, light = false, solid = false }: { hash: string; children: ReactNode; className?: string; onNavigate?: () => void; light?: boolean; solid?: boolean }) {
   const location = useLocation();
   const active = location.pathname === '/' && location.hash === `#${hash}`;
-  const tone = light ? (active ? 'text-orange-400' : 'text-white/70 hover:text-white') : (active ? 'text-orange-600' : 'text-stone-600 hover:text-orange-600');
+  const tone = solid ? '' : light ? (active ? 'text-orange-400' : 'text-white/70 hover:text-white') : (active ? 'text-orange-600' : 'text-stone-600 hover:text-orange-600');
   return (
     <Link
       to={{ pathname: '/', hash }}
@@ -42,28 +47,28 @@ export function Marketing({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-orange-50">
       <header className="sticky top-0 z-20 border-b border-stone-200 bg-orange-50/90 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 py-3">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-5 py-3">
           <Brand />
-          <nav className="hidden items-center gap-5 text-sm font-medium text-stone-600 md:flex">
+          <nav className="hidden items-center gap-5 text-sm font-medium text-stone-600 lg:flex">
             {productLinks.map((link) => <SectionLink key={link.hash} hash={link.hash} className="inline-flex min-h-11 items-center">{link.label}</SectionLink>)}
             <NavLink to="/about" className="inline-flex min-h-11 items-center transition hover:text-orange-600">About</NavLink>
             <NavLink to="/contact" className="inline-flex min-h-11 items-center transition hover:text-orange-600">Contact</NavLink>
           </nav>
           <div className="flex items-center gap-2">
             <NavLink to="/login" className="inline-flex min-h-11 items-center rounded-full px-4 text-sm font-semibold text-stone-600 transition hover:text-orange-600">Sign in</NavLink>
-            <NavLink to="/register" className="hidden min-h-11 items-center rounded-full bg-orange-600 px-4 text-sm font-semibold text-white transition hover:bg-orange-700 md:inline-flex">Start your business</NavLink>
-            <button type="button" className="grid h-11 w-11 place-items-center rounded-full border border-stone-200 md:hidden" aria-expanded={open} aria-controls="marketing-menu" aria-label={open ? 'Close menu' : 'Open menu'} onClick={() => setOpen((value) => !value)}>
+            <SectionLink hash="demo" solid className="hidden min-h-11 items-center rounded-full bg-orange-600 px-4 text-sm font-semibold text-white shadow-lg shadow-orange-600/20 transition hover:bg-orange-700 lg:inline-flex">Book a Free Demo</SectionLink>
+            <button type="button" className="grid h-11 w-11 place-items-center rounded-full border border-stone-200 lg:hidden" aria-expanded={open} aria-controls="marketing-menu" aria-label={open ? 'Close menu' : 'Open menu'} onClick={() => setOpen((value) => !value)}>
               <span className="flex w-4 flex-col gap-1" aria-hidden="true"><span className="h-0.5 bg-stone-950" /><span className="h-0.5 bg-stone-950" /><span className="h-0.5 bg-stone-950" /></span>
             </button>
           </div>
         </div>
         {open && (
-          <nav id="marketing-menu" className="grid gap-1 border-t border-stone-100 px-4 py-3 md:hidden">
+          <nav id="marketing-menu" className="grid gap-1 border-t border-stone-100 px-4 py-3 lg:hidden">
             {productLinks.map((link) => <SectionLink key={link.hash} hash={link.hash} className={item} onNavigate={() => setOpen(false)}>{link.label}</SectionLink>)}
             <NavLink to="/about" className={`${item} text-stone-600`} onClick={() => setOpen(false)}>About</NavLink>
             <NavLink to="/contact" className={`${item} text-stone-600`} onClick={() => setOpen(false)}>Contact</NavLink>
             <NavLink to="/login" className={`${item} text-stone-600`} onClick={() => setOpen(false)}>Sign in</NavLink>
-            <NavLink to="/register" className={`${item} text-stone-600`} onClick={() => setOpen(false)}>Start your business</NavLink>
+            <SectionLink hash="demo" solid className="mt-1 inline-flex min-h-11 items-center justify-center rounded-full bg-orange-600 px-4 text-sm font-semibold text-white" onNavigate={() => setOpen(false)}>Book a Free Demo</SectionLink>
             <NavLink to="/customer-register" className={`${item} text-stone-600`} onClick={() => setOpen(false)}>Customer signup</NavLink>
           </nav>
         )}
@@ -73,7 +78,7 @@ export function Marketing({ children }: { children: ReactNode }) {
         <div className="mx-auto grid max-w-6xl gap-8 md:grid-cols-4">
           <div>
             <Brand />
-            <p className="mt-3 max-w-xs leading-relaxed">Gamified loyalty for restaurants, salons, gyms, clinics, and shops. One QR. Four games. One wallet.</p>
+            <p className="mt-3 max-w-xs leading-relaxed">One QR for the menu, games, coins, coupons, reviews, and the next visit. Built for counters, tables, and chairs.</p>
           </div>
           <div className="space-y-2"><p className="font-semibold text-stone-950">Product</p>{productLinks.map((link) => <span key={link.hash}><SectionLink hash={link.hash}>{link.label}</SectionLink><br /></span>)}</div>
           <div className="space-y-2"><p className="font-semibold text-stone-950">Accounts</p><Linkish to="/login">Sign in</Linkish><br /><Linkish to="/register">Business signup</Linkish><br /><Linkish to="/customer-register">Customer signup</Linkish></div>
@@ -239,8 +244,31 @@ export const businessNav = businessGroups.flatMap((group) => group.items);
 export const customerNav = customerGroups.flatMap((group) => group.items);
 export const superNav = superGroups.flatMap((group) => group.items);
 
+function OrderChime() {
+  const seen = useRef<number | null>(null);
+  useEffect(() => {
+    const unlock = () => unlockSound();
+    window.addEventListener('pointerdown', unlock, { once: true });
+    async function tick() {
+      try {
+        const data = await api<{ total: number }>('/business/menu/orders?status=Pending&pageSize=1', { quiet: true });
+        const total = Number(data.total || 0);
+        if (seen.current !== null && total > seen.current) {
+          playNotify();
+          toastInfo('A new order just arrived.');
+        }
+        seen.current = total;
+      } catch { /* a missed poll should not interrupt the desk */ }
+    }
+    tick();
+    const timer = window.setInterval(tick, 12000);
+    return () => { window.clearInterval(timer); window.removeEventListener('pointerdown', unlock); };
+  }, []);
+  return null;
+}
+
 export function StoreShell() {
-  return <Workspace groups={businessGroups} title="Store" />;
+  return <><OrderChime /><Workspace groups={businessGroups} title="Store" /></>;
 }
 
 export function WalletShell() {

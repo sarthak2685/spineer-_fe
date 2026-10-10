@@ -1,9 +1,11 @@
 import { createContext, FormEvent, ReactNode, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, NavLink, useLocation, useParams } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { api, asset, client } from '../../api/client';
 import { useAuth } from '../../app/auth';
 import { Alert, Button, Field, Form, Modal } from '../../components/ui';
+import { digitsOnly, isTenDigitMobile } from '../../lib/mobile';
 import { toastErr, toastInfo, toastOk } from '../../lib/toast';
 import { GameStage, PrizeSlice, PlayResult } from './Games';
 
@@ -13,7 +15,7 @@ export function brandColor(value?: string) {
 
 const DEFAULT_KEYWORDS = ['friendly staff', 'great food', 'quick service', 'clean place', 'good value', 'tasty', 'cozy', 'worth visiting'];
 
-type GuestTab = 'play' | 'menu' | 'review';
+type GuestTab = 'play' | 'menu' | 'bill' | 'review';
 type GuestHub = Record<string, any>;
 
 type GuestPlaceContext = {
@@ -61,11 +63,12 @@ function Icon({ children }: { children: ReactNode }) {
 
 function tabFromPath(pathname: string): GuestTab {
   if (pathname.includes('/menu/')) return 'menu';
+  if (pathname.includes('/bill/')) return 'bill';
   if (pathname.includes('/review/')) return 'review';
   return 'play';
 }
 
-const tabOrder: GuestTab[] = ['play', 'menu', 'review'];
+const tabOrder: GuestTab[] = ['play', 'menu', 'bill', 'review'];
 
 export function PlaceFrame({ business, token, current, children }: { business: Record<string, any>; token?: string; current: GuestTab; children: ReactNode }) {
   const color = brandColor(business.themecolor);
@@ -100,11 +103,61 @@ export function PlaceFrame({ business, token, current, children }: { business: R
           <div className="mt-5 flex gap-2 overflow-x-auto sm:justify-center">
             <NavLink to={`/play/${token}`} className={tabClass('play')} style={current === 'play' ? { background: color } : undefined}>Play</NavLink>
             <NavLink to={`/menu/${token}`} className={tabClass('menu')} style={current === 'menu' ? { background: color } : undefined}>Menu</NavLink>
+            <NavLink to={`/bill/${token}`} className={tabClass('bill')} style={current === 'bill' ? { background: color } : undefined}>Bill</NavLink>
             <NavLink to={`/review/${token}`} className={tabClass('review')} style={current === 'review' ? { background: color } : undefined}>Review</NavLink>
           </div>
-          <div className="mt-6 overflow-hidden">{children}</div>
+          <div className="mt-6">{children}</div>
         </div>
       </div>
+    </div>
+  );
+}
+
+type BeforeInstallPromptEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }> };
+
+function GetAppCard() {
+  const [prompt, setPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [installed, setInstalled] = useState(() => window.matchMedia('(display-mode: standalone)').matches);
+  const [hint, setHint] = useState('');
+  useEffect(() => {
+    const onPrompt = (event: Event) => {
+      event.preventDefault();
+      setPrompt(event as BeforeInstallPromptEvent);
+    };
+    const onInstalled = () => setInstalled(true);
+    window.addEventListener('beforeinstallprompt', onPrompt);
+    window.addEventListener('appinstalled', onInstalled);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onPrompt);
+      window.removeEventListener('appinstalled', onInstalled);
+    };
+  }, []);
+  if (installed) return null;
+  async function install() {
+    if (prompt) {
+      await prompt.prompt();
+      const choice = await prompt.userChoice;
+      if (choice.outcome === 'accepted') setInstalled(true);
+      setPrompt(null);
+    } else {
+      const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+      setHint(ios ? 'On iPhone, tap Share, then Add to Home Screen.' : 'Open the browser menu and choose Install app or Add to Home Screen.');
+    }
+    if ('Notification' in window && Notification.permission === 'default') {
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+        const { enableBrowserPush } = await import('../../lib/push');
+        await enableBrowserPush().catch(() => undefined);
+      }
+    }
+  }
+  return (
+    <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3">
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-stone-950">Get the app</p>
+        <p className="mt-0.5 text-xs text-stone-500">{hint || 'Add RewardSpinner to your home screen so offers can reach this phone.'}</p>
+      </div>
+      <button type="button" className="shrink-0 rounded-full bg-orange-600 px-4 py-2 text-sm font-semibold text-white" onClick={install}>Install</button>
     </div>
   );
 }
@@ -157,11 +210,79 @@ export function GuestPlaceShell() {
           >
             {tab === 'play' && <PlayPanel />}
             {tab === 'menu' && <MenuPanel />}
+            {tab === 'bill' && <BillPanel />}
             {tab === 'review' && <ReviewPanel />}
           </motion.div>
         </AnimatePresence>
       </PlaceFrame>
     </GuestCtx.Provider>
+  );
+}
+
+type PricedOption = { optionid: number; optionname: string; price: string | number };
+type PricedAddon = { addonid: number; addonname: string; price: string | number };
+
+function ItemSheet({
+  item, color, optionId, addonIds, onOption, onToggleAddon, onClose, onAdd,
+}: {
+  item: any;
+  color: string;
+  optionId: number | null;
+  addonIds: number[];
+  onOption: (id: number) => void;
+  onToggleAddon: (id: number) => void;
+  onClose: () => void;
+  onAdd: () => void;
+}) {
+  const options = (item.options || []) as PricedOption[];
+  const addons = (item.addons || []) as PricedAddon[];
+  const option = options.find((row) => Number(row.optionid) === optionId);
+  const extra = addons.filter((row) => addonIds.includes(Number(row.addonid))).reduce((sum, row) => sum + Number(row.price), 0);
+  const total = Number(option?.price ?? item.price) + extra;
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-stone-950/50 sm:items-center" onClick={onClose}>
+      <div className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl" onClick={(event) => event.stopPropagation()}>
+        <div className="relative">
+          {item.imagepath ? <img alt="" src={asset(item.imagepath)} className="h-44 w-full object-cover" /> : <div className="h-28" style={{ background: color }} />}
+          <button type="button" className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full bg-white text-lg shadow" onClick={onClose} aria-label="Close">×</button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          <h2 className="text-xl font-bold">{item.itemname}</h2>
+          {item.description && <p className="mt-1 text-sm text-stone-500">{item.description}</p>}
+          {options.length > 0 && (
+            <div className="mt-4">
+              <p className="text-sm font-semibold">Choose option</p>
+              <div className="mt-2 space-y-2">
+                {options.map((row) => (
+                  <label key={row.optionid} className={`flex cursor-pointer items-center justify-between rounded-2xl border px-3 py-3 ${optionId === Number(row.optionid) ? 'border-orange-500 bg-orange-50' : 'border-stone-200'}`}>
+                    <span className="flex items-center gap-2 text-sm font-medium"><input type="radio" name="menu-option" checked={optionId === Number(row.optionid)} onChange={() => onOption(Number(row.optionid))} />{row.optionname}</span>
+                    <span className="text-sm font-semibold" style={{ color }}>{rupee(Number(row.price))}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+          {addons.length > 0 && (
+            <div className="mt-4">
+              <p className="text-sm font-semibold">Add-ons</p>
+              <div className="mt-2 space-y-2">
+                {addons.map((row) => (
+                  <label key={row.addonid} className="flex cursor-pointer items-center justify-between rounded-2xl border border-stone-200 px-3 py-3">
+                    <span className="flex items-center gap-2 text-sm font-medium"><input type="checkbox" checked={addonIds.includes(Number(row.addonid))} onChange={() => onToggleAddon(Number(row.addonid))} />{row.addonname}</span>
+                    <span className="text-sm font-semibold text-emerald-600">+{rupee(Number(row.price))}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-stone-100 bg-white px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <p className="text-2xl font-bold">{rupee(total)}</p>
+          <button type="button" className="rounded-full px-6 py-3 text-sm font-semibold text-white shadow-md" style={{ background: color }} onClick={onAdd}>Add to cart</button>
+        </div>
+      </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -230,13 +351,13 @@ function SaveCoinsModal({ onClose, token }: { onClose: () => void; token: string
       {mode === 'create' ? (
         <Form onSubmit={onCreate} className="space-y-3">
           <Field label="Full name" name="name" required />
-          <Field label="Mobile" name="mobile" inputMode="numeric" required />
+          <Field label="Mobile" name="mobile" inputMode="numeric" maxLength={10} pattern="[6-9][0-9]{9}" required />
           <Field label="Password" name="password" type="password" required />
           <Button type="submit" className="w-full">Create and save</Button>
         </Form>
       ) : (
         <Form onSubmit={onLogin} className="space-y-3">
-          <Field label="Mobile" name="mobile" inputMode="numeric" required />
+          <Field label="Mobile" name="mobile" inputMode="numeric" maxLength={10} pattern="[6-9][0-9]{9}" required />
           <Field label="Password" name="password" type="password" required />
           <Button type="submit" className="w-full">Sign in and save</Button>
         </Form>
@@ -273,6 +394,10 @@ export function PlayPanel() {
   const signedIn = auth.user && !auth.user.name.startsWith('Guest_');
   const games = (hub?.games?.length ? hub.games : [{ gamecode: 'SpinWheel' }, { gamecode: 'ScratchCard' }, { gamecode: 'MysteryGiftBox' }, { gamecode: 'SlotMachine' }]) as { gamecode: string }[];
 
+  useEffect(() => {
+    if (result && !signedIn) setSaveOpen(true);
+  }, [result, signedIn]);
+
   return (
     <>
       <div className="flex gap-2 overflow-x-auto pb-1">
@@ -282,7 +407,7 @@ export function PlayPanel() {
           </button>
         ))}
       </div>
-      <section className="mt-5 grid min-h-[22rem] place-items-center rounded-3xl bg-stone-100 p-4">
+      <section className="mt-4 grid place-items-center overflow-visible rounded-3xl bg-stone-100 px-2 py-5 sm:mt-5 sm:px-4 sm:py-6">
         <GameStage key={game} game={game} prizes={prizes} busy={busy} onPlay={play} onReveal={setResult} />
       </section>
       {error && <p className="mt-4 rounded-2xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
@@ -294,24 +419,79 @@ export function PlayPanel() {
         </div>
       )}
       {result && signedIn && <p className="mt-4 text-center text-sm text-stone-500">Saved to your wallet. <Link className="font-semibold text-orange-600" to="/customer/wallet">Open wallet</Link></p>}
-      {result && !signedIn && <Button className="mx-auto mt-5 block" onClick={() => setSaveOpen(true)}>Save coins</Button>}
+      {result && !signedIn && !saveOpen && <button type="button" className="mx-auto mt-4 block text-sm font-semibold text-orange-600" onClick={() => setSaveOpen(true)}>Sign in to keep these coins</button>}
       {saveOpen && !signedIn && <SaveCoinsModal token={token} onClose={() => setSaveOpen(false)} />}
+      <OffersList />
       {!business && null}
     </>
   );
+}
+
+function OffersList() {
+  const { hub } = useGuestPlace();
+  const offers = (hub?.offers || []) as { rewardid: number; rewardname: string; description?: string; coinsrequired: number; imagepath?: string }[];
+  return (
+    <>
+    <section className="mt-8 border-t border-stone-100 pt-5">
+      <h2 className="text-base font-bold">Current offers</h2>
+      <p className="mt-1 text-xs text-stone-400">Rewards this shop has switched on.</p>
+      {!offers.length && <p className="mt-3 text-sm text-stone-400">No active offers right now.</p>}
+      <div className="mt-3 space-y-2">
+        {offers.map((offer) => (
+          <article key={offer.rewardid} className="flex items-center gap-3 rounded-2xl border border-stone-100 bg-stone-50 p-3">
+            <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-amber-100 text-lg">
+              {offer.imagepath ? <img alt="" src={asset(offer.imagepath)} className="h-full w-full object-cover" /> : '🎁'}
+            </div>
+            <div className="min-w-0">
+              <p className="truncate font-semibold text-stone-950">{offer.rewardname}</p>
+              {offer.description && <p className="line-clamp-2 text-xs text-stone-500">{offer.description}</p>}
+              <p className="mt-0.5 text-xs font-semibold text-amber-600">{offer.coinsrequired} coins</p>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+    <GetAppCard />
+    </>
+  );
+}
+
+type CartLine = {
+  key: string;
+  itemId: number;
+  name: string;
+  optionId?: number;
+  optionName?: string;
+  addons: { id: number; name: string; price: number }[];
+  unitPrice: number;
+  qty: number;
+};
+
+function rupee(value: number) {
+  return `₹${Math.round(value)}`;
+}
+
+function cartKey(itemId: number, optionId?: number, addonIds: number[] = []) {
+  return `${itemId}:${optionId || 0}:${[...addonIds].sort((a, b) => a - b).join('.')}`;
 }
 
 export function MenuPanel() {
   const { token, hub, color, business } = useGuestPlace();
   const auth = useAuth();
   const [filter, setFilter] = useState<number | 'all'>('all');
-  const [cart, setCart] = useState<Record<number, number>>({});
+  const [cart, setCart] = useState<CartLine[]>([]);
+  const [fulfillment, setFulfillment] = useState<'DineIn' | 'Delivery' | 'Pickup'>('DineIn');
   const [station, setStation] = useState('');
+  const [address, setAddress] = useState('');
   const [guestName, setGuestName] = useState('');
+  const [mobile, setMobile] = useState('');
   const [note, setNote] = useState('');
   const [whatsappUrl, setWhatsappUrl] = useState('');
   const [open, setOpen] = useState(false);
   const [sending, setSending] = useState(false);
+  const [custom, setCustom] = useState<any | null>(null);
+  const [pickedOption, setPickedOption] = useState<number | null>(null);
+  const [pickedAddons, setPickedAddons] = useState<number[]>([]);
 
   const categories = (hub?.categories || []) as any[];
   const items = (hub?.items || []) as any[];
@@ -324,29 +504,74 @@ export function MenuPanel() {
     });
     return map;
   }, [visible]);
-  const count = Object.values(cart).reduce((sum, qty) => sum + qty, 0);
-  const total = items.reduce((sum, item) => sum + Number(item.price) * (cart[item.itemid] || 0), 0);
+  const count = cart.reduce((sum, line) => sum + line.qty, 0);
+  const total = cart.reduce((sum, line) => sum + line.unitPrice * line.qty, 0);
 
-  function setQty(itemId: number, qty: number, name?: string) {
+  function setQty(key: string, qty: number) {
+    setCart((current) => current.flatMap((line) => (line.key === key ? (qty > 0 ? [{ ...line, qty }] : []) : [line])));
+  }
+
+  function addLine(line: CartLine) {
     setCart((current) => {
-      const next = { ...current };
-      const wasEmpty = !current[itemId];
-      if (qty <= 0) delete next[itemId];
-      else next[itemId] = qty;
-      if (qty === 1 && wasEmpty) toastInfo(`${name || 'Item'} added to cart`);
-      return next;
+      const found = current.find((row) => row.key === line.key);
+      if (!found) {
+        toastInfo(`${line.name} added to cart`);
+        return [...current, line];
+      }
+      return current.map((row) => (row.key === line.key ? { ...row, qty: row.qty + line.qty } : row));
     });
   }
 
+  function openItem(item: any) {
+    const options = (item.options || []) as PricedOption[];
+    setCustom(item);
+    setPickedOption(options[0] ? Number(options[0].optionid) : null);
+    setPickedAddons([]);
+  }
+
+  function confirmCustom() {
+    if (!custom) return;
+    const options = (custom.options || []) as PricedOption[];
+    const addons = (custom.addons || []) as PricedAddon[];
+    const option = options.find((row) => Number(row.optionid) === pickedOption);
+    if (options.length && !option) { toastErr('Choose an option.'); return; }
+    const chosen = addons.filter((row) => pickedAddons.includes(Number(row.addonid)));
+    const unit = Number(option?.price ?? custom.price) + chosen.reduce((sum, row) => sum + Number(row.price), 0);
+    addLine({
+      key: cartKey(custom.itemid, option ? Number(option.optionid) : undefined, chosen.map((row) => Number(row.addonid))),
+      itemId: Number(custom.itemid),
+      name: custom.itemname,
+      optionId: option ? Number(option.optionid) : undefined,
+      optionName: option?.optionname,
+      addons: chosen.map((row) => ({ id: Number(row.addonid), name: row.addonname, price: Number(row.price) })),
+      unitPrice: unit,
+      qty: 1,
+    });
+    setCustom(null);
+  }
+
   async function place() {
-    const lines = Object.entries(cart).filter(([, qty]) => qty > 0);
     if (sending) return;
-    if (!lines.length) { toastErr('Add something from the menu first.'); return; }
-    if (!station.trim()) { toastErr('Room or table number is required.'); return; }
+    if (!cart.length) { toastErr('Add something from the menu first.'); return; }
+    if (!isTenDigitMobile(mobile)) { toastErr('Enter a 10-digit mobile number.'); return; }
+    if (fulfillment === 'DineIn' && !station.trim()) { toastErr('Table or room number is required for dine in.'); return; }
+    if (fulfillment === 'Delivery' && !address.trim()) { toastErr('Delivery address is required.'); return; }
     setSending(true);
     const popup = window.open('', '_blank');
     try {
-      const result = await api<{ message: string; orderNumber: string; whatsappUrl?: string | null; accessToken?: string; user?: NonNullable<typeof auth.user> }>('/public/orders', { method: 'POST', body: JSON.stringify({ token, tableNumber: station, customerName: guestName, remarks: note, items: lines.map(([itemId, qty]) => ({ itemId: Number(itemId), qty })) }) });
+      const result = await api<{ message: string; orderNumber: string; whatsappUrl?: string | null; accessToken?: string; user?: NonNullable<typeof auth.user> }>('/public/orders', {
+        method: 'POST',
+        body: JSON.stringify({
+          token,
+          fulfillment,
+          tableNumber: station,
+          deliveryAddress: address,
+          customerName: guestName,
+          customerMobile: mobile,
+          remarks: note,
+          items: cart.map((line) => ({ itemId: line.itemId, qty: line.qty, optionId: line.optionId, addonIds: line.addons.map((addon) => addon.id) })),
+        }),
+      });
       if (result.accessToken && result.user && auth.user?.role !== 'BusinessAdmin' && auth.user?.role !== 'SuperAdmin') auth.setSession(result.user, result.accessToken);
       if (result.whatsappUrl) {
         if (popup) popup.location.href = result.whatsappUrl;
@@ -357,7 +582,7 @@ export function MenuPanel() {
         setWhatsappUrl('');
         toastOk(`Order ${result.orderNumber} is in the shop queue.`);
       }
-      setCart({});
+      setCart([]);
       setNote('');
       setOpen(false);
     } catch {
@@ -380,86 +605,198 @@ export function MenuPanel() {
           Order sent to the queue. <a className="font-semibold underline" href={whatsappUrl} target="_blank" rel="noreferrer">Open WhatsApp</a>
         </p>
       )}
-      <div className={`mt-4 space-y-8 ${count ? 'pb-24' : ''}`}>
+      <div className={`mt-4 space-y-8 ${count ? 'pb-28' : ''}`}>
         {[...grouped.entries()].map(([categoryId, rows]) => (
           <section key={categoryId}>
             <h2 className="text-lg font-bold">{categories.find((category) => category.categoryid === categoryId)?.categoryname || 'Menu'}</h2>
             <div className="mt-3 space-y-3">
-              {rows.map((item) => (
-                <article key={item.itemid} className="flex items-center gap-3 rounded-2xl border border-stone-100 bg-stone-50/50 p-3 transition hover:border-stone-200 hover:bg-white">
-                  <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl">
-                    {item.imagepath ? (
-                      <img alt="" src={asset(item.imagepath)} className="h-full w-full object-cover" />
+              {rows.map((item) => {
+                const options = (item.options || []) as PricedOption[];
+                const addons = (item.addons || []) as PricedAddon[];
+                const configurable = options.length > 0 || addons.length > 0;
+                const simpleKey = cartKey(item.itemid);
+                const simple = cart.find((line) => line.key === simpleKey);
+                const from = options.length ? Math.min(...options.map((option) => Number(option.price))) : Number(item.price);
+                return (
+                  <article key={item.itemid} className="flex items-center gap-3 rounded-2xl border border-stone-100 bg-white p-3 shadow-sm">
+                    <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl">
+                      {item.imagepath ? (
+                        <img alt="" src={asset(item.imagepath)} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="grid h-full w-full place-items-center text-lg font-semibold text-white" style={{ background: color }}>{String(item.itemname || '?').slice(0, 1)}</div>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-stone-950">{item.itemname}</p>
+                      {item.description && <p className="line-clamp-2 text-sm text-stone-500">{item.description}</p>}
+                      <p className="mt-1 text-sm font-bold" style={{ color }}>{options.length ? `From ${rupee(from)}` : rupee(from)}</p>
+                      {(options.length > 0 || addons.length > 0) && (
+                        <p className="mt-1 flex flex-wrap gap-1 text-[11px] font-semibold">
+                          {options.length > 0 && <span className="rounded-full bg-violet-50 px-2 py-0.5 text-violet-600">Options</span>}
+                          {addons.length > 0 && <span className="rounded-full bg-sky-50 px-2 py-0.5 text-sky-600">Add-ons</span>}
+                        </p>
+                      )}
+                    </div>
+                    {configurable ? (
+                      <button type="button" className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-lg font-bold text-white shadow-md" style={{ background: color }} onClick={() => openItem(item)} aria-label={`Customize ${item.itemname}`}>+</button>
                     ) : (
-                      <div className="grid h-full w-full place-items-center text-lg font-semibold text-white" style={{ background: color }}>{String(item.itemname || '?').slice(0, 1)}</div>
+                      <QtyControl color={color} qty={simple?.qty || 0} onChange={(qty) => {
+                        if (!simple && qty > 0) addLine({ key: simpleKey, itemId: item.itemid, name: item.itemname, unitPrice: Number(item.price), qty, addons: [] });
+                        else setQty(simpleKey, qty);
+                      }} />
                     )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-stone-950">{item.itemname}</p>
-                    {item.description && <p className="line-clamp-2 text-sm text-stone-500">{item.description}</p>}
-                    <p className="mt-1 text-sm font-bold" style={{ color }}>₹{Number(item.price).toFixed(0)}</p>
-                  </div>
-                  <QtyControl color={color} qty={cart[item.itemid] || 0} onChange={(qty) => setQty(item.itemid, qty, item.itemname)} />
-                </article>
-              ))}
+                  </article>
+                );
+              })}
             </div>
           </section>
         ))}
         {!items.length && <p className="py-16 text-center text-stone-400">No menu items yet.</p>}
+        <OffersList />
       </div>
 
-      {count > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-30 px-3 pb-4 sm:px-4">
+      {count > 0 && !custom && createPortal(
+        <div className="fixed inset-x-0 bottom-0 z-40 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 sm:px-4">
           <button
             type="button"
-            className="mx-auto flex w-full max-w-xl items-center justify-between gap-3 rounded-2xl px-5 py-3.5 text-left text-white shadow-2xl shadow-stone-950/30 transition hover:brightness-105 active:scale-[0.99]"
+            className="mx-auto flex w-full max-w-xl items-center justify-between gap-3 rounded-2xl px-5 py-3.5 text-left text-white shadow-2xl shadow-stone-950/30"
             style={{ background: color }}
             onClick={() => setOpen(true)}
           >
             <span>
               <span className="block text-sm font-semibold">View cart · {count} item{count === 1 ? '' : 's'}</span>
-              <span className="text-xs text-white/80">Tap to review and place order</span>
+              <span className="text-xs text-white/80">Dine in, delivery, or pickup</span>
             </span>
-            <span className="rounded-xl bg-white/20 px-3 py-1.5 text-sm font-bold">₹{total.toFixed(0)}</span>
+            <span className="rounded-xl bg-white/20 px-3 py-1.5 text-sm font-bold">{rupee(total)}</span>
           </button>
-        </div>
+        </div>,
+        document.body,
       )}
-      {open && (
-        <div className="fixed inset-0 z-40 flex items-end bg-stone-900/40" onClick={() => { if (!sending) setOpen(false); }}>
-          <div className="public-sheet mx-auto max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-t-3xl bg-white p-5" onClick={(event) => event.stopPropagation()}>
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-bold">Your order · ₹{total.toFixed(0)}</h2>
+      {custom && (
+        <ItemSheet
+          item={custom}
+          color={color}
+          optionId={pickedOption}
+          addonIds={pickedAddons}
+          onOption={setPickedOption}
+          onToggleAddon={(id) => setPickedAddons((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id])}
+          onClose={() => setCustom(null)}
+          onAdd={confirmCustom}
+        />
+      )}
+      {open && createPortal(
+        <div className="fixed inset-0 z-50 flex items-end bg-stone-900/40 sm:items-center sm:justify-center" onClick={() => { if (!sending) setOpen(false); }}>
+          <div className="public-sheet flex max-h-[92vh] w-full max-w-xl flex-col overflow-hidden rounded-t-3xl bg-white sm:rounded-3xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-stone-100 px-5 py-4">
+              <h2 className="text-lg font-bold">Checkout · {rupee(total)}</h2>
               <button type="button" className="text-sm font-semibold text-stone-500" onClick={() => setOpen(false)}>Close</button>
             </div>
-            <div className="space-y-3">
-              {items.filter((item) => cart[item.itemid]).map((item) => (
-                <div key={item.itemid} className="flex items-center justify-between gap-3 rounded-2xl border border-stone-100 px-3 py-2.5">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+              {cart.map((line) => (
+                <div key={line.key} className="flex items-center justify-between gap-3 rounded-2xl border border-stone-100 px-3 py-2.5">
                   <div className="min-w-0">
-                    <p className="truncate font-medium">{item.itemname}</p>
-                    <p className="text-sm text-stone-500">₹{Number(item.price).toFixed(0)} each</p>
+                    <p className="truncate font-medium">{line.name}</p>
+                    <p className="text-sm text-stone-500">{[line.optionName, ...line.addons.map((addon) => addon.name)].filter(Boolean).join(' · ') || rupee(line.unitPrice)} · {rupee(line.unitPrice)} each</p>
                   </div>
-                  <QtyControl color={color} qty={cart[item.itemid] || 0} onChange={(qty) => setQty(item.itemid, qty, item.itemname)} />
+                  <QtyControl color={color} qty={line.qty} onChange={(qty) => setQty(line.key, qty)} />
                 </div>
               ))}
+              <div>
+                <p className="text-sm font-semibold text-stone-700">How should we serve this?</p>
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  {([['DineIn', 'Dine in'], ['Delivery', 'Delivery'], ['Pickup', 'Pickup']] as const).map(([value, label]) => (
+                    <button key={value} type="button" className={`rounded-2xl border px-2 py-3 text-sm font-semibold ${fulfillment === value ? 'border-transparent text-white' : 'border-stone-200 bg-stone-50 text-stone-600'}`} style={fulfillment === value ? { background: color } : undefined} onClick={() => setFulfillment(value)}>{label}</button>
+                  ))}
+                </div>
+              </div>
+              {fulfillment === 'DineIn' && (
+                <label className="block text-sm">
+                  <span className="mb-1.5 block font-medium">{hub?.settings?.stationlabel || 'Table / room'}</span>
+                  <input value={station} onChange={(event) => setStation(event.target.value)} placeholder={hub?.settings?.stationplaceholder || 'Table 4'} className="h-11 w-full rounded-xl border border-stone-200 px-3" />
+                </label>
+              )}
+              {fulfillment === 'Delivery' && (
+                <label className="block text-sm">
+                  <span className="mb-1.5 block font-medium">Delivery address</span>
+                  <textarea value={address} onChange={(event) => setAddress(event.target.value)} rows={3} placeholder="House, street, landmark" className="w-full rounded-xl border border-stone-200 px-3 py-2" />
+                </label>
+              )}
+              {fulfillment === 'Pickup' && <p className="rounded-2xl bg-stone-50 px-3 py-2 text-sm text-stone-500">We’ll keep this ready at the counter. Share the mobile so the shop can call you.</p>}
+              <label className="block text-sm">
+                <span className="mb-1.5 block font-medium">Your name</span>
+                <input value={guestName} onChange={(event) => setGuestName(event.target.value)} placeholder="So the shop knows who ordered" className="h-11 w-full rounded-xl border border-stone-200 px-3" />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1.5 block font-medium">Mobile number</span>
+                <input value={mobile} onChange={(event) => setMobile(digitsOnly(event.target.value))} inputMode="numeric" maxLength={10} placeholder="10-digit mobile" className="h-11 w-full rounded-xl border border-stone-200 px-3" />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1.5 block font-medium">Special instructions</span>
+                <textarea value={note} onChange={(event) => setNote(event.target.value)} rows={3} placeholder="Less spicy, no onion, call on arrival…" className="w-full rounded-xl border border-stone-200 px-3 py-2" />
+              </label>
             </div>
-            <label className="mt-4 block text-sm">
-              <span className="mb-1.5 block font-medium">Your name</span>
-              <input value={guestName} onChange={(event) => setGuestName(event.target.value)} placeholder="So the shop knows who ordered" className="h-11 w-full rounded-xl border border-stone-200 px-3" />
-            </label>
-            <label className="mt-3 block text-sm">
-              <span className="mb-1.5 block font-medium">{hub?.settings?.stationlabel || 'Table / room'}</span>
-              <input value={station} onChange={(event) => setStation(event.target.value)} placeholder={hub?.settings?.stationplaceholder || '12'} className="h-11 w-full rounded-xl border border-stone-200 px-3" required />
-            </label>
-            <label className="mt-3 block text-sm">
-              <span className="mb-1.5 block font-medium">Note</span>
-              <input value={note} onChange={(event) => setNote(event.target.value)} placeholder="Less spicy, no onion…" className="h-11 w-full rounded-xl border border-stone-200 px-3" />
-            </label>
-            <Button className="mt-4 w-full" busy={sending} onClick={place}>{hub?.type?.actionbuttontext || 'Place order and open WhatsApp'}</Button>
+            <div className="shrink-0 border-t border-stone-100 bg-white px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+              <Button className="w-full" busy={sending} onClick={place}>{hub?.type?.actionbuttontext || 'Place order'}</Button>
+            </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
       {!business && null}
     </>
+  );
+}
+
+export function BillPanel() {
+  const { token } = useGuestPlace();
+  const [name, setName] = useState('');
+  const [mobile, setMobile] = useState('');
+  const [amount, setAmount] = useState('');
+  const [invoice, setInvoice] = useState('');
+  const [note, setNote] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState('');
+
+  async function submit() {
+    if (!name.trim()) { toastErr('Enter your name.'); return; }
+    if (!isTenDigitMobile(mobile)) { toastErr('Enter a 10-digit mobile number.'); return; }
+    if (!(Number(amount) > 0)) { toastErr('Enter the bill amount.'); return; }
+    setBusy(true);
+    try {
+      const body = new FormData();
+      body.set('token', token);
+      body.set('customerName', name.trim());
+      body.set('mobile', mobile);
+      body.set('amount', amount);
+      if (invoice.trim()) body.set('invoiceNumber', invoice.trim());
+      if (note.trim()) body.set('remarks', note.trim());
+      if (file) body.set('file', file);
+      const result = await api<{ message: string }>('/public/claims', { method: 'POST', body });
+      setDone(result.message);
+      toastOk(result.message);
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-lg font-bold">Bill payment</h2>
+        <p className="mt-1 text-sm text-stone-500">Paid at the counter? Send the bill here. The shop confirms it and adds the coins.</p>
+      </div>
+      {done ? <p className="rounded-2xl bg-emerald-50 px-3 py-3 text-sm text-emerald-700">{done}</p> : (
+        <div className="space-y-3">
+          <label className="block text-sm"><span className="mb-1.5 block font-medium">Name</span><input value={name} onChange={(event) => setName(event.target.value)} className="h-11 w-full rounded-xl border border-stone-200 px-3" /></label>
+          <label className="block text-sm"><span className="mb-1.5 block font-medium">Mobile</span><input value={mobile} onChange={(event) => setMobile(digitsOnly(event.target.value))} inputMode="numeric" maxLength={10} placeholder="10-digit mobile" className="h-11 w-full rounded-xl border border-stone-200 px-3" /></label>
+          <label className="block text-sm"><span className="mb-1.5 block font-medium">Bill amount</span><input value={amount} onChange={(event) => setAmount(event.target.value.replace(/[^\d.]/g, ''))} inputMode="decimal" placeholder="₹" className="h-11 w-full rounded-xl border border-stone-200 px-3" /></label>
+          <label className="block text-sm"><span className="mb-1.5 block font-medium">Invoice number</span><input value={invoice} onChange={(event) => setInvoice(event.target.value)} className="h-11 w-full rounded-xl border border-stone-200 px-3" /></label>
+          <label className="block text-sm"><span className="mb-1.5 block font-medium">Note</span><textarea value={note} onChange={(event) => setNote(event.target.value)} rows={3} className="w-full rounded-xl border border-stone-200 px-3 py-2" /></label>
+          <label className="block text-sm"><span className="mb-1.5 block font-medium">Bill photo</span><input type="file" accept="image/png,image/jpeg,image/webp" className="block w-full text-sm" onChange={(event) => setFile(event.target.files?.[0] || null)} /></label>
+          <Button className="w-full" busy={busy} onClick={submit}>Submit bill</Button>
+        </div>
+      )}
+      <OffersList />
+    </div>
   );
 }
 
@@ -535,6 +872,7 @@ export function ReviewPanel() {
   async function sendFeedback() {
     if (!name.trim()) { toastErr('Add your name first.'); return; }
     if (!note.trim()) { toastErr('Tell the shop what could be better.'); return; }
+    if (phone && !isTenDigitMobile(phone)) { toastErr('Mobile must be 10 digits, or leave it blank.'); return; }
     setBusy(true);
     try {
       await api('/public/feedback', { method: 'POST', body: JSON.stringify({ token, rating, customerName: name, phone, message: note }) });
@@ -591,13 +929,14 @@ export function ReviewPanel() {
         <div className="space-y-3">
           <p className="text-sm text-stone-500">This goes only to the shop — not posted publicly.</p>
           <textarea value={note} onChange={(event) => setNote(event.target.value)} rows={4} placeholder="What should they improve?" className="w-full rounded-xl border border-stone-200 px-3 py-2 text-sm" />
-          <input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="Phone, if you want a reply" className="h-11 w-full rounded-xl border border-stone-200 px-3 text-sm" />
+          <input value={phone} onChange={(event) => setPhone(digitsOnly(event.target.value))} inputMode="numeric" maxLength={10} placeholder="10-digit mobile, if you want a reply" className="h-11 w-full rounded-xl border border-stone-200 px-3 text-sm" />
           <Button className="w-full" busy={busy} onClick={sendFeedback}>Send private feedback</Button>
         </div>
       )}
 
       {!rating && <p className="text-center text-sm text-stone-400">Tap the stars to continue.</p>}
       {done && <p className="rounded-2xl bg-stone-100 px-3 py-2 text-sm text-stone-600">{done}</p>}
+      <OffersList />
     </div>
   );
 }

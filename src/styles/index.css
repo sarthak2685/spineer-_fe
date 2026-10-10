@@ -17,6 +17,23 @@ html, body, #root { @apply min-h-full bg-orange-50 text-stone-950; }
 .public-enter { animation: public-rise 280ms ease-out both; }
 .public-sheet { animation: public-sheet-up 220ms ease-out both; }
 
+@keyframes landing-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.landing-marquee {
+  animation: landing-marquee var(--marquee-duration, 38s) linear infinite;
+}
+
+.marquee-hover-pause:hover .landing-marquee { animation-play-state: paused; }
+
+.hero-dots {
+  background-image: radial-gradient(rgba(120, 113, 108, 0.22) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: linear-gradient(to bottom, black, transparent 78%);
+}
+
 .public-card,
 .public-enter a,
 .public-enter button {
@@ -25,7 +42,8 @@ html, body, #root { @apply min-h-full bg-orange-50 text-stone-950; }
 
 @media (prefers-reduced-motion: reduce) {
   .public-enter,
-  .public-sheet { animation: none; }
+  .public-sheet,
+  .landing-marquee { animation: none; }
   .public-card,
   .public-enter a,
   .public-enter button { transition: none; }

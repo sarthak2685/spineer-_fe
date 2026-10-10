@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { api, client } from '../../api/client';
 import { ListToolbar, Pager, usePagedQuery } from '../../components/list';
 import { Alert, Button, Card, Empty, Field, Form, PageTitle, Quick, Select, Stat, Status, Table } from '../../components/ui';
-import { toastOk } from '../../lib/toast';
+import { toastErr, toastOk } from '../../lib/toast';
 
 function Frame({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
@@ -30,24 +30,69 @@ export function CustomerDashboard() {
     </div>
     <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       <Quick to="/customer/rewards" title="Rewards" text="Spend coins on something at the counter." />
-      <Quick to="/customer/notifications" title="Notifications" text="Enable browser alerts so shop offers reach you." />
+      <Quick to="/customer/notifications" title="Inbox" text="Shop offers and order updates land here." />
       <Quick to="/customer/explore" title="Play & review" text="Games and reviews stay on the same shop QR link." />
     </div>
+    <NotifyCard />
   </Frame>;
+}
+
+function NotifyCard() {
+  const [pushState, setPushState] = useState('default');
+  useEffect(() => {
+    import('../../lib/push').then(({ getPushPermission }) => getPushPermission().then(setPushState));
+  }, []);
+  if (pushState === 'granted' || pushState === 'unsupported') return null;
+  async function enable() {
+    const { enableBrowserPush } = await import('../../lib/push');
+    await enableBrowserPush();
+    setPushState('granted');
+    toastOk('Notifications enabled.');
+  }
+  return (
+    <Card className="mt-4 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <p className="font-semibold text-stone-950">Enable notifications</p>
+        <p className="mt-1 text-sm text-stone-500">{pushState === 'denied' ? 'Notifications are blocked in the browser. Allow them for this site, then come back.' : 'Turn these on so shop offers and order updates reach this phone.'}</p>
+      </div>
+      {pushState !== 'denied' && <Button onClick={enable}>Enable notifications</Button>}
+    </Card>
+  );
 }
 
 export function ExplorePage() {
   const [data, setData] = useState<any>({ businesses: [], categories: [] });
-  const [query, setQuery] = useState({ search: '', category: 'All', game: 'All' });
-  function load(next = query) { const q = new URLSearchParams(next).toString(); api(`/customer/explore?${q}`).then(setData); }
-  useEffect(() => { load(); }, []);
+  const [states, setStates] = useState<{ stateid: number; statename: string }[]>([]);
+  const [query, setQuery] = useState({ search: '', category: 'All', game: 'All', place: '', stateId: '', lat: '', lng: '', near: '' });
+  const [locating, setLocating] = useState(false);
+  function load(next = query) {
+    const params = new URLSearchParams();
+    Object.entries(next).forEach(([key, value]) => { if (value) params.set(key, value); });
+    api(`/customer/explore?${params.toString()}`).then(setData);
+  }
+  useEffect(() => { load(); api<{ stateid: number; statename: string }[]>('/locations/states').then(setStates); }, []);
+  function nearMe() {
+    if (!navigator.geolocation) { toastErr('This browser cannot read your location. Search by city or state instead.'); return; }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition((position) => {
+      const next = { ...query, lat: String(position.coords.latitude), lng: String(position.coords.longitude), near: '1' };
+      setQuery(next);
+      setLocating(false);
+      load(next);
+    }, () => { setLocating(false); toastErr('Location was blocked. Pick a state or type a city.'); }, { enableHighAccuracy: true, timeout: 8000 });
+  }
   return <Frame>
-    <PageTitle title="Explore shops" text="Open a shop to view the menu, order food, play games, or leave a review." />
+    <PageTitle title="Explore shops" text="Search cafes and other businesses near you, or in any city you type." />
     <Card className="mb-4">
-      <div className="grid items-end gap-3 md:grid-cols-[1fr_1fr_auto]">
-        <Field label="Search" value={query.search} onChange={(e) => setQuery({ ...query, search: e.target.value })} />
+      <div className="grid items-end gap-3 md:grid-cols-2">
+        <Field label="Name" value={query.search} onChange={(e) => setQuery({ ...query, search: e.target.value })} placeholder="Cafe, salon, clinic" />
+        <Field label="City or area" value={query.place} onChange={(e) => setQuery({ ...query, place: e.target.value, near: '' })} placeholder="Bandra, Patna, Delhi" />
+        <Select label="State" value={query.stateId} onChange={(e) => setQuery({ ...query, stateId: e.target.value, near: '' })}><option value="">Any state</option>{states.map((state) => <option key={state.stateid} value={state.stateid}>{state.statename}</option>)}</Select>
         <Select label="Type" value={query.category} onChange={(e) => setQuery({ ...query, category: e.target.value })}><option>All</option>{data.categories.map((c: any) => <option key={c.businesstype}>{c.businesstype}</option>)}</Select>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
         <Button onClick={() => load()}>Search</Button>
+        <Button kind="ghost" busy={locating} onClick={nearMe}>Near me</Button>
       </div>
     </Card>
     <div className="grid gap-3 sm:grid-cols-2">{data.businesses.map((b: any) => (
@@ -55,13 +100,13 @@ export function ExplorePage() {
         <Link to={`/customer/business/${b.businessid}`} className="block transition hover:text-orange-600">
           <p className="text-xs font-semibold uppercase tracking-wider text-stone-400">{b.businesstype || 'Shop'}</p>
           <p className="mt-1 font-display text-2xl font-semibold">{b.businessname}</p>
-          <p className="mt-2 text-sm text-stone-500">{[b.cityname, b.active_offers ? `${b.active_offers} offers` : ''].filter(Boolean).join(' · ') || 'Open the shop'}</p>
+          <p className="mt-2 text-sm text-stone-500">{[b.cityname && b.cityname !== 'Unknown' ? b.cityname : '', b.statename && b.statename !== 'Unknown' ? b.statename : '', b.distancekm != null ? `${Number(b.distancekm).toFixed(1)} km` : '', b.active_offers ? `${b.active_offers} offers` : ''].filter(Boolean).join(' · ') || b.address || 'Open the shop'}</p>
         </Link>
-        {b.businesstoken && (
+        {(b.publicslug || b.businesstoken) && (
           <div className="mt-4 flex flex-wrap gap-2">
-            <Link className="inline-flex h-9 items-center rounded-xl bg-orange-600 px-3 text-sm font-semibold text-white" to={`/menu/${b.businesstoken}`}>View menu</Link>
-            <Link className="inline-flex h-9 items-center rounded-xl border border-stone-200 px-3 text-sm font-semibold" to={`/menu/${b.businesstoken}`}>Order</Link>
-            <Link className="inline-flex h-9 items-center rounded-xl border border-stone-200 px-3 text-sm font-semibold" to={`/play/${b.businesstoken}`}>Play</Link>
+            <Link className="inline-flex h-9 items-center rounded-xl bg-orange-600 px-3 text-sm font-semibold text-white" to={`/menu/${b.publicslug || b.businesstoken}`}>View menu</Link>
+            <Link className="inline-flex h-9 items-center rounded-xl border border-stone-200 px-3 text-sm font-semibold" to={`/menu/${b.publicslug || b.businesstoken}`}>Order</Link>
+            <Link className="inline-flex h-9 items-center rounded-xl border border-stone-200 px-3 text-sm font-semibold" to={`/play/${b.publicslug || b.businesstoken}`}>Play</Link>
           </div>
         )}
       </div>
@@ -73,7 +118,7 @@ export function BusinessDetailsPage() {
   const id = window.location.pathname.split('/').pop();
   const [data, setData] = useState<any>(null);
   useEffect(() => { api(`/customer/businesses/${id}`).then(setData); }, [id]);
-  const token = data?.business?.businesstoken;
+  const token = data?.business?.publicslug || data?.business?.businesstoken;
   return <Frame>
     <PageTitle title={data?.business?.businessname || 'Business'} text={data?.business?.description || data?.business?.tagline || 'View the menu, order to your table, or play for coins.'} />
     <Card>
@@ -169,34 +214,10 @@ export function ClaimsPage() {
 export function NotificationsPage() {
   const [rows, setRows] = useState<any[]>([]);
   const [filter, setFilter] = useState('All');
-  const [pushState, setPushState] = useState<string>('default');
   function load(next = filter) { api(`/customer/notifications?filter=${next}`).then(setRows); }
-  useEffect(() => {
-    load();
-    import('../../lib/push').then(({ getPushPermission }) => getPushPermission().then(setPushState));
-  }, []);
-  async function enablePush() {
-    const { enableBrowserPush } = await import('../../lib/push');
-    await enableBrowserPush();
-    setPushState('granted');
-    toastOk('Browser notifications enabled.');
-  }
+  useEffect(() => { load(); }, []);
   return <Frame>
-    <PageTitle title="Notifications" text="Inbox for shop offers — enable browser alerts to get real pop-ups too." />
-    <Card className="mb-4 flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <p className="text-sm font-semibold text-stone-950">Browser notifications</p>
-        <p className="mt-1 text-sm text-stone-500">
-          {pushState === 'granted' ? 'Enabled. Shop campaigns can reach you as system notifications.'
-            : pushState === 'denied' ? 'Blocked in the browser. Allow notifications for this site in browser settings.'
-              : pushState === 'unsupported' ? 'This browser does not support push notifications.'
-                : 'Turn on so push campaigns appear even when the tab is in the background.'}
-        </p>
-      </div>
-      {pushState !== 'granted' && pushState !== 'unsupported' && (
-        <Button onClick={enablePush}>Enable notifications</Button>
-      )}
-    </Card>
+    <PageTitle title="Notifications" text="Inbox for shop offers and order updates." />
     <div className="mb-4 flex flex-wrap gap-2">
       <Select label="Filter" value={filter} onChange={(e) => { setFilter(e.target.value); load(e.target.value); }}>
         <option>All</option><option>Unread</option><option>Offer</option><option>RewardUpdate</option><option>PurchaseApproval</option><option>CoinExpiry</option><option>OrderUpdate</option>
@@ -221,5 +242,5 @@ export function ProfilePage() {
     const saved = await client.post('/customer/profile', form);
     setProfile(saved); setMessage('Profile saved.');
   }
-  return <Frame><PageTitle title="Profile" /><Form onSubmit={onSubmit} className="grid max-w-xl gap-3"><Field label="Name" name="name" defaultValue={profile.customername} /><Field label="Email" name="email" defaultValue={profile.email} /><Field label="Address" name="address" defaultValue={profile.address} /><Field label="Pincode" name="pincode" defaultValue={profile.pincode} />{message && <p>{message}</p>}<Button type="submit">Save</Button></Form></Frame>;
+  return <Frame><PageTitle title="Profile" /><Form onSubmit={onSubmit} className="grid max-w-xl gap-3"><Field label="Name" name="name" defaultValue={profile.customername} required /><Field label="Email" name="email" defaultValue={profile.email} /><Field label="Address" name="address" defaultValue={profile.address} required /><Field label="Pincode" name="pincode" defaultValue={profile.pincode} />{message && <p>{message}</p>}<Button type="submit">Save</Button></Form></Frame>;
 }

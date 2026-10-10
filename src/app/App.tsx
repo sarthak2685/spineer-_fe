@@ -1,6 +1,6 @@
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { homeFor, useAuth } from './auth';
-import { AboutPage, ContactPage, CustomerRegisterPage, ErrorPage, ForgotPage, HomePage, LoginPage, RegisterPage, ResetPage } from '../features/public/pages';
+import { AboutPage, ContactPage, CustomerRegisterPage, ErrorPage, ForgotPage, HomePage, LoginPage, PrivacyPage, RegisterPage, ResetPage, TermsPage } from '../features/public/pages';
 import { GuestPlaceShell } from '../features/public/guest-places';
 import { BusinessDetailsPage, ClaimsPage, CustomerDashboard, ExplorePage, HistoryPage, MyOrdersPage, NotificationsPage, PrizesPage, ProfilePage, RewardsPage, WalletPage } from '../features/customer/pages';
 import { BusinessClaimsPage, BusinessDashboard, BusinessProfilePage, BusinessReviewsPage, CustomersPage, GameAdminPage, MenuStudio, OrderDetailPage, OrdersPage, PlaysPage, PosterPage, PushPage, QrPage, RedemptionsPage, RewardsAdminPage } from '../features/business/pages';
@@ -21,6 +21,8 @@ export function App() {
       <Route path="/" element={<HomePage />} />
       <Route path="/about" element={<AboutPage />} />
       <Route path="/contact" element={<ContactPage />} />
+      <Route path="/terms" element={<TermsPage />} />
+      <Route path="/privacy" element={<PrivacyPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/forgot-password" element={<ForgotPage />} />
       <Route path="/reset-password" element={<ResetPage />} />
@@ -29,6 +31,7 @@ export function App() {
       <Route element={<GuestPlaceShell />}>
         <Route path="/play/:token" element={<span className="sr-only">Play</span>} />
         <Route path="/menu/:token" element={<span className="sr-only">Menu</span>} />
+        <Route path="/bill/:token" element={<span className="sr-only">Bill</span>} />
         <Route path="/review/:token" element={<span className="sr-only">Review</span>} />
       </Route>
       <Route path="/error" element={<ErrorPage />} />

@@ -117,7 +117,7 @@ export function SuperBusinesses() {
       { key: 'isactive', label: 'Status', render: (row) => <Status value={row.isactive ? 'Active' : 'Inactive'} /> },
       { key: 'actions', label: 'Actions', render: (row) => <RowMenu items={[
         { label: row.isactive ? 'Pause' : 'Resume', onClick: () => toggle(row) },
-        ...(row.businesstoken ? [{ label: 'Open guest page', to: `/play/${row.businesstoken}` }] : []),
+        ...((row.publicslug || row.businesstoken) ? [{ label: 'Open guest page', to: `/play/${row.publicslug || row.businesstoken}` }] : []),
       ]} /> },
     ]} />
   </Frame>;
