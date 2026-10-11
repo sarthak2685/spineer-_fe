@@ -86,15 +86,14 @@ export function PlaceFrame({ business, token, current, children }: { business: R
   );
   const tabClass = (id: GuestTab) =>
     `shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition ${current === id ? 'text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'}`;
-  const playing = current === 'play';
   return (
     <div className="public-enter min-h-screen bg-orange-50 text-stone-900">
-      <div className={`h-52 sm:h-64 ${playing ? 'hidden sm:block' : ''}`} style={{ background: `linear-gradient(120deg, ${color}, #0c0a09)` }}>
+      <div className="h-52 sm:h-64" style={{ background: `linear-gradient(120deg, ${color}, #0c0a09)` }}>
         {business.bannerimagepath && <img alt="" src={asset(business.bannerimagepath)} className="h-full w-full object-cover" />}
       </div>
-      <div className={`relative z-10 mx-auto max-w-xl px-3 pb-28 sm:px-4 ${playing ? 'min-h-dvh sm:-mt-16' : '-mt-16'}`}>
-        <div className={`relative bg-white px-5 pb-8 shadow-xl shadow-stone-950/10 ${playing ? 'min-h-dvh rounded-none pt-5 shadow-none sm:min-h-0 sm:rounded-[28px] sm:pt-14 sm:shadow-xl' : 'rounded-[28px] pt-14'}`}>
-          <div className={`absolute left-1/2 top-0 grid h-20 w-20 -translate-x-1/2 -translate-y-1/2 place-items-center overflow-hidden rounded-full bg-white shadow-lg ring-4 ring-white ${playing ? 'hidden sm:grid' : ''}`}>
+      <div className="relative z-10 mx-auto -mt-16 max-w-xl px-3 pb-28 sm:px-4">
+        <div className="relative rounded-[28px] bg-white px-5 pb-8 pt-14 shadow-xl shadow-stone-950/10">
+          <div className="absolute left-1/2 top-0 grid h-20 w-20 -translate-x-1/2 -translate-y-1/2 place-items-center overflow-hidden rounded-full bg-white shadow-lg ring-4 ring-white">
             {business.logoimagepath ? <img alt="" src={asset(business.logoimagepath)} className="h-full w-full object-cover" /> : <span className="text-xs font-bold text-stone-400">LOGO</span>}
           </div>
           <h1 className="truncate text-center text-2xl font-bold" title={business.businessname || 'RewardSpinner'}>{business.businessname || 'RewardSpinner'}</h1>
@@ -385,7 +384,7 @@ export function PlayPanel() {
           </button>
         ))}
       </div>
-      <section className="mt-4 grid min-h-[70dvh] place-items-center overflow-visible rounded-3xl bg-stone-100 px-2 py-5 sm:mt-5 sm:min-h-0 sm:px-4 sm:py-6">
+      <section className="mt-4 grid place-items-center overflow-visible rounded-3xl bg-stone-100 px-2 py-5 sm:mt-5 sm:px-4 sm:py-6">
         <GameStage key={game} game={game} prizes={prizes} busy={busy} onPlay={play} onReveal={setResult} />
       </section>
       {error && <p className="mt-4 rounded-2xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
