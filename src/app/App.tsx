@@ -4,8 +4,9 @@ import { AboutPage, ContactPage, CustomerRegisterPage, ErrorPage, ForgotPage, Ho
 import { GuestPlaceShell } from '../features/public/guest-places';
 import { BusinessDetailsPage, ClaimsPage, CustomerDashboard, ExplorePage, HistoryPage, MyOrdersPage, NotificationsPage, PrizesPage, ProfilePage, RewardsPage, WalletPage } from '../features/customer/pages';
 import { BusinessClaimsPage, BusinessDashboard, BusinessProfilePage, BusinessReviewsPage, CustomersPage, GameAdminPage, MenuStudio, OrderDetailPage, OrdersPage, PlaysPage, PosterPage, PushPage, QrPage, RedemptionsPage, RewardsAdminPage } from '../features/business/pages';
-import { SuperBusinesses, SuperDashboard, SuperTypes } from '../features/super-admin/pages';
+import { SuperBusinesses, SuperDashboard, SuperDemos, SuperTypes } from '../features/super-admin/pages';
 import { PlatformShell, StoreShell, WalletShell } from '../components/layout/Shells';
+import { SiteInstall } from '../components/install-app';
 
 function Guard({ role }: { role: string }) {
   const auth = useAuth();
@@ -17,6 +18,8 @@ function Guard({ role }: { role: string }) {
 
 export function App() {
   return (
+    <>
+    <SiteInstall />
     <Routes>
       <Route path="/" element={<HomePage />} />
       <Route path="/about" element={<AboutPage />} />
@@ -79,11 +82,13 @@ export function App() {
         <Route element={<PlatformShell />}>
           <Route path="/super/dashboard" element={<SuperDashboard />} />
           <Route path="/super/businesses" element={<SuperBusinesses />} />
+          <Route path="/super/demos" element={<SuperDemos />} />
           <Route path="/super/business-types" element={<SuperTypes />} />
         </Route>
       </Route>
 
       <Route path="*" element={<ErrorPage />} />
     </Routes>
+    </>
   );
 }

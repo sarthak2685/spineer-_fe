@@ -6,8 +6,13 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim());
 });
 
+self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') return;
+  event.respondWith(fetch(event.request));
+});
+
 self.addEventListener('push', (event) => {
-  let data = { title: 'RewardSpinner', body: 'You have a new update.', url: '/customer/notifications' };
+  let data = { title: 'RewardSpinner', body: 'You have a new update.', url: '/customer/notifications', tag: 'rewardspinner' };
   try {
     if (event.data) data = { ...data, ...event.data.json() };
   } catch {
@@ -18,14 +23,21 @@ self.addEventListener('push', (event) => {
       /* ignore */
     }
   }
-  event.waitUntil(
-    self.registration.showNotification(data.title || 'RewardSpinner', {
-      body: data.body || '',
+  const title = data.title || 'RewardSpinner';
+  const body = data.body || '';
+  const url = data.url || '/customer/notifications';
+  event.waitUntil((async () => {
+    await self.registration.showNotification(title, {
+      body,
       icon: '/icons/icon.svg',
       badge: '/icons/icon.svg',
-      data: { url: data.url || '/customer/notifications' },
-    }),
-  );
+      tag: data.tag || title,
+      renotify: true,
+      data: { url },
+    });
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    windows.forEach((client) => client.postMessage({ type: 'push', title, body, url }));
+  })());
 });
 
 self.addEventListener('notificationclick', (event) => {

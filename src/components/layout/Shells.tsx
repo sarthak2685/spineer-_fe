@@ -4,6 +4,8 @@ import { Rise } from '../motion';
 import { Brand, PageMeta, PageMetaContext } from '../ui';
 import { useAuth } from '../../app/auth';
 import { api } from '../../api/client';
+import { catalogCopy } from '../../lib/catalog';
+import { DemoModalHost, openDemo } from '../../features/public/demo-request';
 import { playNotify, unlockSound } from '../../lib/sounds';
 import { toastInfo } from '../../lib/toast';
 
@@ -56,7 +58,7 @@ export function Marketing({ children }: { children: ReactNode }) {
           </nav>
           <div className="flex items-center gap-2">
             <NavLink to="/login" className="inline-flex min-h-11 items-center rounded-full px-4 text-sm font-semibold text-stone-600 transition hover:text-orange-600">Sign in</NavLink>
-            <SectionLink hash="demo" solid className="hidden min-h-11 items-center rounded-full bg-orange-600 px-4 text-sm font-semibold text-white shadow-lg shadow-orange-600/20 transition hover:bg-orange-700 lg:inline-flex">Book a Free Demo</SectionLink>
+            <button type="button" className="hidden min-h-11 items-center rounded-full bg-orange-600 px-4 text-sm font-semibold text-white shadow-lg shadow-orange-600/20 transition hover:bg-orange-700 lg:inline-flex" onClick={openDemo}>Book a Free Demo</button>
             <button type="button" className="grid h-11 w-11 place-items-center rounded-full border border-stone-200 lg:hidden" aria-expanded={open} aria-controls="marketing-menu" aria-label={open ? 'Close menu' : 'Open menu'} onClick={() => setOpen((value) => !value)}>
               <span className="flex w-4 flex-col gap-1" aria-hidden="true"><span className="h-0.5 bg-stone-950" /><span className="h-0.5 bg-stone-950" /><span className="h-0.5 bg-stone-950" /></span>
             </button>
@@ -68,11 +70,12 @@ export function Marketing({ children }: { children: ReactNode }) {
             <NavLink to="/about" className={`${item} text-stone-600`} onClick={() => setOpen(false)}>About</NavLink>
             <NavLink to="/contact" className={`${item} text-stone-600`} onClick={() => setOpen(false)}>Contact</NavLink>
             <NavLink to="/login" className={`${item} text-stone-600`} onClick={() => setOpen(false)}>Sign in</NavLink>
-            <SectionLink hash="demo" solid className="mt-1 inline-flex min-h-11 items-center justify-center rounded-full bg-orange-600 px-4 text-sm font-semibold text-white" onNavigate={() => setOpen(false)}>Book a Free Demo</SectionLink>
+            <button type="button" className="mt-1 inline-flex min-h-11 items-center justify-center rounded-full bg-orange-600 px-4 text-sm font-semibold text-white" onClick={() => { setOpen(false); openDemo(); }}>Book a Free Demo</button>
             <NavLink to="/customer-register" className={`${item} text-stone-600`} onClick={() => setOpen(false)}>Customer signup</NavLink>
           </nav>
         )}
       </header>
+      <DemoModalHost />
       <main>{location.pathname === '/' ? children : <Rise key={location.pathname}>{children}</Rise>}</main>
       <footer className="border-t border-stone-200 bg-white px-5 py-12 text-sm text-stone-500">
         <div className="mx-auto grid max-w-6xl gap-8 md:grid-cols-4">
@@ -119,14 +122,13 @@ function platformIcon(to: string): 'overview' | 'shops' | 'types' {
   return 'overview';
 }
 
-export function Workspace({ groups, children, title, mobile, variant = 'default' }: { groups: NavGroup[]; children?: ReactNode; title?: string; mobile?: NavItem[]; variant?: 'default' | 'platform' }) {
+export function Workspace({ groups, children, title, variant = 'default' }: { groups: NavGroup[]; children?: ReactNode; title?: string; variant?: 'default' | 'platform' }) {
   const auth = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const platform = variant === 'platform';
   const [meta, setMeta] = useState<PageMeta | null>(null);
-  const items = groups.flatMap((group) => group.items);
-  const current = items
+  const current = groups.flatMap((group) => group.items)
     .filter((item) => location.pathname === item.to || location.pathname.startsWith(`${item.to}/`))
     .sort((a, b) => b.to.length - a.to.length)[0];
   const heading = meta?.title || current?.label || 'RewardSpinner';
@@ -192,30 +194,32 @@ export function Workspace({ groups, children, title, mobile, variant = 'default'
         )}
         <div className="min-w-0">
           <header className={`sticky top-0 z-20 border-b border-stone-200 px-4 backdrop-blur sm:px-6 ${platform ? 'bg-white py-3' : 'bg-stone-100/95 py-4 sm:px-8'}`}>
-            <div className="flex items-center justify-between gap-4">
-              <div className="min-w-0">
-                <p className="text-xs font-medium text-stone-500 lg:hidden">{name}</p>
-                {meta?.kicker && <p className="text-xs font-semibold uppercase tracking-[0.18em] text-orange-600">{meta.kicker}</p>}
-                <h1 className="truncate font-display text-2xl font-semibold tracking-tight text-stone-950">{heading}</h1>
-                {meta?.text && <p className={`mt-0.5 max-w-2xl text-sm ${meta.gold ? 'font-semibold text-amber-500' : 'text-stone-500'}`}>{meta.text}</p>}
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <button type="button" className="grid h-10 w-10 place-items-center rounded-full border border-stone-300 bg-white text-stone-700 lg:hidden" aria-label="Open menu" onClick={() => setMenuOpen(true)}>
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div className="flex min-w-0 items-start gap-3">
+                <button type="button" className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-stone-300 bg-white text-stone-700 lg:hidden" aria-label="Open menu" onClick={() => setMenuOpen(true)}>
                   <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
                 </button>
-                {meta?.actions}
-                {platform && (
-                  <div className="hidden items-center gap-2 rounded-full bg-orange-50 py-1 pl-1 pr-3 sm:flex">
-                    <span className="grid h-8 w-8 place-items-center rounded-full bg-orange-600 text-xs font-semibold text-white">{name.slice(0, 1)}</span>
-                    <span className="max-w-[9rem] truncate text-sm font-semibold text-stone-950">{name}</span>
-                  </div>
-                )}
-                <button className="rounded-full border border-stone-300 bg-stone-50 px-3 py-1.5 text-sm font-semibold text-stone-600 lg:hidden" onClick={() => auth.clear().then(() => navigate('/login'))}>Sign out</button>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium text-stone-500 lg:hidden">{name}</p>
+                  {meta?.kicker && <p className="text-xs font-semibold uppercase tracking-[0.18em] text-orange-600">{meta.kicker}</p>}
+                  <h1 className="font-display text-2xl font-semibold tracking-tight text-stone-950">{heading}</h1>
+                  {meta?.text && <p className={`mt-0.5 max-w-2xl text-sm ${meta.gold ? 'font-semibold text-amber-500' : 'text-stone-500'}`}>{meta.text}</p>}
+                </div>
               </div>
+              {(meta?.actions || platform) && (
+                <div className="flex flex-wrap items-center gap-2 lg:shrink-0 lg:justify-end">
+                  {meta?.actions}
+                  {platform && (
+                    <div className="hidden items-center gap-2 rounded-full bg-orange-50 py-1 pl-1 pr-3 sm:flex">
+                      <span className="grid h-8 w-8 place-items-center rounded-full bg-orange-600 text-xs font-semibold text-white">{name.slice(0, 1)}</span>
+                      <span className="max-w-[9rem] truncate text-sm font-semibold text-stone-950">{name}</span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </header>
-          <main className={platform ? 'px-4 py-6 pb-24 sm:px-6' : 'mx-auto max-w-6xl px-4 py-6 pb-24 sm:px-8'}><Rise key={location.pathname}>{children ?? <Outlet />}</Rise></main>
-          <MobileBar items={mobile || items} />
+          <main className={platform ? 'px-4 py-6 sm:px-6' : 'mx-auto max-w-6xl px-4 py-6 sm:px-8'}><Rise key={location.pathname}>{children ?? <Outlet />}</Rise></main>
         </div>
       </div>
     </PageMetaContext.Provider>
@@ -237,7 +241,7 @@ export const customerGroups: NavGroup[] = [
 ];
 
 export const superGroups: NavGroup[] = [
-  { heading: 'Platform', items: [{ to: '/super/dashboard', label: 'Overview' }, { to: '/super/businesses', label: 'Businesses' }, { to: '/super/business-types', label: 'Business types' }] },
+  { heading: 'Platform', items: [{ to: '/super/dashboard', label: 'Overview' }, { to: '/super/businesses', label: 'Businesses' }, { to: '/super/demos', label: 'Demo requests' }, { to: '/super/business-types', label: 'Business types' }] },
 ];
 
 export const businessNav = businessGroups.flatMap((group) => group.items);
@@ -268,11 +272,68 @@ function OrderChime() {
 }
 
 export function StoreShell() {
-  return <><OrderChime /><Workspace groups={businessGroups} title="Store" /></>;
+  const [kind, setKind] = useState('');
+  useEffect(() => {
+    api<any>('/business/profile').then((profile) => setKind(profile?.typename || profile?.businesstype || '')).catch(() => undefined);
+  }, []);
+  const label = catalogCopy(kind).nav;
+  const groups = businessGroups.map((group) => ({
+    ...group,
+    items: group.items.map((item) => (item.to === '/business/menu' ? { ...item, label } : item)),
+  }));
+  return <><OrderChime /><Workspace groups={groups} title="Store" /></>;
+}
+
+function CustomerAlerts() {
+  const auth = useAuth();
+  const seen = useRef<Set<number> | null>(null);
+  const recent = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (auth.user?.role !== 'Customer') return;
+    import('../../lib/push').then(({ getPushPermission, enableBrowserPush }) => {
+      getPushPermission().then((permission) => {
+        if (permission === 'granted') enableBrowserPush().catch(() => undefined);
+      });
+    });
+    function announce(title: string, message: string, id?: number) {
+      const textKey = `${title}|${message}`;
+      if (recent.current.has(textKey)) return;
+      if (id && recent.current.has(`id:${id}`)) return;
+      recent.current.add(textKey);
+      if (id) recent.current.add(`id:${id}`);
+      toastInfo(message ? `${title}: ${message}` : title, id ? `note-${id}` : textKey);
+    }
+    function onMessage(event: MessageEvent) {
+      if (event.data?.type !== 'push') return;
+      announce(String(event.data.title || 'New update'), String(event.data.body || ''));
+    }
+    navigator.serviceWorker?.addEventListener('message', onMessage);
+    async function tick() {
+      try {
+        const rows = await api<{ customernotificationid: number; title: string; message: string }[]>('/customer/notifications?filter=Unread', { quiet: true });
+        if (seen.current === null) {
+          seen.current = new Set(rows.map((row) => row.customernotificationid));
+          return;
+        }
+        rows.forEach((row) => {
+          if (seen.current?.has(row.customernotificationid)) return;
+          seen.current?.add(row.customernotificationid);
+          announce(row.title, row.message, row.customernotificationid);
+        });
+      } catch { /* a missed poll should not interrupt the wallet */ }
+    }
+    tick();
+    const timer = window.setInterval(tick, 12000);
+    return () => {
+      window.clearInterval(timer);
+      navigator.serviceWorker?.removeEventListener('message', onMessage);
+    };
+  }, [auth.user?.role]);
+  return null;
 }
 
 export function WalletShell() {
-  return <Workspace groups={customerGroups} title="Wallet" />;
+  return <><CustomerAlerts /><Workspace groups={customerGroups} title="Wallet" /></>;
 }
 
 export function PlatformShell() {
@@ -307,10 +368,3 @@ export function GuestShell({ children, color = '#ea580c', name }: { children: Re
   );
 }
 
-export function MobileBar({ items }: { items: NavItem[] }) {
-  return (
-    <nav className="fixed inset-x-0 bottom-0 z-20 flex gap-1 overflow-x-auto overscroll-contain border-t border-stone-200 bg-white/95 px-2 py-2 backdrop-blur lg:hidden">
-      {items.map((item) => <NavLink key={item.to} to={item.to} className={({ isActive }) => `shrink-0 rounded-full px-3 py-2 text-center text-xs font-semibold ${isActive ? 'bg-orange-600 text-white' : 'text-stone-500'}`}>{item.label}</NavLink>)}
-    </nav>
-  );
-}

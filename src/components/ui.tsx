@@ -367,12 +367,12 @@ export function Modal({ title, text, onClose, children, wide = false }: { title:
     return () => { document.body.style.overflow = previous; };
   }, []);
   return createPortal(
-    <div className="fixed inset-0 z-[80] grid h-dvh place-items-end overflow-y-auto p-0 sm:place-items-center sm:p-6">
-      <button type="button" className="absolute inset-0 bg-stone-900/50" onClick={onClose} aria-label="Close" />
-      <div className={`relative max-h-[92dvh] w-full overflow-y-auto rounded-t-3xl bg-white p-5 shadow-2xl sm:rounded-3xl sm:p-6 ${wide ? 'max-w-xl' : 'max-w-md'}`}>
+    <div className="fixed inset-0 z-[80] flex h-dvh flex-col bg-white sm:grid sm:place-items-center sm:bg-transparent sm:p-6">
+      <button type="button" className="absolute inset-0 hidden bg-stone-900/50 sm:block" onClick={onClose} aria-label="Close" />
+      <div className={`relative flex h-full min-h-0 w-full flex-col overflow-y-auto bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:h-auto sm:max-h-[min(92dvh,40rem)] sm:rounded-3xl sm:p-6 sm:shadow-2xl ${wide ? 'sm:max-w-xl' : 'sm:max-w-md'}`}>
         <div className="mb-5 flex items-start justify-between gap-3 border-b border-stone-100 pb-4">
           <div><h2 className="font-display text-xl font-semibold tracking-tight text-stone-950">{title}</h2>{text && <p className="mt-1 text-sm text-stone-500">{text}</p>}</div>
-          <button type="button" onClick={onClose} className="grid h-9 w-9 place-items-center rounded-full bg-stone-100 text-lg text-stone-600 transition hover:bg-stone-200">×</button>
+          <button type="button" onClick={onClose} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-stone-100 text-lg text-stone-600 transition hover:bg-stone-200">×</button>
         </div>
         {children}
       </div>

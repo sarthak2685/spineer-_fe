@@ -1,8 +1,9 @@
 import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, asset } from '../../api/client';
-import { Button, Field, Form, PageTitle, RowMenu, Status, Table } from '../../components/ui';
-import { toastOk } from '../../lib/toast';
+import { Button, Field, Form, Modal, PageTitle, RowMenu, Select, Status, Table } from '../../components/ui';
+import { digitsOnly, isTenDigitMobile } from '../../lib/mobile';
+import { toastErr, toastOk } from '../../lib/toast';
 
 const searchClass = 'h-10 w-full rounded-xl border border-transparent bg-orange-50 px-4 text-sm text-stone-950 outline-none ring-orange-600/15 placeholder:text-stone-400 focus:border-orange-200 focus:bg-white focus:ring-4';
 
@@ -56,10 +57,14 @@ export function SuperDashboard() {
       <Metric label="Plays" value={data.totalSpins ?? '—'}><Mark d="M12 3a9 9 0 1 0 9 9M12 7v5l3 2" /></Metric>
       <Metric label="Redemptions" value={data.totalRedemptions ?? '—'}><Mark d="M12 3l2.2 4.6L19 8.2l-3.5 3.4.8 4.9L12 14.8 7.7 16.5l.8-4.9L5 8.2l4.8-.6L12 3z" /></Metric>
     </div>
-    <div className="mt-4 grid gap-4 sm:grid-cols-2">
+    <div className="mt-4 grid gap-4 sm:grid-cols-3">
       <Link to="/super/businesses" className="rounded-2xl border border-orange-100 bg-white p-5 shadow-sm transition hover:border-orange-200 hover:bg-orange-50">
         <p className="font-semibold text-stone-950">Businesses</p>
-        <p className="mt-1 text-sm text-stone-500">Pause a shop or open the page a guest sees.</p>
+        <p className="mt-1 text-sm text-stone-500">Pause a shop, renew it, or open the guest page.</p>
+      </Link>
+      <Link to="/super/demos" className="rounded-2xl border border-orange-100 bg-white p-5 shadow-sm transition hover:border-orange-200 hover:bg-orange-50">
+        <p className="font-semibold text-stone-950">Demo requests</p>
+        <p className="mt-1 text-sm text-stone-500">People who asked for a walkthrough.</p>
       </Link>
       <Link to="/super/business-types" className="rounded-2xl border border-orange-100 bg-white p-5 shadow-sm transition hover:border-orange-200 hover:bg-orange-50">
         <p className="font-semibold text-stone-950">Business types</p>
@@ -79,17 +84,27 @@ export function SuperDashboard() {
   </Frame>;
 }
 
+function shopState(row: any) {
+  if (!row.isactive) return 'Inactive';
+  if (row.activeto && new Date(row.activeto).getTime() < Date.now()) return 'Expired';
+  return 'Active';
+}
+
 export function SuperBusinesses() {
   const [rows, setRows] = useState<any[]>([]);
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<'All' | 'Active' | 'Inactive'>('All');
+  const [filter, setFilter] = useState<'All' | 'Active' | 'Inactive' | 'Expired'>('All');
+  const [renewing, setRenewing] = useState<any>(null);
+  const [days, setDays] = useState('30');
+  const [onboard, setOnboard] = useState(false);
   function load() { api<any[]>('/super/businesses').then(setRows); }
   useEffect(load, []);
   const visible = useMemo(() => rows.filter((row) => {
     const blob = `${row.businessname || ''} ${row.phone || ''} ${row.email || ''}`.toLowerCase();
     if (query.trim() && !blob.includes(query.trim().toLowerCase())) return false;
-    if (filter === 'Active') return Boolean(row.isactive);
-    if (filter === 'Inactive') return !row.isactive;
+    if (filter === 'Active') return shopState(row) === 'Active';
+    if (filter === 'Inactive') return shopState(row) === 'Inactive';
+    if (filter === 'Expired') return shopState(row) === 'Expired';
     return true;
   }), [rows, query, filter]);
   async function toggle(row: any) {
@@ -97,13 +112,21 @@ export function SuperBusinesses() {
     toastOk(row.isactive ? 'Shop paused.' : 'Shop resumed.');
     load();
   }
+  async function renew(event: FormEvent) {
+    event.preventDefault();
+    await api(`/super/businesses/${renewing.businessid}/renew`, { method: 'POST', body: JSON.stringify({ days: Number(days) }) });
+    toastOk('Shop period extended.');
+    setRenewing(null);
+    load();
+  }
   return <Frame>
-    <PageTitle kicker="Platform" title="Businesses" text="Pause a shop to hide it from guests. Orders stay on the account." />
+    <PageTitle kicker="Platform" title="Businesses" text="Pause a shop, extend its period, or onboard a new one." />
+    <div className="mb-4"><Button type="button" onClick={() => setOnboard(true)}>Onboard</Button></div>
     <Table variant="card" empty="No businesses match this filter." rows={visible} toolbar={
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search name, phone, or email" className={`${searchClass} sm:max-w-xs`} />
         <div className="flex gap-2">
-          {(['All', 'Active', 'Inactive'] as const).map((item) => (
+          {(['All', 'Active', 'Inactive', 'Expired'] as const).map((item) => (
             <button key={item} type="button" className={`rounded-full px-3 py-1.5 text-sm font-semibold ${filter === item ? 'bg-orange-600 text-white' : 'bg-orange-50 text-stone-600'}`} onClick={() => setFilter(item)}>{item}</button>
           ))}
         </div>
@@ -114,11 +137,93 @@ export function SuperBusinesses() {
       { key: 'phone', label: 'Phone' },
       { key: 'email', label: 'Email' },
       { key: 'createddate', label: 'Joined', render: (row) => joined(row.createddate) },
-      { key: 'isactive', label: 'Status', render: (row) => <Status value={row.isactive ? 'Active' : 'Inactive'} /> },
+      { key: 'activeto', label: 'Active until', render: (row) => joined(row.activeto) },
+      { key: 'isactive', label: 'Status', render: (row) => <Status value={shopState(row)} /> },
       { key: 'actions', label: 'Actions', render: (row) => <RowMenu items={[
+        { label: 'Renew', onClick: () => { setDays('30'); setRenewing(row); } },
         { label: row.isactive ? 'Pause' : 'Resume', onClick: () => toggle(row) },
         ...((row.publicslug || row.businesstoken) ? [{ label: 'Open guest page', to: `/play/${row.publicslug || row.businesstoken}` }] : []),
       ]} /> },
+    ]} />
+    {renewing && (
+      <Modal title={`Renew ${renewing.businessname}`} text="Days are added after today, or after the current end date if it is still ahead." onClose={() => setRenewing(null)}>
+        <Form onSubmit={renew} className="space-y-3">
+          <Field label="More days" value={days} inputMode="numeric" onChange={(event) => setDays(event.target.value.replace(/\D/g, '').slice(0, 4))} required />
+          <Button type="submit" className="w-full">Extend period</Button>
+        </Form>
+      </Modal>
+    )}
+    {onboard && <OnboardModal onClose={() => setOnboard(false)} onDone={() => { setOnboard(false); load(); }} />}
+  </Frame>;
+}
+
+function OnboardModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const [countries, setCountries] = useState<any[]>([]);
+  const [states, setStates] = useState<any[]>([]);
+  const [types, setTypes] = useState<any[]>([]);
+  const [countryId, setCountryId] = useState('');
+  const [stateId, setStateId] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    api<any[]>('/locations/countries').then((rows) => {
+      setCountries(rows);
+      if (rows.length === 1) setCountryId(String(rows[0].countryid));
+    });
+    api<any[]>('/locations/business-types').then(setTypes);
+  }, []);
+  useEffect(() => {
+    if (!countryId) { setStates([]); return; }
+    api<any[]>(`/locations/states?countryId=${countryId}`).then(setStates);
+  }, [countryId]);
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const body = Object.fromEntries(new FormData(event.currentTarget).entries()) as Record<string, string>;
+    if (!isTenDigitMobile(digitsOnly(body.ownerMobile || ''))) { toastErr('Owner mobile must be 10 digits.'); return; }
+    setBusy(true);
+    try {
+      await api('/super/businesses', {
+        method: 'POST',
+        body: JSON.stringify({ ...body, ownerMobile: digitsOnly(body.ownerMobile || ''), activeDays: Number(body.activeDays || 7) }),
+      });
+      toastOk('Shop onboarded.');
+      onDone();
+    } catch {
+      /* api toasts */
+    } finally { setBusy(false); }
+  }
+  return (
+    <Modal title="Onboard a shop" text="Creates the business login and sets how long it stays active." onClose={onClose} wide>
+      <Form onSubmit={submit} className="grid gap-3 sm:grid-cols-2">
+        <Field label="Business name" name="businessName" required />
+        <Select label="Type" name="businessTypeId"><option value="">Select</option>{types.map((row) => <option key={row.businesstypeid} value={row.businesstypeid}>{row.typename}</option>)}</Select>
+        <Field label="Business phone" name="phone" required />
+        <Field label="Business email" name="email" type="email" required />
+        <div className="sm:col-span-2"><Field label="Address" name="address" required /></div>
+        <Select label="Country" name="countryId" required value={countryId} onChange={(event) => { setCountryId(event.target.value); setStateId(''); }}><option value="">Select</option>{countries.map((row) => <option key={row.countryid} value={row.countryid}>{row.countryname}</option>)}</Select>
+        <Select label="State" name="stateId" required value={stateId} onChange={(event) => setStateId(event.target.value)}><option value="">Select</option>{states.map((row) => <option key={row.stateid} value={row.stateid}>{row.statename}</option>)}</Select>
+        <Field label="Owner name" name="ownerName" required />
+        <Field label="Owner mobile" name="ownerMobile" inputMode="numeric" maxLength={10} required />
+        <Field label="Owner email" name="ownerEmail" type="email" required />
+        <Field label="Password" name="password" type="password" required />
+        <Field label="Active days" name="activeDays" defaultValue="7" inputMode="numeric" required />
+        <div className="sm:col-span-2"><Button type="submit" className="w-full" busy={busy}>Create shop</Button></div>
+      </Form>
+    </Modal>
+  );
+}
+
+export function SuperDemos() {
+  const [rows, setRows] = useState<any[]>([]);
+  useEffect(() => { api<any[]>('/super/demos').then(setRows); }, []);
+  return <Frame>
+    <PageTitle kicker="Platform" title="Demo requests" text="Saved when someone books a demo. Email goes out only when mail is configured." />
+    <Table variant="card" empty="No demo requests yet." rows={rows} columns={[
+      { key: 'contactname', label: 'Name' },
+      { key: 'businessname', label: 'Business' },
+      { key: 'mobile', label: 'Mobile' },
+      { key: 'email', label: 'Email' },
+      { key: 'city', label: 'City' },
+      { key: 'createddate', label: 'Received', render: (row) => joined(row.createddate) },
     ]} />
   </Frame>;
 }

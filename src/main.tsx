@@ -6,9 +6,12 @@ import { App } from './app/App';
 import { AuthProvider } from './app/auth';
 import './styles/index.css';
 import 'react-toastify/dist/ReactToastify.css';
+import { captureInstallPrompt } from './lib/install';
+
+captureInstallPrompt();
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => undefined));
+  navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' }).catch(() => undefined);
 }
 
 createRoot(document.getElementById('root')!).render(

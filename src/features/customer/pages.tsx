@@ -23,7 +23,7 @@ export function CustomerDashboard() {
     <PageTitle title={`Hello, ${data?.customer?.customername || 'there'}`} text="Browse a shop menu, place an order, play for coins, and keep everything in one wallet." />
     <div className="grid gap-4 sm:grid-cols-3"><Stat label="Coins" value={data?.customer?.totalcoins ?? '—'} gold /><Stat label="Plays" value={data?.prizes ?? '—'} /><Stat label="Unread" value={data?.unread ?? '—'} /></div>
     <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      <Quick to="/customer/explore" title="Find a shop" text="Open any shop to view the menu and order food." />
+      <Quick to="/customer/explore" title="Your shops" text="Places you have already opened. Search there to find any other shop." />
       <Quick to="/customer/explore" title="Order food" text="Pick a business, tap Order, add items, and send to the table." />
       <Quick to="/customer/my-orders" title="My orders" text="Track what you already sent to the station." />
       <Quick to="/customer/wallet" title="Wallet" text="See every coin that came in or went out." />
@@ -61,7 +61,7 @@ function NotifyCard() {
 }
 
 export function ExplorePage() {
-  const [data, setData] = useState<any>({ businesses: [], categories: [] });
+  const [data, setData] = useState<any>({ businesses: [], categories: [], scope: 'visited' });
   const [states, setStates] = useState<{ stateid: number; statename: string }[]>([]);
   const [query, setQuery] = useState({ search: '', category: 'All', game: 'All', place: '', stateId: '', lat: '', lng: '', near: '' });
   const [locating, setLocating] = useState(false);
@@ -81,8 +81,9 @@ export function ExplorePage() {
       load(next);
     }, () => { setLocating(false); toastErr('Location was blocked. Pick a state or type a city.'); }, { enableHighAccuracy: true, timeout: 8000 });
   }
+  const visited = data.scope !== 'directory';
   return <Frame>
-    <PageTitle title="Explore shops" text="Search cafes and other businesses near you, or in any city you type." />
+    <PageTitle title={visited ? 'Your shops' : 'Explore shops'} text={visited ? 'Places you have already opened by scanning, playing, or ordering. Search or use Near me to see any other shop.' : 'Results for the name or location you searched.'} />
     <Card className="mb-4">
       <div className="grid items-end gap-3 md:grid-cols-2">
         <Field label="Name" value={query.search} onChange={(e) => setQuery({ ...query, search: e.target.value })} placeholder="Cafe, salon, clinic" />
@@ -110,7 +111,7 @@ export function ExplorePage() {
           </div>
         )}
       </div>
-    ))}{!data.businesses.length && <Empty text="No businesses match these filters." />}</div>
+    ))}{!data.businesses.length && <Empty text={visited ? 'No shops yet. Scan a QR, or search by name, city, or Near me.' : 'No businesses match these filters.'} />}</div>
   </Frame>;
 }
 

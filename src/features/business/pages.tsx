@@ -173,7 +173,11 @@ export function QrPage() {
     <PageTitle title="QR and poster" text="The link uses the shop name. Older printed codes still open. Regenerate if the shop name changed." />
     <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
       <Card className="text-center">
-        {data?.code?.imagepath && <img alt="QR" src={asset(data.code.imagepath)} className="mx-auto h-56 w-56 rounded-3xl bg-stone-100 p-3" />}
+        {data?.code?.imagepath && (
+          <div className="mx-auto grid h-60 w-60 place-items-center rounded-[28px] bg-white p-3 shadow-lg shadow-orange-600/10 ring-1 ring-orange-100">
+            <img alt="QR" src={asset(data.code.imagepath)} className="h-full w-full object-contain" />
+          </div>
+        )}
         <p className="my-3 break-all text-sm text-stone-500">{data?.code?.qrcodetext}</p>
         <div className="flex flex-wrap justify-center gap-2">
           <Button onClick={() => api('/business/qr/regenerate', { method: 'POST' }).then(load)}>Regenerate</Button>
@@ -186,17 +190,141 @@ export function QrPage() {
           <Field label="Catalog title" name="catalogTitle" defaultValue={data?.settings?.catalogtitle} />
           <Field label="Station label" name="stationLabel" defaultValue={data?.settings?.stationlabel} />
           <Field label="Station placeholder" name="stationPlaceholder" defaultValue={data?.settings?.stationplaceholder} />
-          <Field label="Review keywords" name="reviewKeywords" defaultValue={data?.settings?.reviewkeywords} placeholder="spicy, quick service, friendly staff" />
+          <Field label="Review keywords" name="reviewKeywords" defaultValue={data?.settings?.reviewkeywords} placeholder="Words guests can tap, separated by commas" />
           <Button type="submit">Save experience</Button>
         </Form>
       </Card>
     </div>
   </Frame>;
 }
+const posterLayouts = [
+  { id: 'classic', label: 'Classic' },
+  { id: 'bold', label: 'Bold' },
+  { id: 'night', label: 'Night' },
+] as const;
+
+const posterSteps = ['Scan', 'Play', 'Earn'];
+
+function posterColor(value?: string) {
+  return value && /^#[0-9a-fA-F]{6}$/.test(value) ? value : '#ea580c';
+}
+
+function QrPlate({ src, color, logo, name }: { src: string; color: string; logo: string; name: string }) {
+  const corner = 'pointer-events-none absolute h-6 w-6';
+  return (
+    <div className="relative mx-auto grid h-[248px] w-[248px] place-items-center rounded-[32px] bg-white p-5 shadow-[0_24px_50px_-24px_rgba(28,25,23,0.45)]">
+      <span className={`${corner} left-4 top-4 border-l-[3px] border-t-[3px]`} style={{ borderColor: color }} />
+      <span className={`${corner} right-4 top-4 border-r-[3px] border-t-[3px]`} style={{ borderColor: color }} />
+      <span className={`${corner} bottom-4 left-4 border-b-[3px] border-l-[3px]`} style={{ borderColor: color }} />
+      <span className={`${corner} bottom-4 right-4 border-b-[3px] border-r-[3px]`} style={{ borderColor: color }} />
+      {src ? <img alt="QR code" src={src} className="h-[188px] w-[188px] object-contain" /> : <span className="text-sm text-stone-400">QR is loading</span>}
+      <span className="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 place-items-center overflow-hidden rounded-xl bg-white p-0.5 shadow-md ring-2 ring-white">
+        {logo ? <img alt="" src={logo} className="h-full w-full rounded-[10px] object-cover" /> : <span className="font-display text-lg font-semibold" style={{ color }}>{name.slice(0, 1)}</span>}
+      </span>
+    </div>
+  );
+}
+
+function printPoster() {
+  const sheet = document.querySelector('.poster-print');
+  if (!sheet) return;
+  const frame = window.open('', '_blank', 'width=480,height=720');
+  if (!frame) {
+    window.print();
+    return;
+  }
+  const styles = Array.from(document.querySelectorAll('link[rel="stylesheet"], style')).map((node) => node.outerHTML).join('');
+  frame.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Poster</title>${styles}<style>
+    @page { margin: 0; size: 108mm 176mm; }
+    html, body { margin: 0; padding: 0; width: 108mm; height: 176mm; overflow: hidden; background: transparent; }
+    .poster-print { width: 108mm; max-width: none; margin: 0; }
+    .poster-print article { width: 108mm; min-height: 176mm; margin: 0; border-radius: 0; box-shadow: none; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  </style></head><body>${sheet.outerHTML}</body></html>`);
+  frame.document.close();
+  window.setTimeout(() => {
+    frame.focus();
+    frame.print();
+    frame.onafterprint = () => frame.close();
+  }, 300);
+}
+
+function PosterSteps({ color, light = false }: { color: string; light?: boolean }) {
+  return (
+    <ol className="mt-7 flex items-center justify-center gap-2">
+      {posterSteps.map((step, index) => (
+        <li key={step} className="flex items-center gap-2">
+            <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${light ? 'bg-white/10 text-white' : 'bg-white text-stone-800 shadow-sm'}`}>
+            <span className="grid h-4 w-4 place-items-center rounded-full text-[10px] text-white" style={{ background: color }}>{index + 1}</span>
+            {step}
+          </span>
+          {index < posterSteps.length - 1 && <span className={`h-px w-3 ${light ? 'bg-white/30' : 'bg-stone-300'}`} />}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 export function PosterPage() {
   const [data, setData] = useState<any>(null);
+  const [layout, setLayout] = useState<(typeof posterLayouts)[number]['id']>('classic');
   useEffect(() => { api('/business/qr').then(setData); }, []);
-  return <Frame><PageTitle title="Print poster" /><Card className="text-center"><p className="font-display text-4xl">{data?.business?.businessname}</p><p>Scan to play, order, and review</p>{data?.code?.imagepath && <img alt="QR" src={asset(data.code.imagepath)} className="mx-auto mt-4 h-64 w-64" />}{data?.code?.qrcodetext && <p className="mt-3 break-all text-sm text-stone-500">{data.code.qrcodetext}</p>}<Button className="mt-4" onClick={() => window.print()}>Print</Button></Card></Frame>;
+  const name = data?.business?.businessname || 'Scan to visit';
+  const line = data?.business?.tagline || 'Play, order, and collect coins';
+  const qr = data?.code?.imagepath ? asset(data.code.imagepath) : '';
+  const logo = data?.business?.logoimagepath ? asset(data.business.logoimagepath) : '';
+  const color = posterColor(data?.business?.themecolor);
+  const link = String(data?.code?.qrcodetext || '').replace(/^https?:\/\//, '');
+  return <Frame>
+    <div className="print:hidden">
+      <PageTitle title="Print poster" text="Choose a layout. Print shows only the poster." />
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <Button type="button" onClick={printPoster}>Print</Button>
+        {posterLayouts.map((item) => (
+          <button key={item.id} type="button" className={`rounded-full px-4 py-2 text-sm font-semibold ${layout === item.id ? 'bg-orange-600 text-white' : 'bg-orange-50 text-stone-600'}`} onClick={() => setLayout(item.id)}>{item.label}</button>
+        ))}
+      </div>
+    </div>
+    <div className="poster-print mx-auto w-full max-w-[420px]">
+      {layout === 'classic' && (
+        <article className="overflow-hidden rounded-[36px] bg-[#fffaf5] px-8 pb-8 pt-10 text-center shadow-xl shadow-stone-950/10 ring-1 ring-stone-200" style={{ backgroundImage: `radial-gradient(circle at top, ${color}18, transparent 42%)` }}>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.32em]" style={{ color }}>Welcome</p>
+          <h2 className="mt-3 font-display text-[2.4rem] font-semibold leading-none tracking-tight text-stone-950">{name}</h2>
+          <p className="mx-auto mt-2 max-w-[16rem] text-sm leading-relaxed text-stone-500">{line}</p>
+          <div className="mt-7"><QrPlate src={qr} color={color} logo={logo} name={name} /></div>
+          <p className="mt-6 font-display text-xl font-semibold text-stone-950">Point your camera here</p>
+          <PosterSteps color={color} />
+          {link && <p className="mt-5 text-[11px] tracking-wide text-stone-400">{link}</p>}
+        </article>
+      )}
+      {layout === 'bold' && (
+        <article className="overflow-hidden rounded-[36px] text-center text-white shadow-xl shadow-stone-950/15" style={{ background: `linear-gradient(165deg, ${color} 0%, #1c1917 78%)` }}>
+          <div className="px-8 pb-6 pt-10">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-white/70">Scan to start</p>
+            <h2 className="mt-2 font-display text-[2.5rem] font-semibold leading-none tracking-tight">{name}</h2>
+            <p className="mx-auto mt-2 max-w-[16rem] text-sm text-white/75">{line}</p>
+          </div>
+          <div className="mx-4 mb-4 rounded-[28px] bg-white px-6 pb-7 pt-7 text-stone-950">
+            <QrPlate src={qr} color={color} logo={logo} name={name} />
+            <p className="mt-5 font-display text-lg font-semibold">Play a game. Keep the coins.</p>
+            <PosterSteps color={color} />
+            {link && <p className="mt-4 text-[11px] tracking-wide text-stone-400">{link}</p>}
+          </div>
+        </article>
+      )}
+      {layout === 'night' && (
+        <article className="overflow-hidden rounded-[36px] bg-stone-950 px-8 pb-8 pt-10 text-center text-white shadow-xl shadow-stone-950/20">
+          <div className="mx-auto mb-6 h-1.5 w-16 rounded-full" style={{ background: color }} />
+          <h2 className="font-display text-[2.5rem] font-semibold leading-none tracking-tight">{name}</h2>
+          <p className="mx-auto mt-2 max-w-[16rem] text-sm text-stone-400">{line}</p>
+          <div className="mt-7"><QrPlate src={qr} color={color} logo={logo} name={name} /></div>
+          <p className="mt-6 text-sm font-semibold uppercase tracking-[0.22em]" style={{ color }}>Scan · Play · Earn</p>
+          <PosterSteps color={color} light />
+          {link && <p className="mt-5 text-[11px] tracking-wide text-stone-500">{link}</p>}
+        </article>
+      )}
+    </div>
+  </Frame>;
 }
 export function BusinessProfilePage() {
   const [profile, setProfile] = useState<any>({});
@@ -321,7 +449,7 @@ export function BusinessReviewsPage() {
   return <Frame>
     <PageTitle title="Reviews" text="High ratings become Google reviews. Lower ratings stay here as private feedback." />
     <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">Public reviews</h2>
-    <Table empty="No guest reviews yet." rows={reviews} columns={[{ key: 'customername', label: 'Guest' }, { key: 'rating', label: 'Stars' }, { key: 'body', label: 'Review' }]} />
+    <Table empty="No named guest reviews yet." rows={reviews.filter((row) => String(row.customername || '').trim())} columns={[{ key: 'customername', label: 'Guest' }, { key: 'rating', label: 'Stars' }, { key: 'body', label: 'Review' }]} />
     <h2 className="mb-3 mt-8 text-sm font-semibold uppercase tracking-wider text-stone-400">Private feedback</h2>
     <Table empty="No private feedback yet." rows={feedback} columns={[{ key: 'customername', label: 'Guest' }, { key: 'rating', label: 'Stars' }, { key: 'message', label: 'Message' }, { key: 'status', label: 'Status', render: (row) => <Status value={row.status === 'resolved' ? 'Completed' : row.status === 'read' ? 'Accepted' : 'Pending'} /> }, { key: 'actions', label: '', render: (row) => <RowMenu items={[{ label: row.status === 'resolved' ? 'Reopen' : 'Resolve', onClick: () => api(`/business/guest-feedback/${row.feedbackid}`, { method: 'POST', body: JSON.stringify({ status: row.status === 'resolved' ? 'read' : 'resolved' }) }).then(load) }]} /> }]} />
   </Frame>;
@@ -338,7 +466,7 @@ export function PushPage() {
       <Field label="Title" name="title" required />
       <Area label="Message" name="message" required />
       <Select label="Segment" name="segment"><option>All</option><option>ScannedQR</option><option>Registered</option><option>WalletBalance</option><option>ExpiringCoins</option><option>RedeemedRewards</option><option>Inactive30Days</option><option>PendingClaims</option></Select>
-      <p className="text-xs text-stone-500">Customers who enabled browser notifications also get a real system notification.</p>
+      <p className="text-xs text-stone-500">Everyone who played, ordered, or signed up at this shop gets it in their inbox. If they allowed notifications, their phone shows a banner even when the site is closed.</p>
       <Button type="submit">Send</Button>
       {message && <p className="text-sm text-emerald-700">{message}</p>}
     </Form>

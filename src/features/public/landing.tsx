@@ -1,10 +1,13 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Link, useLocation } from 'react-router-dom';
+import { api } from '../../api/client';
 import { Marketing } from '../../components/layout/Shells';
+import { openDemo } from './demo-request';
+import { digitsOnly, isTenDigitMobile } from '../../lib/mobile';
+import { toastOk } from '../../lib/toast';
 
 const ease = [0.22, 1, 0.36, 1] as const;
-const supportEmail = 'support@rewardspinner.local';
 
 const businesses = [
   { id: 'cafe', label: 'Café Owner', chain: ['Café', 'Table QR', 'Digital Menu', 'Spin the Wheel', 'Free Latte Coupon', 'Sunday Repeat Visit'] },
@@ -175,7 +178,7 @@ function Hero() {
             One QR. Digital Menu. Games. Rewards. Coins. Coupons. Reviews. CRM. Everything you need to engage and retain customers.
           </motion.p>
           <motion.div initial={reduce ? false : { opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.9, delay: 0.8, ease }} className="mt-9 flex flex-wrap items-center gap-4">
-            <button type="button" onClick={() => scrollToId('demo')} className="group inline-flex items-center gap-2 rounded-full bg-orange-600 px-7 py-3.5 text-sm font-semibold text-white shadow-lg shadow-orange-600/30 transition hover:scale-[1.03] hover:bg-orange-700 active:scale-[0.98]">
+            <button type="button" onClick={openDemo} className="group inline-flex items-center gap-2 rounded-full bg-orange-600 px-7 py-3.5 text-sm font-semibold text-white shadow-lg shadow-orange-600/30 transition hover:scale-[1.03] hover:bg-orange-700 active:scale-[0.98]">
               Book a Free Demo
               <Arrow className="transition group-hover:translate-x-1" />
             </button>
@@ -490,7 +493,7 @@ function Pricing() {
                 <p className="mt-1 text-sm text-stone-500">{plan.blurb}</p>
                 <p className="mt-5 text-3xl font-semibold">{price}<span className="text-base font-normal text-stone-400">{note}</span></p>
                 <ul className="mt-5 space-y-2 text-sm text-stone-600">{plan.features.map((item) => <li key={item}>• {item}</li>)}</ul>
-                <button type="button" onClick={() => scrollToId('demo')} className="mt-8 inline-flex min-h-11 items-center justify-center rounded-full bg-orange-600 px-4 text-sm font-semibold text-white transition hover:bg-orange-700">{plan.cta}</button>
+                <button type="button" onClick={openDemo} className="mt-8 inline-flex min-h-11 items-center justify-center rounded-full bg-orange-600 px-4 text-sm font-semibold text-white transition hover:bg-orange-700">{plan.cta}</button>
               </article>
             );
           })}
@@ -566,20 +569,34 @@ function Demo() {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
-  function submit(event: FormEvent) {
+  async function submit(event: FormEvent) {
     event.preventDefault();
     const next: Partial<DemoForm> = {};
     if (!form.name.trim()) next.name = 'Your name is required';
     if (!form.businessName.trim()) next.businessName = 'Business name is required';
     if (!form.businessType) next.businessType = 'Pick a business type';
-    if (!/^[+\d][\d\s-]{6,16}$/.test(form.phone.trim())) next.phone = 'Enter a valid phone number';
+    if (!isTenDigitMobile(digitsOnly(form.phone))) next.phone = 'Enter a 10-digit mobile number';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) next.email = 'Enter a valid email';
     if (!form.city.trim()) next.city = 'City is required';
     setErrors(next);
     if (Object.keys(next).length) return;
-    const body = [`Name: ${form.name.trim()}`, `Business: ${form.businessName.trim()}`, `Type: ${form.businessType}`, `Phone: ${form.phone.trim()}`, `Email: ${form.email.trim()}`, `City: ${form.city.trim()}`].join('\n');
-    window.location.href = `mailto:${supportEmail}?subject=${encodeURIComponent('Free demo request')}&body=${encodeURIComponent(body)}`;
-    setSent(true);
+    try {
+      await api('/public/demos', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: form.name.trim(),
+          mobile: digitsOnly(form.phone),
+          email: form.email.trim(),
+          businessName: form.businessName.trim(),
+          businessType: form.businessType,
+          city: form.city.trim(),
+        }),
+      });
+      setSent(true);
+      toastOk('Demo request sent.');
+    } catch {
+      /* api toasts */
+    }
   }
 
   return (
@@ -600,8 +617,8 @@ function Demo() {
           <div className="rounded-3xl border border-stone-200 bg-white p-6 shadow-2xl shadow-stone-950/10 sm:p-8">
             {sent ? (
               <div className="py-10 text-center">
-                <p className="font-display text-2xl font-semibold">You’re booked in.</p>
-                <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-stone-500">Thanks {form.name.split(' ')[0]} — send the email that just opened, or write {supportEmail}, and we’ll call {form.phone} to schedule the demo.</p>
+                <p className="font-display text-2xl font-semibold">Request received.</p>
+                <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-stone-500">Thanks {form.name.split(' ')[0]}. We will call {form.phone} to schedule the demo.</p>
                 <button type="button" className="mt-7 rounded-full border border-stone-200 px-6 py-2.5 text-sm font-semibold" onClick={() => { setSent(false); setForm(emptyDemo); }}>Book for another business</button>
               </div>
             ) : (
@@ -619,7 +636,7 @@ function Demo() {
                   {errors.businessType && <span className="mt-1 block text-xs text-rose-600">{errors.businessType}</span>}
                 </label>
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="Phone" value={form.phone} error={errors.phone} placeholder="98765 43210" onChange={(value) => update('phone', value)} />
+                  <Field label="Mobile" value={form.phone} error={errors.phone} placeholder="10-digit mobile" onChange={(value) => update('phone', digitsOnly(value).slice(0, 10))} />
                   <Field label="Email" value={form.email} error={errors.email} placeholder="priya@cafe.in" onChange={(value) => update('email', value)} />
                 </div>
                 <Field label="City" value={form.city} error={errors.city} placeholder="Mumbai" onChange={(value) => update('city', value)} />

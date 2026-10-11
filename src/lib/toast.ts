@@ -8,6 +8,6 @@ export function toastErr(message: string, toastId?: string) {
   toast.error(message || 'Something went wrong.', toastId ? { toastId } : undefined);
 }
 
-export function toastInfo(message: string) {
-  toast.info(message);
+export function toastInfo(message: string, toastId?: string) {
+  toast.info(message, toastId ? { toastId } : undefined);
 }

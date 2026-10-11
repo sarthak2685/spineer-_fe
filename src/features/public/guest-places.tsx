@@ -5,7 +5,9 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { api, asset, client } from '../../api/client';
 import { useAuth } from '../../app/auth';
 import { Alert, Button, Field, Form, Modal } from '../../components/ui';
+import { catalogCopy } from '../../lib/catalog';
 import { digitsOnly, isTenDigitMobile } from '../../lib/mobile';
+import { useInstallApp } from '../../lib/use-install';
 import { toastErr, toastInfo, toastOk } from '../../lib/toast';
 import { GameStage, PrizeSlice, PlayResult } from './Games';
 
@@ -13,7 +15,7 @@ export function brandColor(value?: string) {
   return value && /^#[0-9a-fA-F]{6}$/.test(value) ? value : '#ea580c';
 }
 
-const DEFAULT_KEYWORDS = ['friendly staff', 'great food', 'quick service', 'clean place', 'good value', 'tasty', 'cozy', 'worth visiting'];
+const DEFAULT_KEYWORDS = ['friendly staff', 'quick service', 'clean place', 'good value', 'professional', 'on time', 'comfortable', 'worth visiting'];
 
 type GuestTab = 'play' | 'menu' | 'bill' | 'review';
 type GuestHub = Record<string, any>;
@@ -71,6 +73,9 @@ function tabFromPath(pathname: string): GuestTab {
 const tabOrder: GuestTab[] = ['play', 'menu', 'bill', 'review'];
 
 export function PlaceFrame({ business, token, current, children }: { business: Record<string, any>; token?: string; current: GuestTab; children: ReactNode }) {
+  const auth = useAuth();
+  const [loginOpen, setLoginOpen] = useState(false);
+  const signedIn = Boolean(auth.user && !auth.user.name.startsWith('Guest_'));
   const color = brandColor(business.themecolor);
   const whatsapp = String(business.whatsappnumber || '').replace(/\D/g, '');
   const wa = whatsapp.length === 10 ? `91${whatsapp}` : whatsapp;
@@ -81,14 +86,15 @@ export function PlaceFrame({ business, token, current, children }: { business: R
   );
   const tabClass = (id: GuestTab) =>
     `shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition ${current === id ? 'text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'}`;
+  const playing = current === 'play';
   return (
     <div className="public-enter min-h-screen bg-orange-50 text-stone-900">
-      <div className="h-52 sm:h-64" style={{ background: `linear-gradient(120deg, ${color}, #0c0a09)` }}>
+      <div className={`h-52 sm:h-64 ${playing ? 'hidden sm:block' : ''}`} style={{ background: `linear-gradient(120deg, ${color}, #0c0a09)` }}>
         {business.bannerimagepath && <img alt="" src={asset(business.bannerimagepath)} className="h-full w-full object-cover" />}
       </div>
-      <div className="relative z-10 mx-auto -mt-16 max-w-xl px-3 pb-28 sm:px-4">
-        <div className="relative rounded-[28px] bg-white px-5 pb-8 pt-14 shadow-xl shadow-stone-950/10">
-          <div className="absolute left-1/2 top-0 grid h-20 w-20 -translate-x-1/2 -translate-y-1/2 place-items-center overflow-hidden rounded-full bg-white shadow-lg ring-4 ring-white">
+      <div className={`relative z-10 mx-auto max-w-xl px-3 pb-28 sm:px-4 ${playing ? 'min-h-dvh sm:-mt-16' : '-mt-16'}`}>
+        <div className={`relative bg-white px-5 pb-8 shadow-xl shadow-stone-950/10 ${playing ? 'min-h-dvh rounded-none pt-5 shadow-none sm:min-h-0 sm:rounded-[28px] sm:pt-14 sm:shadow-xl' : 'rounded-[28px] pt-14'}`}>
+          <div className={`absolute left-1/2 top-0 grid h-20 w-20 -translate-x-1/2 -translate-y-1/2 place-items-center overflow-hidden rounded-full bg-white shadow-lg ring-4 ring-white ${playing ? 'hidden sm:grid' : ''}`}>
             {business.logoimagepath ? <img alt="" src={asset(business.logoimagepath)} className="h-full w-full object-cover" /> : <span className="text-xs font-bold text-stone-400">LOGO</span>}
           </div>
           <h1 className="truncate text-center text-2xl font-bold" title={business.businessname || 'RewardSpinner'}>{business.businessname || 'RewardSpinner'}</h1>
@@ -102,60 +108,29 @@ export function PlaceFrame({ business, token, current, children }: { business: R
           </div>
           <div className="mt-5 flex gap-2 overflow-x-auto sm:justify-center">
             <NavLink to={`/play/${token}`} className={tabClass('play')} style={current === 'play' ? { background: color } : undefined}>Play</NavLink>
-            <NavLink to={`/menu/${token}`} className={tabClass('menu')} style={current === 'menu' ? { background: color } : undefined}>Menu</NavLink>
+            <NavLink to={`/menu/${token}`} className={tabClass('menu')} style={current === 'menu' ? { background: color } : undefined}>{catalogCopy(business.businesstype).tab}</NavLink>
             <NavLink to={`/bill/${token}`} className={tabClass('bill')} style={current === 'bill' ? { background: color } : undefined}>Bill</NavLink>
             <NavLink to={`/review/${token}`} className={tabClass('review')} style={current === 'review' ? { background: color } : undefined}>Review</NavLink>
           </div>
           <div className="mt-6">{children}</div>
+          {!signedIn && token && (
+            <button type="button" className="mt-6 w-full rounded-full border border-stone-200 py-3 text-sm font-semibold text-stone-950" onClick={() => setLoginOpen(true)}>Sign in</button>
+          )}
         </div>
       </div>
+      {loginOpen && !signedIn && token && <SaveCoinsModal token={token} onClose={() => setLoginOpen(false)} />}
     </div>
   );
 }
 
-type BeforeInstallPromptEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }> };
-
 function GetAppCard() {
-  const [prompt, setPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [installed, setInstalled] = useState(() => window.matchMedia('(display-mode: standalone)').matches);
-  const [hint, setHint] = useState('');
-  useEffect(() => {
-    const onPrompt = (event: Event) => {
-      event.preventDefault();
-      setPrompt(event as BeforeInstallPromptEvent);
-    };
-    const onInstalled = () => setInstalled(true);
-    window.addEventListener('beforeinstallprompt', onPrompt);
-    window.addEventListener('appinstalled', onInstalled);
-    return () => {
-      window.removeEventListener('beforeinstallprompt', onPrompt);
-      window.removeEventListener('appinstalled', onInstalled);
-    };
-  }, []);
+  const { ready, installed, hint, install } = useInstallApp();
   if (installed) return null;
-  async function install() {
-    if (prompt) {
-      await prompt.prompt();
-      const choice = await prompt.userChoice;
-      if (choice.outcome === 'accepted') setInstalled(true);
-      setPrompt(null);
-    } else {
-      const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
-      setHint(ios ? 'On iPhone, tap Share, then Add to Home Screen.' : 'Open the browser menu and choose Install app or Add to Home Screen.');
-    }
-    if ('Notification' in window && Notification.permission === 'default') {
-      const permission = await Notification.requestPermission();
-      if (permission === 'granted') {
-        const { enableBrowserPush } = await import('../../lib/push');
-        await enableBrowserPush().catch(() => undefined);
-      }
-    }
-  }
   return (
     <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3">
       <div className="min-w-0">
         <p className="text-sm font-semibold text-stone-950">Get the app</p>
-        <p className="mt-0.5 text-xs text-stone-500">{hint || 'Add RewardSpinner to your home screen so offers can reach this phone.'}</p>
+        <p className="mt-0.5 text-xs text-stone-500">{hint || (ready ? 'Click Install to download it onto this device.' : 'Preparing the download…')}</p>
       </div>
       <button type="button" className="shrink-0 rounded-full bg-orange-600 px-4 py-2 text-sm font-semibold text-white" onClick={install}>Install</button>
     </div>
@@ -223,7 +198,7 @@ type PricedOption = { optionid: number; optionname: string; price: string | numb
 type PricedAddon = { addonid: number; addonname: string; price: string | number };
 
 function ItemSheet({
-  item, color, optionId, addonIds, onOption, onToggleAddon, onClose, onAdd,
+  item, color, optionId, addonIds, onOption, onToggleAddon, onClose, onAdd, optionLabel, addonLabel, addLabel,
 }: {
   item: any;
   color: string;
@@ -233,6 +208,9 @@ function ItemSheet({
   onToggleAddon: (id: number) => void;
   onClose: () => void;
   onAdd: () => void;
+  optionLabel: string;
+  addonLabel: string;
+  addLabel: string;
 }) {
   const options = (item.options || []) as PricedOption[];
   const addons = (item.addons || []) as PricedAddon[];
@@ -251,7 +229,7 @@ function ItemSheet({
           {item.description && <p className="mt-1 text-sm text-stone-500">{item.description}</p>}
           {options.length > 0 && (
             <div className="mt-4">
-              <p className="text-sm font-semibold">Choose option</p>
+              <p className="text-sm font-semibold">{optionLabel}</p>
               <div className="mt-2 space-y-2">
                 {options.map((row) => (
                   <label key={row.optionid} className={`flex cursor-pointer items-center justify-between rounded-2xl border px-3 py-3 ${optionId === Number(row.optionid) ? 'border-orange-500 bg-orange-50' : 'border-stone-200'}`}>
@@ -264,7 +242,7 @@ function ItemSheet({
           )}
           {addons.length > 0 && (
             <div className="mt-4">
-              <p className="text-sm font-semibold">Add-ons</p>
+              <p className="text-sm font-semibold">{addonLabel}</p>
               <div className="mt-2 space-y-2">
                 {addons.map((row) => (
                   <label key={row.addonid} className="flex cursor-pointer items-center justify-between rounded-2xl border border-stone-200 px-3 py-3">
@@ -278,7 +256,7 @@ function ItemSheet({
         </div>
         <div className="flex shrink-0 items-center justify-between gap-3 border-t border-stone-100 bg-white px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <p className="text-2xl font-bold">{rupee(total)}</p>
-          <button type="button" className="rounded-full px-6 py-3 text-sm font-semibold text-white shadow-md" style={{ background: color }} onClick={onAdd}>Add to cart</button>
+          <button type="button" className="rounded-full px-6 py-3 text-sm font-semibold text-white shadow-md" style={{ background: color }} onClick={onAdd}>{addLabel}</button>
         </div>
       </div>
     </div>,
@@ -407,7 +385,7 @@ export function PlayPanel() {
           </button>
         ))}
       </div>
-      <section className="mt-4 grid place-items-center overflow-visible rounded-3xl bg-stone-100 px-2 py-5 sm:mt-5 sm:px-4 sm:py-6">
+      <section className="mt-4 grid min-h-[70dvh] place-items-center overflow-visible rounded-3xl bg-stone-100 px-2 py-5 sm:mt-5 sm:min-h-0 sm:px-4 sm:py-6">
         <GameStage key={game} game={game} prizes={prizes} busy={busy} onPlay={play} onReveal={setResult} />
       </section>
       {error && <p className="mt-4 rounded-2xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
@@ -436,20 +414,22 @@ function OffersList() {
       <h2 className="text-base font-bold">Current offers</h2>
       <p className="mt-1 text-xs text-stone-400">Rewards this shop has switched on.</p>
       {!offers.length && <p className="mt-3 text-sm text-stone-400">No active offers right now.</p>}
-      <div className="mt-3 space-y-2">
-        {offers.map((offer) => (
-          <article key={offer.rewardid} className="flex items-center gap-3 rounded-2xl border border-stone-100 bg-stone-50 p-3">
-            <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-amber-100 text-lg">
-              {offer.imagepath ? <img alt="" src={asset(offer.imagepath)} className="h-full w-full object-cover" /> : '🎁'}
-            </div>
-            <div className="min-w-0">
-              <p className="truncate font-semibold text-stone-950">{offer.rewardname}</p>
-              {offer.description && <p className="line-clamp-2 text-xs text-stone-500">{offer.description}</p>}
-              <p className="mt-0.5 text-xs font-semibold text-amber-600">{offer.coinsrequired} coins</p>
-            </div>
-          </article>
-        ))}
-      </div>
+      {offers.length > 0 && (
+        <div className="mt-3 flex gap-3 overflow-x-auto pb-2">
+          {offers.map((offer) => (
+            <article key={offer.rewardid} className="flex w-64 shrink-0 items-center gap-3 rounded-2xl border border-stone-100 bg-stone-50 p-3">
+              <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-amber-100 text-lg">
+                {offer.imagepath ? <img alt="" src={asset(offer.imagepath)} className="h-full w-full object-cover" /> : '🎁'}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate font-semibold text-stone-950">{offer.rewardname}</p>
+                {offer.description && <p className="line-clamp-2 text-xs text-stone-500">{offer.description}</p>}
+                <p className="mt-0.5 text-xs font-semibold text-amber-600">{offer.coinsrequired} coins</p>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
     </section>
     <GetAppCard />
     </>
@@ -480,7 +460,7 @@ export function MenuPanel() {
   const auth = useAuth();
   const [filter, setFilter] = useState<number | 'all'>('all');
   const [cart, setCart] = useState<CartLine[]>([]);
-  const [fulfillment, setFulfillment] = useState<'DineIn' | 'Delivery' | 'Pickup'>('DineIn');
+  const [fulfillment, setFulfillment] = useState<'DineIn' | 'Delivery' | 'Pickup'>(catalogCopy('').modes[0][0]);
   const [station, setStation] = useState('');
   const [address, setAddress] = useState('');
   const [guestName, setGuestName] = useState('');
@@ -493,6 +473,10 @@ export function MenuPanel() {
   const [pickedOption, setPickedOption] = useState<number | null>(null);
   const [pickedAddons, setPickedAddons] = useState<number[]>([]);
 
+  const copy = catalogCopy(hub?.type?.typename || hub?.type?.typecode || business?.businesstype);
+  useEffect(() => {
+    if (!copy.modes.some(([value]) => value === fulfillment)) setFulfillment(copy.modes[0][0]);
+  }, [copy.kind]);
   const categories = (hub?.categories || []) as any[];
   const items = (hub?.items || []) as any[];
   const visible = filter === 'all' ? items : items.filter((item) => item.categoryid === filter);
@@ -515,7 +499,7 @@ export function MenuPanel() {
     setCart((current) => {
       const found = current.find((row) => row.key === line.key);
       if (!found) {
-        toastInfo(`${line.name} added to cart`);
+        toastInfo(`${line.name} · ${copy.added.toLowerCase()}`);
         return [...current, line];
       }
       return current.map((row) => (row.key === line.key ? { ...row, qty: row.qty + line.qty } : row));
@@ -552,9 +536,9 @@ export function MenuPanel() {
 
   async function place() {
     if (sending) return;
-    if (!cart.length) { toastErr('Add something from the menu first.'); return; }
+    if (!cart.length) { toastErr(`Add something from the ${copy.tab.toLowerCase()} list first.`); return; }
     if (!isTenDigitMobile(mobile)) { toastErr('Enter a 10-digit mobile number.'); return; }
-    if (fulfillment === 'DineIn' && !station.trim()) { toastErr('Table or room number is required for dine in.'); return; }
+    if (fulfillment === 'DineIn' && !station.trim()) { toastErr(copy.stationError); return; }
     if (fulfillment === 'Delivery' && !address.trim()) { toastErr('Delivery address is required.'); return; }
     setSending(true);
     const popup = window.open('', '_blank');
@@ -595,7 +579,7 @@ export function MenuPanel() {
   return (
     <>
       <div className="flex gap-2 overflow-x-auto pb-2">
-        <button type="button" className="whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold" style={chip(filter === 'all')} onClick={() => setFilter('all')}>All items</button>
+        <button type="button" className="whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold" style={chip(filter === 'all')} onClick={() => setFilter('all')}>{copy.guestAll}</button>
         {categories.map((category) => (
           <button key={category.categoryid} type="button" className="whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold" style={chip(filter === category.categoryid)} onClick={() => setFilter(category.categoryid)}>{category.categoryname}</button>
         ))}
@@ -608,7 +592,7 @@ export function MenuPanel() {
       <div className={`mt-4 space-y-8 ${count ? 'pb-28' : ''}`}>
         {[...grouped.entries()].map(([categoryId, rows]) => (
           <section key={categoryId}>
-            <h2 className="text-lg font-bold">{categories.find((category) => category.categoryid === categoryId)?.categoryname || 'Menu'}</h2>
+            <h2 className="text-lg font-bold">{categories.find((category) => category.categoryid === categoryId)?.categoryname || copy.pageTitle}</h2>
             <div className="mt-3 space-y-3">
               {rows.map((item) => {
                 const options = (item.options || []) as PricedOption[];
@@ -632,8 +616,8 @@ export function MenuPanel() {
                       <p className="mt-1 text-sm font-bold" style={{ color }}>{options.length ? `From ${rupee(from)}` : rupee(from)}</p>
                       {(options.length > 0 || addons.length > 0) && (
                         <p className="mt-1 flex flex-wrap gap-1 text-[11px] font-semibold">
-                          {options.length > 0 && <span className="rounded-full bg-violet-50 px-2 py-0.5 text-violet-600">Options</span>}
-                          {addons.length > 0 && <span className="rounded-full bg-sky-50 px-2 py-0.5 text-sky-600">Add-ons</span>}
+                          {options.length > 0 && <span className="rounded-full bg-violet-50 px-2 py-0.5 text-violet-600">{copy.optionLabel}</span>}
+                          {addons.length > 0 && <span className="rounded-full bg-sky-50 px-2 py-0.5 text-sky-600">{copy.addonLabel}</span>}
                         </p>
                       )}
                     </div>
@@ -651,7 +635,7 @@ export function MenuPanel() {
             </div>
           </section>
         ))}
-        {!items.length && <p className="py-16 text-center text-stone-400">No menu items yet.</p>}
+        {!items.length && <p className="py-16 text-center text-stone-400">{copy.emptyGuest}</p>}
         <OffersList />
       </div>
 
@@ -664,8 +648,8 @@ export function MenuPanel() {
             onClick={() => setOpen(true)}
           >
             <span>
-              <span className="block text-sm font-semibold">View cart · {count} item{count === 1 ? '' : 's'}</span>
-              <span className="text-xs text-white/80">Dine in, delivery, or pickup</span>
+              <span className="block text-sm font-semibold">{copy.action} · {count}</span>
+              <span className="text-xs text-white/80">{copy.cartHint}</span>
             </span>
             <span className="rounded-xl bg-white/20 px-3 py-1.5 text-sm font-bold">{rupee(total)}</span>
           </button>
@@ -678,6 +662,9 @@ export function MenuPanel() {
           color={color}
           optionId={pickedOption}
           addonIds={pickedAddons}
+          optionLabel={copy.optionLabel}
+          addonLabel={copy.addonLabel}
+          addLabel={copy.addButton}
           onOption={setPickedOption}
           onToggleAddon={(id) => setPickedAddons((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id])}
           onClose={() => setCustom(null)}
@@ -702,9 +689,9 @@ export function MenuPanel() {
                 </div>
               ))}
               <div>
-                <p className="text-sm font-semibold text-stone-700">How should we serve this?</p>
-                <div className="mt-2 grid grid-cols-3 gap-2">
-                  {([['DineIn', 'Dine in'], ['Delivery', 'Delivery'], ['Pickup', 'Pickup']] as const).map(([value, label]) => (
+                <p className="text-sm font-semibold text-stone-700">{copy.serveTitle}</p>
+                <div className={`mt-2 grid gap-2 ${copy.modes.length > 1 ? 'grid-cols-3' : 'grid-cols-1'}`}>
+                  {copy.modes.map(([value, label]) => (
                     <button key={value} type="button" className={`rounded-2xl border px-2 py-3 text-sm font-semibold ${fulfillment === value ? 'border-transparent text-white' : 'border-stone-200 bg-stone-50 text-stone-600'}`} style={fulfillment === value ? { background: color } : undefined} onClick={() => setFulfillment(value)}>{label}</button>
                   ))}
                 </div>
@@ -724,19 +711,19 @@ export function MenuPanel() {
               {fulfillment === 'Pickup' && <p className="rounded-2xl bg-stone-50 px-3 py-2 text-sm text-stone-500">We’ll keep this ready at the counter. Share the mobile so the shop can call you.</p>}
               <label className="block text-sm">
                 <span className="mb-1.5 block font-medium">Your name</span>
-                <input value={guestName} onChange={(event) => setGuestName(event.target.value)} placeholder="So the shop knows who ordered" className="h-11 w-full rounded-xl border border-stone-200 px-3" />
+                <input value={guestName} onChange={(event) => setGuestName(event.target.value)} placeholder="Your name" className="h-11 w-full rounded-xl border border-stone-200 px-3" />
               </label>
               <label className="block text-sm">
                 <span className="mb-1.5 block font-medium">Mobile number</span>
                 <input value={mobile} onChange={(event) => setMobile(digitsOnly(event.target.value))} inputMode="numeric" maxLength={10} placeholder="10-digit mobile" className="h-11 w-full rounded-xl border border-stone-200 px-3" />
               </label>
               <label className="block text-sm">
-                <span className="mb-1.5 block font-medium">Special instructions</span>
-                <textarea value={note} onChange={(event) => setNote(event.target.value)} rows={3} placeholder="Less spicy, no onion, call on arrival…" className="w-full rounded-xl border border-stone-200 px-3 py-2" />
+                <span className="mb-1.5 block font-medium">{copy.noteLabel}</span>
+                <textarea value={note} onChange={(event) => setNote(event.target.value)} rows={3} placeholder={copy.notePlaceholder} className="w-full rounded-xl border border-stone-200 px-3 py-2" />
               </label>
             </div>
             <div className="shrink-0 border-t border-stone-100 bg-white px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-              <Button className="w-full" busy={sending} onClick={place}>{hub?.type?.actionbuttontext || 'Place order'}</Button>
+              <Button className="w-full" busy={sending} onClick={place}>{copy.action}</Button>
             </div>
           </div>
         </div>,
@@ -830,7 +817,6 @@ export function ReviewPanel() {
   }
 
   async function generate() {
-    if (!name.trim()) { toastErr('Add your name first.'); return; }
     if (!rating) { toastErr('Tap a star rating first.'); return; }
     setBusy(true);
     setDone('');
@@ -894,7 +880,10 @@ export function ReviewPanel() {
           ))}
         </div>
       </div>
-      <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Your name" className="h-11 w-full rounded-xl border border-stone-200 px-3 text-sm" />
+      <label className="block text-sm">
+        <span className="mb-1.5 block font-medium text-stone-600">Your name <span className="font-normal text-stone-400">(optional)</span></span>
+        <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Leave blank to stay unnamed" className="h-11 w-full rounded-xl border border-stone-200 px-3 text-sm" />
+      </label>
 
       {rating >= 4 && (
         <div>
