@@ -159,7 +159,7 @@ export function QrPage() {
   function load() { api('/business/qr').then(setData); }
   useEffect(load, []);
   return <Frame>
-    <PageTitle title="QR and poster" text="The code uses your shop color, joined lines, and a lined frame. The poster prints that same image. Regenerate if the shop name changed." />
+    <PageTitle title="QR and poster" text="The code is black, with joined lines and a lined frame in your shop color. The poster prints that same image. Regenerate if the shop name changed." />
     <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
       <Card className="text-center">
         {data?.code?.imagepath && (
