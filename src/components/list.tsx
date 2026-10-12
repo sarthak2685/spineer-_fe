@@ -1,5 +1,5 @@
 import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
-import { api } from '../api/client';
+import { api, downloadCsv } from '../api/client';
 import { Button, Field } from './ui';
 
 export type PageResult<T> = { rows: T[]; total: number; page: number; pageSize: number };
@@ -37,6 +37,13 @@ export function ListToolbar({
       {children ? <div className="flex flex-wrap items-end gap-2">{children}</div> : null}
     </form>
   );
+}
+
+export function CsvButton({ path, from, to, extra = '', filename = 'export.csv' }: { path: string; from?: string; to?: string; extra?: string; filename?: string }) {
+  const query = from
+    ? `format=csv&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to || from)}${extra}`
+    : `format=csv${extra}`;
+  return <Button type="button" kind="ghost" onClick={() => downloadCsv(`${path}?${query}`, filename)}>Download CSV</Button>;
 }
 
 export function Pager({ page, pageSize, total, onPage }: { page: number; pageSize: number; total: number; onPage: (page: number) => void }) {

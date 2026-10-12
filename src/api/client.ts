@@ -77,6 +77,17 @@ export const client = {
   post: <T = unknown>(path: string, body?: unknown) => api<T>(path, { method: 'POST', body: body instanceof FormData ? body : JSON.stringify(body ?? {}) }),
 };
 
+export async function downloadCsv(path: string, fallbackName: string) {
+  const data = await api<{ csv: string; filename?: string }>(path);
+  const blob = new Blob([data.csv || ''], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = data.filename || fallbackName;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 export function asset(path?: string | null) {
   if (!path) return '';
   if (path.startsWith('http')) return path;

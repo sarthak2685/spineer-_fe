@@ -1,7 +1,8 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, asset } from '../../api/client';
-import { ListToolbar, Pager, usePagedQuery } from '../../components/list';
+import { useAuth } from '../../app/auth';
+import { CsvButton, ListToolbar, Pager, usePagedQuery } from '../../components/list';
 import { ActionIcon, Alert, Button, Card, Field, Form, Modal, PageTitle, Quick, RowMenu, Select, Stat, Status, Area, Table } from '../../components/ui';
 import { toastOk } from '../../lib/toast';
 
@@ -28,72 +29,54 @@ export function CustomersPage() {
   const [showAll, setShowAll] = useState(false);
   const list = usePagedQuery<any>('/business/customers', showAll ? '&scope=all' : '');
   const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<any>(null);
 
-  function openCreate() {
-    setEditing(null);
-    setOpen(true);
-  }
-  function openEdit(row: any) {
-    setEditing(row);
-    setOpen(true);
-  }
-  function closeModal() {
-    setOpen(false);
-    setEditing(null);
-  }
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = Object.fromEntries(new FormData(event.currentTarget).entries());
     await api('/business/customers', { method: 'POST', body: JSON.stringify(form) });
-    toastOk(editing ? 'Customer updated.' : 'Customer added.');
-    closeModal();
+    toastOk('Customer added.');
+    setOpen(false);
     list.reload();
   }
   async function remove(row: any) {
-    if (!window.confirm(`Remove ${row.customername || 'this customer'}?`)) return;
+    if (!window.confirm(`Remove ${row.customername || 'this customer'} from this shop? Their account stays.`)) return;
     await api(`/business/customers/${row.customerid}/delete`, { method: 'POST' });
-    toastOk('Customer removed.');
+    toastOk('Removed from this shop.');
     list.reload();
   }
   return <Frame>
-    <PageTitle title="Customers" text="Filter by date, then add or manage guests for this shop." />
+    <PageTitle title="Customers" text="Anyone who joined or played at this shop. You can remove them from this list only." />
     <ListToolbar
       from={list.from}
       to={list.to}
       onApply={(from, to) => { setShowAll(false); list.applyDates(from, to); }}
     >
       <Button type="button" kind="ghost" onClick={() => setShowAll(true)}>All customers</Button>
-      <Button type="button" onClick={openCreate}>Add customer</Button>
+      <CsvButton path="/business/customers" from={showAll ? undefined : list.from} to={showAll ? undefined : list.to} extra={showAll ? '&scope=all' : ''} filename="customers.csv" />
+      <Button type="button" onClick={() => setOpen(true)}>Add customer</Button>
     </ListToolbar>
     <Table empty={list.loading ? 'Loading…' : showAll ? 'No customers yet.' : 'No customers in this date range.'} rows={list.rows} columns={[
-      { key: 'customername', label: 'Name', render: (row) => <button type="button" className="font-medium text-orange-600" onClick={() => openEdit(row)}>{row.customername}</button> },
+      { key: 'customername', label: 'Name' },
       { key: 'mobile', label: 'Mobile' },
       { key: 'totalcoins', label: 'Coins' },
       { key: 'email', label: 'Email' },
       { key: 'createddate', label: 'Joined', render: (row) => String(row.createddate || '').slice(0, 10) },
-      { key: 'actions', label: '', render: (row) => <RowMenu items={[{ label: 'Edit', onClick: () => openEdit(row) }, { label: 'Delete', danger: true, onClick: () => remove(row) }]} /> },
+      { key: 'actions', label: '', render: (row) => <RowMenu items={[{ label: 'Remove from this shop', danger: true, onClick: () => remove(row) }]} /> },
     ]} />
     <Pager page={list.page} pageSize={list.pageSize} total={list.total} onPage={list.setPage} />
     {open && (
-      <Modal
-        wide
-        title={editing ? 'Edit customer' : 'Add customer'}
-        text={editing ? 'Update details for this guest.' : 'Create a walk-in or registered guest for this shop.'}
-        onClose={closeModal}
-      >
-        <Form key={editing?.customerid || 'new'} className="grid gap-3 sm:grid-cols-2" onSubmit={onSubmit}>
-          {editing && <input type="hidden" name="id" value={editing.customerid} />}
-          <Field label="Name" name="customerName" defaultValue={editing?.customername} required />
-          <Field label="Mobile" name="mobile" defaultValue={editing?.mobile || ''} inputMode="numeric" maxLength={10} pattern="[6-9][0-9]{9}" placeholder="10-digit mobile" />
-          <Field label="Email" name="email" defaultValue={editing?.email || ''} />
-          <Field label="Coins" name="totalCoins" defaultValue={editing?.totalcoins ?? 0} />
+      <Modal wide title="Add customer" text="Create a walk-in or registered guest for this shop." onClose={() => setOpen(false)}>
+        <Form className="grid gap-3 sm:grid-cols-2" onSubmit={onSubmit}>
+          <Field label="Name" name="customerName" required />
+          <Field label="Mobile" name="mobile" inputMode="numeric" maxLength={10} pattern="[6-9][0-9]{9}" placeholder="10-digit mobile" />
+          <Field label="Email" name="email" />
+          <Field label="Coins" name="totalCoins" defaultValue={0} />
           <div className="sm:col-span-2">
-            <Field label={editing ? 'New password (optional)' : 'Password (optional)'} name="password" type="password" placeholder="Min 6 characters" />
+            <Field label="Password (optional)" name="password" type="password" placeholder="Min 6 characters" />
           </div>
           <div className="flex flex-wrap justify-end gap-2 border-t border-stone-100 pt-4 sm:col-span-2">
-            <Button type="button" kind="ghost" onClick={closeModal}>Cancel</Button>
-            <Button type="submit">{editing ? 'Save changes' : 'Add customer'}</Button>
+            <Button type="button" kind="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button type="submit">Add customer</Button>
           </div>
         </Form>
       </Modal>
@@ -105,7 +88,9 @@ export function PlaysPage() {
   const list = usePagedQuery<any>('/business/plays');
   return <Frame>
     <PageTitle title="Who played" text="Every game play for the selected dates." />
-    <ListToolbar from={list.from} to={list.to} onApply={list.applyDates} />
+    <ListToolbar from={list.from} to={list.to} onApply={list.applyDates}>
+      <CsvButton path="/business/plays" from={list.from} to={list.to} filename="plays.csv" />
+    </ListToolbar>
     <Table empty={list.loading ? 'Loading…' : 'No plays in this date range.'} rows={list.rows} columns={[
       { key: 'customername', label: 'Guest' },
       { key: 'mobile', label: 'Mobile' },
@@ -134,7 +119,9 @@ export function RedemptionsPage() {
   const list = usePagedQuery<any>('/business/redemptions');
   return <Frame>
     <PageTitle title="Redemptions" text="Reward claims for the selected dates." />
-    <ListToolbar from={list.from} to={list.to} onApply={list.applyDates} />
+    <ListToolbar from={list.from} to={list.to} onApply={list.applyDates}>
+      <CsvButton path="/business/redemptions" from={list.from} to={list.to} filename="redemptions.csv" />
+    </ListToolbar>
     <Table empty={list.loading ? 'Loading…' : 'No redemptions in this date range.'} rows={list.rows} columns={[
       { key: 'rewardname', label: 'Reward' },
       { key: 'customername', label: 'Customer' },
@@ -151,7 +138,9 @@ export function BusinessClaimsPage() {
   const list = usePagedQuery<any>('/business/claims');
   return <Frame>
     <PageTitle title="Purchase claims" text="Bill claims for the selected dates." />
-    <ListToolbar from={list.from} to={list.to} onApply={list.applyDates} />
+    <ListToolbar from={list.from} to={list.to} onApply={list.applyDates}>
+      <CsvButton path="/business/claims" from={list.from} to={list.to} filename="claims.csv" />
+    </ListToolbar>
     <Table empty={list.loading ? 'Loading…' : 'No claims in this date range.'} rows={list.rows} columns={[
       { key: 'customername', label: 'Customer' },
       { key: 'purchaseamount', label: 'Amount', render: (row) => `₹${row.purchaseamount}` },
@@ -170,13 +159,11 @@ export function QrPage() {
   function load() { api('/business/qr').then(setData); }
   useEffect(load, []);
   return <Frame>
-    <PageTitle title="QR and poster" text="The link uses the shop name. Older printed codes still open. Regenerate if the shop name changed." />
-    <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
+    <PageTitle title="QR and poster" text="The code uses your shop color, joined lines, and a lined frame. The poster prints that same image. Regenerate if the shop name changed." />
+    <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
       <Card className="text-center">
         {data?.code?.imagepath && (
-          <div className="mx-auto grid h-60 w-60 place-items-center rounded-[28px] bg-white p-3 shadow-lg shadow-orange-600/10 ring-1 ring-orange-100">
-            <img alt="QR" src={asset(data.code.imagepath)} className="h-full w-full object-contain" />
-          </div>
+          <img alt="QR" src={asset(data.code.imagepath)} className="mx-auto h-72 w-72" />
         )}
         <p className="my-3 break-all text-sm text-stone-500">{data?.code?.qrcodetext}</p>
         <div className="flex flex-wrap justify-center gap-2">
@@ -209,18 +196,10 @@ function posterColor(value?: string) {
   return value && /^#[0-9a-fA-F]{6}$/.test(value) ? value : '#ea580c';
 }
 
-function QrPlate({ src, color, logo, name }: { src: string; color: string; logo: string; name: string }) {
-  const corner = 'pointer-events-none absolute h-6 w-6';
+function QrPlate({ src }: { src: string }) {
   return (
-    <div className="relative mx-auto grid h-[248px] w-[248px] place-items-center rounded-[32px] bg-white p-5 shadow-[0_24px_50px_-24px_rgba(28,25,23,0.45)]">
-      <span className={`${corner} left-4 top-4 border-l-[3px] border-t-[3px]`} style={{ borderColor: color }} />
-      <span className={`${corner} right-4 top-4 border-r-[3px] border-t-[3px]`} style={{ borderColor: color }} />
-      <span className={`${corner} bottom-4 left-4 border-b-[3px] border-l-[3px]`} style={{ borderColor: color }} />
-      <span className={`${corner} bottom-4 right-4 border-b-[3px] border-r-[3px]`} style={{ borderColor: color }} />
-      {src ? <img alt="QR code" src={src} className="h-[188px] w-[188px] object-contain" /> : <span className="text-sm text-stone-400">QR is loading</span>}
-      <span className="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 place-items-center overflow-hidden rounded-xl bg-white p-0.5 shadow-md ring-2 ring-white">
-        {logo ? <img alt="" src={logo} className="h-full w-full rounded-[10px] object-cover" /> : <span className="font-display text-lg font-semibold" style={{ color }}>{name.slice(0, 1)}</span>}
-      </span>
+    <div className="mx-auto grid h-[280px] w-[280px] place-items-center">
+      {src ? <img alt="QR code" src={src} className="h-full w-full object-contain" /> : <span className="text-sm text-stone-400">QR is loading</span>}
     </div>
   );
 }
@@ -272,7 +251,6 @@ export function PosterPage() {
   const name = data?.business?.businessname || 'Scan to visit';
   const line = data?.business?.tagline || 'Play, order, and collect coins';
   const qr = data?.code?.imagepath ? asset(data.code.imagepath) : '';
-  const logo = data?.business?.logoimagepath ? asset(data.business.logoimagepath) : '';
   const color = posterColor(data?.business?.themecolor);
   const link = String(data?.code?.qrcodetext || '').replace(/^https?:\/\//, '');
   return <Frame>
@@ -291,7 +269,7 @@ export function PosterPage() {
           <p className="text-[11px] font-semibold uppercase tracking-[0.32em]" style={{ color }}>Welcome</p>
           <h2 className="mt-3 font-display text-[2.4rem] font-semibold leading-none tracking-tight text-stone-950">{name}</h2>
           <p className="mx-auto mt-2 max-w-[16rem] text-sm leading-relaxed text-stone-500">{line}</p>
-          <div className="mt-7"><QrPlate src={qr} color={color} logo={logo} name={name} /></div>
+          <div className="mt-7"><QrPlate src={qr} /></div>
           <p className="mt-6 font-display text-xl font-semibold text-stone-950">Point your camera here</p>
           <PosterSteps color={color} />
           {link && <p className="mt-5 text-[11px] tracking-wide text-stone-400">{link}</p>}
@@ -305,7 +283,7 @@ export function PosterPage() {
             <p className="mx-auto mt-2 max-w-[16rem] text-sm text-white/75">{line}</p>
           </div>
           <div className="mx-4 mb-4 rounded-[28px] bg-white px-6 pb-7 pt-7 text-stone-950">
-            <QrPlate src={qr} color={color} logo={logo} name={name} />
+            <QrPlate src={qr} />
             <p className="mt-5 font-display text-lg font-semibold">Play a game. Keep the coins.</p>
             <PosterSteps color={color} />
             {link && <p className="mt-4 text-[11px] tracking-wide text-stone-400">{link}</p>}
@@ -317,7 +295,7 @@ export function PosterPage() {
           <div className="mx-auto mb-6 h-1.5 w-16 rounded-full" style={{ background: color }} />
           <h2 className="font-display text-[2.5rem] font-semibold leading-none tracking-tight">{name}</h2>
           <p className="mx-auto mt-2 max-w-[16rem] text-sm text-stone-400">{line}</p>
-          <div className="mt-7"><QrPlate src={qr} color={color} logo={logo} name={name} /></div>
+          <div className="mt-7"><QrPlate src={qr} /></div>
           <p className="mt-6 text-sm font-semibold uppercase tracking-[0.22em]" style={{ color }}>Scan · Play · Earn</p>
           <PosterSteps color={color} light />
           {link && <p className="mt-5 text-[11px] tracking-wide text-stone-500">{link}</p>}
@@ -327,6 +305,8 @@ export function PosterPage() {
   </Frame>;
 }
 export function BusinessProfilePage() {
+  const auth = useAuth();
+  const navigate = useNavigate();
   const [profile, setProfile] = useState<any>({});
   const [countries, setCountries] = useState<any[]>([]);
   const [states, setStates] = useState<any[]>([]);
@@ -368,6 +348,12 @@ export function BusinessProfilePage() {
       <label className="text-sm">Banner<input className="mt-1 block w-full" type="file" name="banner" accept="image/png,image/jpeg,image/webp" /></label>
       <Button type="submit">Save profile</Button>
     </Form>
+    <Button kind="danger" className="mt-6" onClick={async () => {
+      if (!window.confirm('Delete this shop account? The shop is paused and you will not be able to sign in. Orders and plays stay.')) return;
+      await api('/business/account/delete', { method: 'POST' });
+      await auth.clear();
+      navigate('/login');
+    }}>Delete account</Button>
   </Frame>;
 }
 export { CategoriesPage, ItemsPage, MenuStudio } from './menu-studio';
@@ -390,7 +376,9 @@ export function OrdersPage() {
   const filters = ['All', 'Pending', 'Accepted', 'Preparing', 'Ready', 'Completed', 'Cancelled', 'Rejected'];
   return <Frame>
     <PageTitle title="Orders" text="Accept a new order, move it through the kitchen, or reject and cancel it from this list." />
-    <ListToolbar from={list.from} to={list.to} onApply={list.applyDates} />
+    <ListToolbar from={list.from} to={list.to} onApply={list.applyDates}>
+      <CsvButton path="/business/menu/orders" from={list.from} to={list.to} extra={`&status=${encodeURIComponent(status)}`} filename="orders.csv" />
+    </ListToolbar>
     <div className="mb-4 flex gap-2 overflow-x-auto">{filters.map((item) => <button key={item} className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-semibold ${status === item ? 'bg-orange-600 text-white' : 'bg-white text-stone-500 ring-1 ring-stone-200'}`} onClick={() => setStatus(item)}>{item}</button>)}</div>
     <Table empty={list.loading ? 'Loading…' : 'No orders for this filter.'} rows={list.rows} columns={[
       { key: 'ordernumber', label: 'Order', render: (row) => <Link className="font-medium text-orange-600" to={`/business/menu/orders/${row.orderid}`}>{row.ordernumber}</Link> },
@@ -448,6 +436,7 @@ export function BusinessReviewsPage() {
   useEffect(load, []);
   return <Frame>
     <PageTitle title="Reviews" text="High ratings become Google reviews. Lower ratings stay here as private feedback." />
+    <div className="mb-4"><CsvButton path="/business/guest-reviews" filename="reviews.csv" /></div>
     <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-stone-400">Public reviews</h2>
     <Table empty="No named guest reviews yet." rows={reviews.filter((row) => String(row.customername || '').trim())} columns={[{ key: 'customername', label: 'Guest' }, { key: 'rating', label: 'Stars' }, { key: 'body', label: 'Review' }]} />
     <h2 className="mb-3 mt-8 text-sm font-semibold uppercase tracking-wider text-stone-400">Private feedback</h2>

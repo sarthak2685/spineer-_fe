@@ -151,8 +151,26 @@ export function IconLink({ to, label, kind = 'primary', children }: { to: string
   return <Link to={to} aria-label={label} title={label} className={`inline-flex !h-8 !w-8 items-center justify-center !rounded-full !px-0 ${styles}`}>{children}</Link>;
 }
 
-export function Field({ label, className = '', ...props }: React.InputHTMLAttributes<HTMLInputElement> & { label: string }) {
-  return <label className="block text-sm"><span className="mb-1.5 block font-medium text-stone-500">{label}</span><input {...props} className={`h-11 w-full rounded-xl border border-stone-200 bg-white px-3.5 text-sm outline-none ring-orange-600/20 transition focus:border-orange-600 focus:ring-4 ${className}`} /></label>;
+export function Field({ label, className = '', type, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { label: string }) {
+  const [visible, setVisible] = useState(false);
+  const password = type === 'password';
+  return (
+    <label className="block text-sm">
+      <span className="mb-1.5 block font-medium text-stone-500">{label}</span>
+      <span className="relative block">
+        <input {...props} type={password && visible ? 'text' : type} className={`h-11 w-full rounded-xl border border-stone-200 bg-white px-3.5 text-sm outline-none ring-orange-600/20 transition focus:border-orange-600 focus:ring-4 ${password ? 'pr-11' : ''} ${className}`} />
+        {password && (
+          <button type="button" className="absolute right-2 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center text-stone-400 hover:text-stone-700" aria-label={visible ? 'Hide password' : 'Show password'} onClick={() => setVisible((current) => !current)}>
+            {visible ? (
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3 3l18 18" /><path d="M10.6 10.6A2 2 0 0 0 12 14a2 2 0 0 0 1.4-.6" /><path d="M9.9 5.1A10.8 10.8 0 0 1 12 5c5 0 9.3 3.1 11 7-1 2.2-2.6 4.1-4.6 5.4M6.1 6.1C4.2 7.4 2.6 9.2 1.6 11.4 3.3 15.9 7.6 19 12.6 19c1.3 0 2.5-.2 3.6-.6" /></svg>
+            ) : (
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></svg>
+            )}
+          </button>
+        )}
+      </span>
+    </label>
+  );
 }
 
 export function Area({ label, ...props }: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { label: string }) {

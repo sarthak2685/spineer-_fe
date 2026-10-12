@@ -1,8 +1,9 @@
-import { FormEvent, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { FormEvent, useEffect, useRef, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../app/auth';
 import { api, client } from '../../api/client';
 import { ListToolbar, Pager, usePagedQuery } from '../../components/list';
-import { Alert, Button, Card, Empty, Field, Form, PageTitle, Quick, Select, Stat, Status, Table } from '../../components/ui';
+import { Alert, Button, Card, Empty, Field, Form, Modal, PageTitle, Quick, Select, Stat, Status, Table } from '../../components/ui';
 import { toastErr, toastOk } from '../../lib/toast';
 
 function Frame({ children }: { children: React.ReactNode }) {
@@ -23,6 +24,7 @@ export function CustomerDashboard() {
     <PageTitle title={`Hello, ${data?.customer?.customername || 'there'}`} text="Browse a shop menu, place an order, play for coins, and keep everything in one wallet." />
     <div className="grid gap-4 sm:grid-cols-3"><Stat label="Coins" value={data?.customer?.totalcoins ?? '—'} gold /><Stat label="Plays" value={data?.prizes ?? '—'} /><Stat label="Unread" value={data?.unread ?? '—'} /></div>
     <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <ScanQr />
       <Quick to="/customer/explore" title="Your shops" text="Places you have already opened. Search there to find any other shop." />
       <Quick to="/customer/explore" title="Order food" text="Pick a business, tap Order, add items, and send to the table." />
       <Quick to="/customer/my-orders" title="My orders" text="Track what you already sent to the station." />
@@ -35,6 +37,78 @@ export function CustomerDashboard() {
     </div>
     <NotifyCard />
   </Frame>;
+}
+
+function shopPath(value: string) {
+  try {
+    const url = value.startsWith('http') ? new URL(value) : new URL(value, window.location.origin);
+    const match = url.pathname.match(/^\/(play|menu|bill|review)\/([^/]+)/);
+    return match ? `/${match[1]}/${decodeURIComponent(match[2])}` : null;
+  } catch {
+    return null;
+  }
+}
+
+function ScanQr() {
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [error, setError] = useState('');
+  const videoRef = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    let stop = false;
+    let stream: MediaStream | null = null;
+    const Detector = (window as unknown as { BarcodeDetector?: new (options: { formats: string[] }) => { detect: (source: HTMLVideoElement) => Promise<{ rawValue?: string }[]> } }).BarcodeDetector;
+    if (!Detector || !navigator.mediaDevices?.getUserMedia) {
+      setError('This browser cannot use the camera. Open this page in Chrome or Edge.');
+      return;
+    }
+    const detector = new Detector({ formats: ['qr_code'] });
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }).then(async (next) => {
+      stream = next;
+      if (!videoRef.current) return;
+      videoRef.current.srcObject = next;
+      await videoRef.current.play();
+      const tick = async () => {
+        if (stop || !videoRef.current) return;
+        try {
+          const codes = await detector.detect(videoRef.current);
+          const raw = codes[0]?.rawValue;
+          if (raw) {
+            const path = shopPath(raw);
+            if (path) {
+              stop = true;
+              stream?.getTracks().forEach((track) => track.stop());
+              setOpen(false);
+              navigate(path);
+              return;
+            }
+            setError('This is not a RewardSpinner QR.');
+          }
+        } catch { /* the next frame may be readable */ }
+        if (!stop) window.setTimeout(() => { void tick(); }, 250);
+      };
+      void tick();
+    }).catch(() => setError('Allow the camera to scan a shop QR.'));
+    return () => {
+      stop = true;
+      stream?.getTracks().forEach((track) => track.stop());
+    };
+  }, [open, navigate]);
+  return (
+    <>
+      <button type="button" className="rounded-3xl border border-stone-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-orange-600 hover:shadow-lg" onClick={() => { setError(''); setOpen(true); }}>
+        <p className="font-semibold text-stone-950">Scan QR</p>
+        <p className="mt-1 text-sm text-stone-500">Point the camera at any shop QR to open its game and menu.</p>
+      </button>
+      {open && (
+        <Modal title="Scan a shop QR" text="The code on a poster, table, or screen." onClose={() => setOpen(false)}>
+          {error && <Alert text={error} />}
+          <video ref={videoRef} className="mt-3 aspect-square w-full rounded-2xl bg-stone-950 object-cover" muted playsInline />
+        </Modal>
+      )}
+    </>
+  );
 }
 
 function NotifyCard() {
@@ -151,16 +225,31 @@ export function RewardsPage({ offers = false }: { offers?: boolean }) {
   const [data, setData] = useState<any>({ rewards: [], merchants: [] });
   const [error, setError] = useState('');
   useEffect(() => { api(offers ? '/customer/offers' : '/customer/rewards').then(setData); }, [offers]);
-  async function redeem(id: number) { try { await api(`/customer/rewards/${id}/redeem`, { method: 'POST' }); toastOk('Reward claimed.'); api('/customer/rewards').then(setData); } catch (err) { setError(err instanceof Error ? err.message : 'Could not redeem.'); } }
+  async function redeem(id: number) {
+    try {
+      const result = await api<{ message?: string }>(`/customer/rewards/${id}/redeem`, { method: 'POST' });
+      toastOk(result.message || 'This offer is pending until the shop approves it.');
+      api(offers ? '/customer/offers' : '/customer/rewards').then(setData);
+    } catch (err) { setError(err instanceof Error ? err.message : 'Could not redeem.'); }
+  }
   return <Frame>
     <PageTitle title={offers ? 'Offers' : 'Rewards'} text={`${data.customer?.totalcoins ?? 0} coins available`} gold />
     {error && <Alert text={error} />}
-    <div className="grid gap-3 sm:grid-cols-2">{(data.rewards || []).map((reward: any) => (
+    <div className="grid gap-3 sm:grid-cols-2">{(data.rewards || []).map((reward: any) => {
+      const status = String(reward.redemptionstatus || '');
+      const closed = status === 'Pending' || status === 'Approved';
+      const label = status === 'Pending' ? 'Pending' : status === 'Approved' ? 'Redeemed' : status === 'Rejected' ? 'Redeem again' : 'Redeem';
+      return (
       <Card key={reward.rewardid} className="flex items-center justify-between gap-3">
-        <div><p className="font-semibold">{reward.rewardname}</p><p className="mt-1 text-sm text-stone-500">{reward.businessname}</p><p className="mt-2 text-sm font-semibold text-orange-600">{reward.coinsrequired} coins</p></div>
-        {!offers && <Button onClick={() => redeem(reward.rewardid)}>Redeem</Button>}
+        <button type="button" className="min-w-0 text-left" disabled={closed} onClick={() => { if (!closed) redeem(reward.rewardid); }}>
+          <p className="font-semibold">{reward.rewardname}</p>
+          <p className="mt-1 text-sm text-stone-500">{reward.businessname}</p>
+          <p className="mt-2 text-sm font-semibold text-orange-600">{reward.coinsrequired} coins</p>
+        </button>
+        <Button disabled={closed} onClick={() => redeem(reward.rewardid)}>{label}</Button>
       </Card>
-    ))}{!(data.rewards || []).length && <Empty text="Nothing to redeem yet." />}</div>
+      );
+    })}{!(data.rewards || []).length && <Empty text="Nothing to redeem yet." />}</div>
   </Frame>;
 }
 
@@ -234,6 +323,8 @@ export function NotificationsPage() {
 }
 
 export function ProfilePage() {
+  const auth = useAuth();
+  const navigate = useNavigate();
   const [profile, setProfile] = useState<any>({});
   const [message, setMessage] = useState('');
   useEffect(() => { api('/customer/profile').then(setProfile); }, []);
@@ -243,5 +334,11 @@ export function ProfilePage() {
     const saved = await client.post('/customer/profile', form);
     setProfile(saved); setMessage('Profile saved.');
   }
-  return <Frame><PageTitle title="Profile" /><Form onSubmit={onSubmit} className="grid max-w-xl gap-3"><Field label="Name" name="name" defaultValue={profile.customername} required /><Field label="Email" name="email" defaultValue={profile.email} /><Field label="Address" name="address" defaultValue={profile.address} required /><Field label="Pincode" name="pincode" defaultValue={profile.pincode} />{message && <p>{message}</p>}<Button type="submit">Save</Button></Form></Frame>;
+  async function removeAccount() {
+    if (!window.confirm('Delete this account? Shops keep the visit history, and you will not be able to sign in.')) return;
+    await api('/customer/account/delete', { method: 'POST' });
+    await auth.clear();
+    navigate('/login');
+  }
+  return <Frame><PageTitle title="Profile" /><Form onSubmit={onSubmit} className="grid max-w-xl gap-3"><Field label="Name" name="name" defaultValue={profile.customername} required /><Field label="Email" name="email" defaultValue={profile.email} /><Field label="Address" name="address" defaultValue={profile.address} required /><Field label="Pincode" name="pincode" defaultValue={profile.pincode} />{message && <p>{message}</p>}<Button type="submit">Save</Button></Form><Button kind="danger" className="mt-6" onClick={removeAccount}>Delete account</Button></Frame>;
 }

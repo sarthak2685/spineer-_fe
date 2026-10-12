@@ -5,6 +5,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { api, asset, client } from '../../api/client';
 import { useAuth } from '../../app/auth';
 import { Alert, Button, Field, Form, Modal } from '../../components/ui';
+import { customerGroups, Workspace } from '../../components/layout/Shells';
 import { catalogCopy } from '../../lib/catalog';
 import { digitsOnly, isTenDigitMobile } from '../../lib/mobile';
 import { useInstallApp } from '../../lib/use-install';
@@ -76,6 +77,11 @@ export function PlaceFrame({ business, token, current, children }: { business: R
   const auth = useAuth();
   const [loginOpen, setLoginOpen] = useState(false);
   const signedIn = Boolean(auth.user && !auth.user.name.startsWith('Guest_'));
+  useEffect(() => {
+    const open = () => setLoginOpen(true);
+    window.addEventListener('rs-open-shop-signin', open);
+    return () => window.removeEventListener('rs-open-shop-signin', open);
+  }, []);
   const color = brandColor(business.themecolor);
   const whatsapp = String(business.whatsappnumber || '').replace(/\D/g, '');
   const wa = whatsapp.length === 10 ? `91${whatsapp}` : whatsapp;
@@ -111,10 +117,10 @@ export function PlaceFrame({ business, token, current, children }: { business: R
             <NavLink to={`/bill/${token}`} className={tabClass('bill')} style={current === 'bill' ? { background: color } : undefined}>Bill</NavLink>
             <NavLink to={`/review/${token}`} className={tabClass('review')} style={current === 'review' ? { background: color } : undefined}>Review</NavLink>
           </div>
-          <div className="mt-6">{children}</div>
           {!signedIn && token && (
-            <button type="button" className="mt-6 w-full rounded-full border border-stone-200 py-3 text-sm font-semibold text-stone-950" onClick={() => setLoginOpen(true)}>Sign in</button>
+            <button type="button" className="mt-5 w-full rounded-full border border-stone-200 py-3 text-sm font-semibold text-stone-950" onClick={() => setLoginOpen(true)}>Sign in</button>
           )}
+          <div className="mt-6">{children}</div>
         </div>
       </div>
       {loginOpen && !signedIn && token && <SaveCoinsModal token={token} onClose={() => setLoginOpen(false)} />}
@@ -138,6 +144,8 @@ function GetAppCard() {
 
 /** Shared shell: banner/logo stay mounted; only the inner panel slides. */
 export function GuestPlaceShell() {
+  const auth = useAuth();
+  const signedIn = Boolean(auth.user && auth.user.role === 'Customer' && !auth.user.name.startsWith('Guest_'));
   const { token = '' } = useParams();
   const location = useLocation();
   const reduce = useReducedMotion();
@@ -169,9 +177,7 @@ export function GuestPlaceShell() {
   const business = hub.business || {};
   const color = brandColor(business.themecolor);
   const ctx: GuestPlaceContext = { token, hub, setHub, color, business };
-
-  return (
-    <GuestCtx.Provider value={ctx}>
+  const shop = (
       <PlaceFrame business={business} token={token} current={tab}>
         <AnimatePresence mode="wait" custom={direction} initial={false}>
           <motion.div
@@ -189,6 +195,16 @@ export function GuestPlaceShell() {
           </motion.div>
         </AnimatePresence>
       </PlaceFrame>
+  );
+
+  return (
+    <GuestCtx.Provider value={ctx}>
+      {signedIn ? (
+        <Workspace groups={customerGroups} title="Wallet">
+          <Link to="/customer/dashboard" className="mb-4 inline-flex text-sm font-semibold text-orange-600">Back</Link>
+          {shop}
+        </Workspace>
+      ) : shop}
     </GuestCtx.Provider>
   );
 }
@@ -404,29 +420,65 @@ export function PlayPanel() {
   );
 }
 
+function offerLabel(status?: string) {
+  if (status === 'Pending') return 'Pending';
+  if (status === 'Approved') return 'Redeemed';
+  if (status === 'Rejected') return 'Redeem again';
+  return 'Redeem';
+}
+
 function OffersList() {
-  const { hub } = useGuestPlace();
+  const { hub, business } = useGuestPlace();
+  const auth = useAuth();
+  const signedIn = Boolean(auth.user && auth.user.role === 'Customer' && !auth.user.name.startsWith('Guest_'));
   const offers = (hub?.offers || []) as { rewardid: number; rewardname: string; description?: string; coinsrequired: number; imagepath?: string }[];
+  const [statuses, setStatuses] = useState<Record<number, string>>({});
+  const businessId = business?.businessid;
+  useEffect(() => {
+    if (!signedIn || !businessId) return;
+    api<{ rewards?: { rewardid: number; redemptionstatus?: string }[] }>(`/customer/rewards?businessId=${businessId}`, { quiet: true })
+      .then((data) => {
+        const next: Record<number, string> = {};
+        (data.rewards || []).forEach((reward) => { if (reward.redemptionstatus) next[reward.rewardid] = reward.redemptionstatus; });
+        setStatuses(next);
+      })
+      .catch(() => undefined);
+  }, [signedIn, businessId]);
+  async function redeem(offer: { rewardid: number }) {
+    const status = statuses[offer.rewardid];
+    if (status === 'Pending' || status === 'Approved') return;
+    if (!signedIn) {
+      window.dispatchEvent(new Event('rs-open-shop-signin'));
+      return;
+    }
+    const result = await api<{ message?: string }>(`/customer/rewards/${offer.rewardid}/redeem`, { method: 'POST' });
+    toastOk(result.message || 'This offer is pending until the shop approves it.');
+    setStatuses((current) => ({ ...current, [offer.rewardid]: 'Pending' }));
+  }
   return (
     <>
     <section className="mt-8 border-t border-stone-100 pt-5">
       <h2 className="text-base font-bold">Current offers</h2>
-      <p className="mt-1 text-xs text-stone-400">Rewards this shop has switched on.</p>
+      <p className="mt-1 text-xs text-stone-400">Tap an offer to redeem it.</p>
       {!offers.length && <p className="mt-3 text-sm text-stone-400">No active offers right now.</p>}
       {offers.length > 0 && (
         <div className="mt-3 flex gap-3 overflow-x-auto pb-2">
-          {offers.map((offer) => (
-            <article key={offer.rewardid} className="flex w-64 shrink-0 items-center gap-3 rounded-2xl border border-stone-100 bg-stone-50 p-3">
+          {offers.map((offer) => {
+            const status = statuses[offer.rewardid];
+            const closed = status === 'Pending' || status === 'Approved';
+            return (
+            <button key={offer.rewardid} type="button" disabled={closed} className="flex w-64 shrink-0 items-center gap-3 rounded-2xl border border-stone-100 bg-stone-50 p-3 text-left disabled:opacity-70" onClick={() => redeem(offer)}>
               <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-amber-100 text-lg">
                 {offer.imagepath ? <img alt="" src={asset(offer.imagepath)} className="h-full w-full object-cover" /> : '🎁'}
               </div>
               <div className="min-w-0">
                 <p className="truncate font-semibold text-stone-950">{offer.rewardname}</p>
                 {offer.description && <p className="line-clamp-2 text-xs text-stone-500">{offer.description}</p>}
-                <p className="mt-0.5 text-xs font-semibold text-amber-600">{offer.coinsrequired} coins</p>
+                <p className="mt-0.5 text-xs font-semibold text-amber-600">{offer.coinsrequired} coins · {offerLabel(status)}</p>
               </div>
-            </article>
-          ))}
+            </button>
+            );
+          })}
         </div>
       )}
     </section>
