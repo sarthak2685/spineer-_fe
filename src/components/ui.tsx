@@ -57,7 +57,7 @@ export function Button({ children, kind = 'primary', className = '', busy = fals
           try { await result; } finally { setClickPending(false); }
         }
       }}
-      className={`inline-flex h-10 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition disabled:cursor-wait disabled:opacity-70 ${styles} ${className}`}
+      className={`inline-flex h-10 items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orange-600/20 disabled:cursor-wait disabled:opacity-70 ${styles} ${className}`}
     >
       {waiting && <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent" />}
       {children}
@@ -178,11 +178,11 @@ export function Area({ label, ...props }: React.TextareaHTMLAttributes<HTMLTextA
 }
 
 export function Select({ label, children, ...props }: React.SelectHTMLAttributes<HTMLSelectElement> & { label: string }) {
-  return <label className="block text-sm"><span className="mb-1.5 block font-medium text-stone-500">{label}</span><select {...props} className="h-11 w-full rounded-xl border border-stone-200 bg-white px-3 text-sm outline-none focus:border-orange-600">{children}</select></label>;
+  return <label className="block text-sm"><span className="mb-1.5 block font-medium text-stone-500">{label}</span><select {...props} className="h-11 w-full rounded-xl border border-stone-200 bg-white px-3 text-sm outline-none ring-orange-600/20 focus:border-orange-600 focus:ring-4">{children}</select></label>;
 }
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <section className={`rounded-2xl border border-stone-200 bg-white p-5 shadow-sm ${className}`}>{children}</section>;
+  return <section className={`h-full rounded-3xl border border-stone-200 bg-white p-5 shadow-sm ${className}`}>{children}</section>;
 }
 
 export function Stat({ label, value, gold = false }: { label: string; value: string | number; gold?: boolean }) {
@@ -203,6 +203,7 @@ export function Status({ value }: { value: string }) {
     Ready: 'bg-emerald-50 text-emerald-700',
     Completed: 'bg-emerald-600 text-white',
     Approved: 'bg-emerald-600 text-white',
+    Redeemed: 'bg-emerald-600 text-white',
     Active: 'bg-emerald-50 text-emerald-700',
     Inactive: 'bg-stone-100 text-stone-600',
     Cancelled: 'bg-rose-50 text-rose-700',
@@ -211,8 +212,13 @@ export function Status({ value }: { value: string }) {
   return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${tone[value] || 'bg-stone-100 text-stone-600'}`}>{value}</span>;
 }
 
-export function Empty({ text }: { text: string }) {
-  return <p className="rounded-2xl border border-dashed border-stone-200 px-4 py-10 text-center text-sm text-stone-500">{text}</p>;
+export function Empty({ text, action }: { text: string; action?: ReactNode }) {
+  return (
+    <div className="rounded-3xl border border-dashed border-stone-200 px-4 py-10 text-center text-sm text-stone-500">
+      <p>{text}</p>
+      {action ? <div className="mt-3 flex justify-center">{action}</div> : null}
+    </div>
+  );
 }
 
 export function Alert({ text }: { text: string }) {
@@ -272,6 +278,28 @@ export function Table({ columns, rows, empty = 'Nothing here yet.', variant = 'r
     if (index === columns.length - 1) return 'rounded-r-2xl border-r';
     return '';
   };
+  const phoneRows = (articleClass: string) => list.map((row, index) => {
+    const fields = columns.filter((column) => column.key !== 'actions');
+    const [lead, ...rest] = fields;
+    return (
+      <article key={rowKey(row, index)} className={articleClass}>
+        {lead && <div className="text-sm font-semibold text-stone-950">{lead.render ? lead.render(row) : row[lead.key] ?? '—'}</div>}
+        {rest.length > 0 && (
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-stone-500">
+            {rest.map((column, columnIndex) => (
+              <span key={column.key} className="inline-flex max-w-full items-center gap-2">
+                {columnIndex > 0 && <span className="text-stone-300" aria-hidden="true">·</span>}
+                <span className="min-w-0">{column.render ? column.render(row) : row[column.key] ?? '—'}</span>
+              </span>
+            ))}
+          </div>
+        )}
+        {columns.filter((column) => column.key === 'actions').map((column) => (
+          <div key={column.key} className="mt-3 [&>div]:flex [&>div]:w-full [&>div]:justify-start">{cell(column, row)}</div>
+        ))}
+      </article>
+    );
+  });
   if (variant === 'card') {
     return (
       <section className="overflow-hidden rounded-2xl border border-orange-100 bg-white shadow-sm">
@@ -300,21 +328,7 @@ export function Table({ columns, rows, empty = 'Nothing here yet.', variant = 'r
             </tbody>
           </table>
         </div>
-        <div className="divide-y divide-stone-100 md:hidden">
-          {list.map((row, index) => (
-            <article key={rowKey(row, index)} className="space-y-3 p-4">
-              {columns.filter((column) => column.key !== 'actions').map((column, columnIndex) => (
-                <div key={column.key} className="flex items-start justify-between gap-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-stone-400">{heading(column)}</p>
-                  <div className={`text-right text-sm text-stone-600 ${columnIndex === 0 ? 'font-semibold text-stone-950' : ''}`}>{column.render ? column.render(row) : row[column.key] ?? '—'}</div>
-                </div>
-              ))}
-              {columns.filter((column) => column.key === 'actions').map((column) => (
-                <div key={column.key} className="border-t border-orange-100 pt-3 [&>div]:flex [&>div]:w-full [&>div]:justify-start">{cell(column, row)}</div>
-              ))}
-            </article>
-          ))}
-        </div>
+        <div className="grid gap-3 p-3 md:hidden">{phoneRows('rounded-2xl bg-orange-50/70 p-4')}</div>
       </section>
     );
   }
@@ -344,23 +358,7 @@ export function Table({ columns, rows, empty = 'Nothing here yet.', variant = 'r
           </tbody>
         </table>
       </div>
-      <div className="grid gap-3 md:hidden">
-        {list.map((row, index) => (
-          <article key={rowKey(row, index)} className="rounded-2xl border border-white bg-white p-4 shadow-sm shadow-orange-900/5">
-            <div className="space-y-3">
-              {columns.filter((column) => column.key !== 'actions').map((column, columnIndex) => (
-                <div key={column.key} className="flex items-start justify-between gap-3">
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-stone-400">{heading(column)}</p>
-                  <div className={`text-right text-sm text-stone-600 ${columnIndex === 0 ? 'font-semibold text-stone-950' : ''}`}>{column.render ? column.render(row) : row[column.key] ?? '—'}</div>
-                </div>
-              ))}
-            </div>
-            {columns.filter((column) => column.key === 'actions').map((column) => (
-              <div key={column.key} className="mt-4 border-t border-orange-100 pt-3 [&>div]:flex [&>div]:w-full [&>div]:justify-start">{cell(column, row)}</div>
-            ))}
-          </article>
-        ))}
-      </div>
+      <div className="grid gap-3 md:hidden">{phoneRows('rounded-2xl border border-white bg-white p-4 shadow-sm shadow-orange-900/5')}</div>
     </div>
   );
 }
@@ -375,7 +373,7 @@ export function Quick({ to, title, text }: { to: string; title: string; text: st
 }
 
 export function Brand({ light = false }: { light?: boolean }) {
-  return <Link to="/" className={`inline-flex items-center gap-2 text-sm font-semibold tracking-tight ${light ? 'text-white' : 'text-stone-950'}`}><span className="grid h-8 w-8 place-items-center rounded-xl bg-orange-600 text-[11px] font-bold text-white">RS</span>RewardSpinner</Link>;
+  return <Link to="/" className={`inline-flex items-center gap-2 text-sm font-semibold tracking-tight ${light ? 'text-white' : 'text-stone-950'}`}><span className="grid h-8 w-8 place-items-center rounded-xl bg-orange-600 text-[11px] font-bold text-white">RM</span>Repeat Mate</Link>;
 }
 
 export function Modal({ title, text, onClose, children, wide = false }: { title: string; text?: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
@@ -387,12 +385,14 @@ export function Modal({ title, text, onClose, children, wide = false }: { title:
   return createPortal(
     <div className="fixed inset-0 z-[80] flex h-dvh flex-col bg-white sm:grid sm:place-items-center sm:bg-transparent sm:p-6">
       <button type="button" className="absolute inset-0 hidden bg-stone-900/50 sm:block" onClick={onClose} aria-label="Close" />
-      <div className={`relative flex h-full min-h-0 w-full flex-col overflow-y-auto bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:h-auto sm:max-h-[min(92dvh,40rem)] sm:rounded-3xl sm:p-6 sm:shadow-2xl ${wide ? 'sm:max-w-xl' : 'sm:max-w-md'}`}>
-        <div className="mb-5 flex items-start justify-between gap-3 border-b border-stone-100 pb-4">
+      <div className={`relative flex h-full min-h-0 w-full flex-col bg-white sm:h-auto sm:max-h-[min(92dvh,40rem)] sm:rounded-3xl sm:shadow-2xl ${wide ? 'sm:max-w-xl' : 'sm:max-w-md'}`}>
+        <div className="flex items-start justify-between gap-3 border-b border-stone-100 px-5 pb-4 pt-5 sm:px-6 sm:pt-6">
           <div><h2 className="font-display text-xl font-semibold tracking-tight text-stone-950">{title}</h2>{text && <p className="mt-1 text-sm text-stone-500">{text}</p>}</div>
           <button type="button" onClick={onClose} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-stone-100 text-lg text-stone-600 transition hover:bg-stone-200">×</button>
         </div>
-        {children}
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-6 [&_form]:flex [&_form]:min-h-full [&_form]:flex-col [&_form>:last-child]:sticky [&_form>:last-child]:bottom-0 [&_form>:last-child]:z-10 [&_form>:last-child]:mt-auto [&_form>:last-child]:bg-white [&_form>:last-child]:pt-3 sm:[&_form]:block sm:[&_form]:min-h-0 sm:[&_form>:last-child]:static sm:[&_form>:last-child]:mt-0 sm:[&_form>:last-child]:bg-transparent sm:[&_form>:last-child]:pt-0">
+          {children}
+        </div>
       </div>
     </div>,
     document.body,

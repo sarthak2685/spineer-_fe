@@ -4,7 +4,7 @@ import { Link, NavLink, useLocation, useParams } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { api, asset, client } from '../../api/client';
 import { useAuth } from '../../app/auth';
-import { Alert, Button, Field, Form, Modal } from '../../components/ui';
+import { ActionIcon, Alert, Button, Field, Form, IconButton, Modal } from '../../components/ui';
 import { customerGroups, Workspace } from '../../components/layout/Shells';
 import { catalogCopy } from '../../lib/catalog';
 import { digitsOnly, isTenDigitMobile } from '../../lib/mobile';
@@ -92,6 +92,14 @@ export function PlaceFrame({ business, token, current, children }: { business: R
   );
   const tabClass = (id: GuestTab) =>
     `shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition ${current === id ? 'text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'}`;
+  const tabs = () => (
+    <>
+      <NavLink to={`/play/${token}`} className={tabClass('play')} style={current === 'play' ? { background: color } : undefined}>Play</NavLink>
+      <NavLink to={`/menu/${token}`} className={tabClass('menu')} style={current === 'menu' ? { background: color } : undefined}>{catalogCopy(business.businesstype).tab}</NavLink>
+      <NavLink to={`/bill/${token}`} className={tabClass('bill')} style={current === 'bill' ? { background: color } : undefined}>Bill</NavLink>
+      <NavLink to={`/review/${token}`} className={tabClass('review')} style={current === 'review' ? { background: color } : undefined}>Review</NavLink>
+    </>
+  );
   return (
     <div className="public-enter min-h-screen bg-orange-50 text-stone-900">
       <div className="h-52 sm:h-64" style={{ background: `linear-gradient(120deg, ${color}, #0c0a09)` }}>
@@ -102,7 +110,7 @@ export function PlaceFrame({ business, token, current, children }: { business: R
           <div className="absolute left-1/2 top-0 grid h-20 w-20 -translate-x-1/2 -translate-y-1/2 place-items-center overflow-hidden rounded-full bg-white shadow-lg ring-4 ring-white">
             {business.logoimagepath ? <img alt="" src={asset(business.logoimagepath)} className="h-full w-full object-cover" /> : <span className="text-xs font-bold text-stone-400">LOGO</span>}
           </div>
-          <h1 className="truncate text-center text-2xl font-bold" title={business.businessname || 'RewardSpinner'}>{business.businessname || 'RewardSpinner'}</h1>
+          <h1 className="truncate text-center text-2xl font-bold" title={business.businessname || 'Repeat Mate'}>{business.businessname || 'Repeat Mate'}</h1>
           <p className="mt-1 text-center text-sm text-stone-500">{business.tagline || business.description || 'Play, order, and review in one place.'}</p>
           {business.address && <p className="mt-2 text-center text-sm text-stone-600">{business.address}</p>}
           <div className="mt-5 flex flex-wrap justify-center gap-6">
@@ -111,18 +119,14 @@ export function PlaceFrame({ business, token, current, children }: { business: R
             {business.instagramurl && link(business.instagramurl, 'Instagram', <Icon><svg viewBox="0 0 24 24" className="h-4 w-4 fill-pink-600"><path d="M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4zm5 5a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm6.2-.9a1 1 0 1 0 0 2 1 1 0 0 0 0-2zM12 10a2 2 0 1 1 0 4 2 2 0 0 1 0-4z" /></svg></Icon>)}
             {business.facebookurl && link(business.facebookurl, 'Facebook', <Icon><svg viewBox="0 0 24 24" className="h-4 w-4 fill-blue-600"><path d="M14 9h3V6h-3c-2.2 0-4 1.8-4 4v2H8v3h2v7h3v-7h2.6l.4-3H13v-2c0-.6.4-1 1-1z" /></svg></Icon>)}
           </div>
-          <div className="mt-5 flex gap-2 overflow-x-auto sm:justify-center">
-            <NavLink to={`/play/${token}`} className={tabClass('play')} style={current === 'play' ? { background: color } : undefined}>Play</NavLink>
-            <NavLink to={`/menu/${token}`} className={tabClass('menu')} style={current === 'menu' ? { background: color } : undefined}>{catalogCopy(business.businesstype).tab}</NavLink>
-            <NavLink to={`/bill/${token}`} className={tabClass('bill')} style={current === 'bill' ? { background: color } : undefined}>Bill</NavLink>
-            <NavLink to={`/review/${token}`} className={tabClass('review')} style={current === 'review' ? { background: color } : undefined}>Review</NavLink>
-          </div>
+          <div className="mt-5 hidden gap-2 overflow-x-auto sm:flex sm:justify-center">{tabs()}</div>
           {!signedIn && token && (
             <button type="button" className="mt-5 w-full rounded-full border border-stone-200 py-3 text-sm font-semibold text-stone-950" onClick={() => setLoginOpen(true)}>Sign in</button>
           )}
           <div className="mt-6">{children}</div>
         </div>
       </div>
+      <nav className="fixed inset-x-0 bottom-0 z-30 flex gap-2 overflow-x-auto border-t border-stone-200 bg-white/95 px-3 py-2 backdrop-blur sm:hidden" style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}>{tabs()}</nav>
       {loginOpen && !signedIn && token && <SaveCoinsModal token={token} onClose={() => setLoginOpen(false)} />}
     </div>
   );
@@ -237,7 +241,7 @@ function ItemSheet({
       <div className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl" onClick={(event) => event.stopPropagation()}>
         <div className="relative">
           {item.imagepath ? <img alt="" src={asset(item.imagepath)} className="h-44 w-full object-cover" /> : <div className="h-28" style={{ background: color }} />}
-          <button type="button" className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full bg-white text-lg shadow" onClick={onClose} aria-label="Close">×</button>
+          <IconButton label="Close" kind="ghost" className="absolute right-3 top-3 !bg-white shadow" onClick={onClose}><ActionIcon name="close" /></IconButton>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
           <h2 className="text-xl font-bold">{item.itemname}</h2>
@@ -315,7 +319,7 @@ function SaveCoinsModal({ onClose, token }: { onClose: () => void; token: string
     try {
       const result = await client.login({ mobile: form.get('mobile'), password: form.get('password'), remember: true });
       auth.setSession(result.user, result.accessToken);
-      toastOk('Coins saved to your wallet.');
+      toastOk('Coins saved to your Repeat Mate wallet.');
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign in failed.');
@@ -411,7 +415,7 @@ export function PlayPanel() {
           <p className="text-sm font-semibold text-amber-500">{result.coins} coins</p>
         </div>
       )}
-      {result && signedIn && <p className="mt-4 text-center text-sm text-stone-500">Saved to your wallet. <Link className="font-semibold text-orange-600" to="/customer/wallet">Open wallet</Link></p>}
+      {result && signedIn && <p className="mt-4 text-center text-sm text-stone-500">Saved to your Repeat Mate wallet. <Link className="font-semibold text-orange-600" to="/customer/wallet">Open wallet</Link></p>}
       {result && !signedIn && !saveOpen && <button type="button" className="mx-auto mt-4 block text-sm font-semibold text-orange-600" onClick={() => setSaveOpen(true)}>Sign in to keep these coins</button>}
       {saveOpen && !signedIn && <SaveCoinsModal token={token} onClose={() => setSaveOpen(false)} />}
       <OffersList />

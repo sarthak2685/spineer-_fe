@@ -1,10 +1,12 @@
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { homeFor, useAuth } from './auth';
-import { AboutPage, ContactPage, CustomerRegisterPage, ErrorPage, ForgotPage, HomePage, LoginPage, PrivacyPage, RegisterPage, ResetPage, TermsPage } from '../features/public/pages';
+import { AboutPage, CustomerRegisterPage, ErrorPage, ForgotPage, HomePage, LoginPage, RegisterPage, ResetPage } from '../features/public/pages';
+import { LegalPage } from '../features/public/legal';
+import { legalNav } from '../features/public/legal-nav';
 import { GuestPlaceShell } from '../features/public/guest-places';
 import { BusinessDetailsPage, ClaimsPage, CustomerDashboard, ExplorePage, HistoryPage, MyOrdersPage, NotificationsPage, PrizesPage, ProfilePage, RewardsPage, WalletPage } from '../features/customer/pages';
 import { BusinessClaimsPage, BusinessDashboard, BusinessProfilePage, BusinessReviewsPage, CustomersPage, GameAdminPage, MenuStudio, OrderDetailPage, OrdersPage, PlaysPage, PosterPage, PushPage, QrPage, RedemptionsPage, RewardsAdminPage } from '../features/business/pages';
-import { SuperBusinesses, SuperDashboard, SuperDemos, SuperTypes } from '../features/super-admin/pages';
+import { SuperBusinesses, SuperDashboard, SuperDemos, SuperHowVideo, SuperTypes } from '../features/super-admin/pages';
 import { PlatformShell, StoreShell, WalletShell } from '../components/layout/Shells';
 import { SiteInstall } from '../components/install-app';
 
@@ -23,9 +25,8 @@ export function App() {
     <Routes>
       <Route path="/" element={<HomePage />} />
       <Route path="/about" element={<AboutPage />} />
-      <Route path="/contact" element={<ContactPage />} />
-      <Route path="/terms" element={<TermsPage />} />
-      <Route path="/privacy" element={<PrivacyPage />} />
+      <Route path="/contact" element={<Navigate to="/#demo" replace />} />
+      {legalNav.map((link) => <Route key={link.to} path={link.to} element={<LegalPage slug={link.to.slice(1)} />} />)}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/forgot-password" element={<ForgotPage />} />
       <Route path="/reset-password" element={<ResetPage />} />
@@ -84,6 +85,7 @@ export function App() {
           <Route path="/super/businesses" element={<SuperBusinesses />} />
           <Route path="/super/demos" element={<SuperDemos />} />
           <Route path="/super/business-types" element={<SuperTypes />} />
+          <Route path="/super/how-video" element={<SuperHowVideo />} />
         </Route>
       </Route>
 

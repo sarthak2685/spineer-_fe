@@ -12,7 +12,7 @@ self.addEventListener('fetch', (event) => {
 });
 
 self.addEventListener('push', (event) => {
-  let data = { title: 'RewardSpinner', body: 'You have a new update.', url: '/customer/notifications', tag: 'rewardspinner' };
+  let data = { title: 'Repeat Mate', body: 'You have a new update.', url: '/customer/notifications', tag: 'repeat-mate' };
   try {
     if (event.data) data = { ...data, ...event.data.json() };
   } catch {
@@ -23,20 +23,22 @@ self.addEventListener('push', (event) => {
       /* ignore */
     }
   }
-  const title = data.title || 'RewardSpinner';
+  const title = data.title || 'Repeat Mate';
   const body = data.body || '';
   const url = data.url || '/customer/notifications';
   event.waitUntil((async () => {
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const visible = windows.some((client) => client.visibilityState === 'visible');
+    windows.forEach((client) => client.postMessage({ type: 'push', title, body, url }));
+    if (visible) return;
     await self.registration.showNotification(title, {
       body,
-      icon: '/icons/icon.svg',
-      badge: '/icons/icon.svg',
+      icon: '/icons/icon-192.png',
+      badge: '/icons/badge-72.png',
       tag: data.tag || title,
       renotify: true,
       data: { url },
     });
-    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    windows.forEach((client) => client.postMessage({ type: 'push', title, body, url }));
   })());
 });
 

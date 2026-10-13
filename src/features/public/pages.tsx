@@ -29,7 +29,7 @@ function AuthShell({ kicker, title, text, wide = false, asideTitle, asidePoints,
         <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(520px 280px at 20% 0%, rgba(234,88,12,.5), transparent 60%), radial-gradient(420px 240px at 90% 100%, rgba(245,158,11,.28), transparent 55%)' }} />
         <div className="relative"><Brand light /></div>
         <Rise className="relative mt-16 max-w-md">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/45">For shops and guests</p>
+          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-orange-300">For shops and guests</p>
           <h2 className="mt-3 font-display text-4xl font-semibold leading-tight">{asideTitle || 'One QR for games, orders, and a wallet.'}</h2>
           {asideSteps ? (
             <ol className="mt-8 space-y-5">
@@ -55,7 +55,7 @@ function AuthShell({ kicker, title, text, wide = false, asideTitle, asidePoints,
         <div className={`w-full ${wide ? 'max-w-2xl' : 'max-w-md'}`}>
           <div className="mb-6 lg:hidden"><Brand /></div>
           <Rise>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-orange-600">{kicker}</p>
+            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-orange-600">{kicker}</p>
             <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight">{title}</h1>
             <p className="mt-2 text-sm text-stone-500">{text}</p>
           </Rise>
@@ -71,9 +71,9 @@ export function AboutPage() {
     <Marketing>
       <section className="px-5 py-12 lg:py-20">
         <div className="mx-auto max-w-6xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-orange-600">About</p>
+          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-orange-600">About</p>
           <h1 className="mt-2 max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl">Loyalty that lives on the counter, not in an app store.</h1>
-          <p className="mt-4 max-w-3xl text-lg leading-relaxed text-stone-600">RewardSpinner is for restaurants, cafes, salons, gyms, clinics, garages, and shops. Guests scan a QR, play, order, and keep coins. Owners approve claims, print one flyer, and see who came back.</p>
+          <p className="mt-4 max-w-3xl text-lg leading-relaxed text-stone-600">Repeat Mate is for restaurants, cafes, salons, gyms, clinics, garages, and shops. Guests scan a QR, play, order, and keep coins. Owners approve claims, print one flyer, and see who came back.</p>
           <div className="mt-8 grid gap-4 sm:grid-cols-2">
             <Lift className="public-card rounded-3xl border border-stone-200 bg-white p-6"><h2 className="font-semibold">For the shop</h2><p className="mt-2 text-sm leading-relaxed text-stone-500">Menu, games, orders, claims, and a poster that never needs a new URL.</p></Lift>
             <Lift className="public-card rounded-3xl border border-stone-200 bg-white p-6"><h2 className="font-semibold">For the guest</h2><p className="mt-2 text-sm leading-relaxed text-stone-500">Play in the browser. Sign in on the same screen if they already have a wallet.</p></Lift>
@@ -89,42 +89,10 @@ export function ContactPage() {
     <Marketing>
       <section className="px-5 py-12 lg:py-20">
         <div className="mx-auto max-w-6xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-orange-600">Contact</p>
+          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-orange-600">Contact</p>
           <h1 className="mt-2 max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl">Talk to the platform team.</h1>
           <p className="mt-4 max-w-2xl text-lg leading-relaxed text-stone-600">For a store that already has a poster, use the support address on that flyer. For sales and onboarding, write here.</p>
-          <Lift className="mt-8 max-w-xl"><Card><p className="font-semibold">support@rewardspinner.local</p><p className="mt-1 text-sm text-stone-500">We reply on business days.</p></Card></Lift>
-        </div>
-      </section>
-    </Marketing>
-  );
-}
-
-export function TermsPage() {
-  return (
-    <Marketing>
-      <section className="px-5 py-12 lg:py-16">
-        <div className="mx-auto max-w-3xl space-y-4 text-sm leading-relaxed text-stone-600">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-orange-600">Terms</p>
-          <h1 className="text-3xl font-semibold tracking-tight text-stone-950">Terms & Conditions</h1>
-          <p>RewardSpinner gives a shop one QR for games, a menu, orders, and reviews. Creating a business means you will use it for your own counter, keep guest mobiles only for orders and rewards, and not post anything unlawful.</p>
-          <p>Coins, offers, and bill claims are decided by the shop. The platform stores the account, the menu, and the order so the counter can run them. You can close the business by contacting support.</p>
-          <p>The service is provided as available. A missed notification or a delayed order does not create a payment obligation on RewardSpinner.</p>
-        </div>
-      </section>
-    </Marketing>
-  );
-}
-
-export function PrivacyPage() {
-  return (
-    <Marketing>
-      <section className="px-5 py-12 lg:py-16">
-        <div className="mx-auto max-w-3xl space-y-4 text-sm leading-relaxed text-stone-600">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-orange-600">Privacy</p>
-          <h1 className="text-3xl font-semibold tracking-tight text-stone-950">Privacy Policy</h1>
-          <p>We store the name, mobile, email, and address you enter so the shop can recognise an order, a game win, and a bill claim. Location search uses the place you type, or your device location only when you tap Near me.</p>
-          <p>Notifications are sent only after you allow them. A home-screen shortcut does not give the app access to your contacts or photos beyond a bill picture you choose to upload.</p>
-          <p>Shop owners see the orders and claims for their own business. They do not see another shop’s guest list.</p>
+          <Lift className="mt-8 max-w-xl"><Card><p className="font-semibold">repeatmate@gmail.com</p><p className="mt-1 text-sm text-stone-500">+91 92967 56289</p><p className="mt-3 text-sm text-stone-600">1, Niwas, Civil Line Buxar, Buxar, Bihar – 802101, India</p><p className="mt-1 text-sm text-stone-600">Operating from Civil Lines, Prayagraj, Uttar Pradesh, India. WebGrow.store.</p><p className="mt-1 text-sm text-stone-500">We reply on business days.</p></Card></Lift>
         </div>
       </section>
     </Marketing>
@@ -137,7 +105,7 @@ export function ErrorPage() {
     <Marketing>
       <section className="px-5 py-12 lg:py-20">
         <div className="mx-auto max-w-6xl">
-          <PageTitle title={missing ? 'Page not found' : 'Something went wrong'} text={missing ? 'That address is not part of RewardSpinner.' : 'The page could not be completed. Return home and try the flow again.'} />
+          <PageTitle title={missing ? 'Page not found' : 'Something went wrong'} text={missing ? 'That address is not part of Repeat Mate.' : 'The page could not be completed. Return home and try the flow again.'} />
           <Link to="/" className="inline-flex min-h-11 items-center rounded-full bg-orange-600 px-5 text-sm font-semibold text-white">Back home</Link>
         </div>
       </section>
@@ -170,7 +138,7 @@ export function LoginPage() {
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(720px_320px_at_15%_0%,rgba(234,88,12,.18),transparent_55%),radial-gradient(520px_280px_at_90%_20%,rgba(245,158,11,.14),transparent_50%)]" />
         <div className="relative mx-auto grid max-w-6xl gap-10 lg:grid-cols-[0.92fr_1.08fr] lg:items-stretch">
           <Lift className="rounded-[28px] border border-stone-200 bg-white/95 p-6 shadow-xl shadow-stone-950/10 sm:p-8">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-orange-600">Welcome back</p>
+            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-orange-600">Welcome back</p>
             <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight text-stone-950 sm:text-4xl">Sign in</h1>
             <p className="mt-2 text-sm text-stone-500">Use the 10-digit mobile on the account.</p>
             <Form onSubmit={onSubmit} className="mt-6 space-y-4">
@@ -181,6 +149,7 @@ export function LoginPage() {
                 <Link to="/forgot-password" className="inline-flex min-h-11 items-center text-sm font-semibold text-orange-600">Forgot password</Link>
               </div>
               <Button type="submit" className="w-full">Continue</Button>
+              <p className="text-center text-xs text-stone-500"><Link className="font-semibold text-orange-600" to="/privacy">Privacy Policy</Link> · <Link className="font-semibold text-orange-600" to="/terms">Terms</Link></p>
             </Form>
             <div className="mt-6 grid gap-3 border-t border-stone-100 pt-5 sm:grid-cols-2">
               <Link to="/register" className="rounded-2xl border border-stone-200 px-4 py-3 transition hover:border-orange-600 hover:bg-orange-50">
@@ -194,7 +163,7 @@ export function LoginPage() {
             </div>
           </Lift>
           <Rise className="flex flex-col justify-center rounded-[28px] border border-orange-200/80 bg-gradient-to-br from-orange-50 via-white to-amber-50 p-7 sm:p-9">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-orange-600">RewardSpinner</p>
+            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-orange-600">Repeat Mate</p>
             <h2 className="mt-3 font-display text-3xl font-semibold leading-tight tracking-tight text-stone-950 sm:text-4xl">
               Transform every customer visit into rewards.
             </h2>
@@ -236,7 +205,7 @@ export function ForgotPage() {
     } catch (err) { setError(err instanceof Error ? err.message : 'Request failed.'); }
   }
   if (hold) return null;
-  return <AuthShell kicker="Account recovery" title="Reset password" text="Enter the email or mobile on the account."><Form onSubmit={onSubmit} className="space-y-4">{error && <Alert text={error} />}{message && <Card><p>{message}</p>{path && <Link className="mt-3 inline-block text-sm font-semibold text-orange-600" to={path}>Open reset link</Link>}</Card>}<Field label="Email or mobile" name="identifier" /><Button type="submit" className="w-full">Send reset link</Button><p className="text-center text-sm text-stone-500"><Link className="font-semibold text-orange-600" to="/login">Back to sign in</Link></p></Form></AuthShell>;
+  return <AuthShell kicker="Account recovery" title="Reset password" text="Enter the email or mobile on the account."><Form onSubmit={onSubmit} className="space-y-4">{error && <Alert text={error} />}{message && <Card><p>{message}</p>{path && <Link className="mt-3 inline-block text-sm font-semibold text-orange-600" to={path}>Open reset link</Link>}</Card>}<Field label="Email or mobile" name="identifier" /><Button type="submit" className="w-full">Send reset link</Button><p className="text-center text-sm text-stone-500"><Link className="font-semibold text-orange-600" to="/login">Back to sign in</Link></p><p className="text-center text-xs text-stone-500"><Link className="font-semibold text-orange-600" to="/privacy">Privacy Policy</Link> · <Link className="font-semibold text-orange-600" to="/terms">Terms</Link></p></Form></AuthShell>;
 }
 
 export function ResetPage() {
@@ -253,7 +222,7 @@ export function ResetPage() {
     } catch (err) { setError(err instanceof Error ? err.message : 'Reset failed.'); }
   }
   if (hold) return null;
-  return <AuthShell kicker="Account recovery" title="Choose a new password" text="Both fields must match."><Form onSubmit={onSubmit} className="space-y-4">{error && <Alert text={error} />}{message && <Card>{message} <Link className="mt-3 inline-block font-semibold text-orange-600" to="/login">Sign in</Link></Card>}<Field label="New password" name="password" type="password" /><Field label="Confirm password" name="confirm" type="password" /><Button type="submit" className="w-full">Update password</Button></Form></AuthShell>;
+  return <AuthShell kicker="Account recovery" title="Choose a new password" text="Both fields must match."><Form onSubmit={onSubmit} className="space-y-4">{error && <Alert text={error} />}{message && <Card>{message} <Link className="mt-3 inline-block font-semibold text-orange-600" to="/login">Sign in</Link></Card>}<Field label="New password" name="password" type="password" /><Field label="Confirm password" name="confirm" type="password" /><Button type="submit" className="w-full">Update password</Button><p className="text-center text-xs text-stone-500"><Link className="font-semibold text-orange-600" to="/privacy">Privacy Policy</Link> · <Link className="font-semibold text-orange-600" to="/terms">Terms</Link></p></Form></AuthShell>;
 }
 
 export function RegisterPage() {
@@ -331,7 +300,7 @@ export function RegisterPage() {
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(720px_320px_at_50%_0%,rgba(234,88,12,.16),transparent_55%)]" />
         <div className="relative mx-auto max-w-3xl">
           <Lift className="rounded-[28px] border border-stone-200 bg-white/95 p-6 shadow-xl shadow-stone-950/10 sm:p-8">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-orange-600">For shop owners</p>
+            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-orange-600">For shop owners</p>
             <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight text-stone-950 sm:text-4xl">Create your business</h1>
             <p className="mt-2 text-sm text-stone-500">Step {step} of 3. Shop details, then the owner account.</p>
             <div className="mt-6">
@@ -445,7 +414,7 @@ export function CustomerRegisterPage() {
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(720px_320px_at_15%_0%,rgba(234,88,12,.18),transparent_55%),radial-gradient(520px_280px_at_90%_20%,rgba(245,158,11,.14),transparent_50%)]" />
         <div className="relative mx-auto grid max-w-6xl gap-10 lg:grid-cols-[0.92fr_1.08fr] lg:items-stretch">
           <Lift className="rounded-[28px] border border-stone-200 bg-white/95 p-6 shadow-xl shadow-stone-950/10 sm:p-8">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-orange-600">For guests</p>
+            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-orange-600">For guests</p>
             <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight text-stone-950 sm:text-4xl">Create a customer account</h1>
             <p className="mt-2 text-sm text-stone-500">{guestId ? 'This keeps the coins from your guest play.' : 'Use a 10-digit mobile and a password of at least 6 characters.'}</p>
             <Form onSubmit={onSubmit} className="mt-6 space-y-4">
@@ -455,12 +424,13 @@ export function CustomerRegisterPage() {
               <Field label="Email" name="email" />
               <Field label="Password" name="password" type="password" required />
               <Field label="Business token, if you scanned a QR" name="token" defaultValue={params.get('token') || auth.user?.businessToken || ''} />
+              <p className="text-sm text-stone-600">By creating an account you agree to the <Link className="font-semibold text-orange-600" to="/terms">Terms</Link> and <Link className="font-semibold text-orange-600" to="/privacy">Privacy Policy</Link>.</p>
               <Button type="submit" className="w-full">Create account</Button>
             </Form>
             <p className="mt-6 text-sm text-stone-500">Already have an account? <Link className="font-semibold text-orange-600" to="/login">Sign in</Link></p>
           </Lift>
           <Rise className="flex flex-col justify-center rounded-[28px] border border-orange-200/80 bg-gradient-to-br from-orange-50 via-white to-amber-50 p-7 sm:p-9">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-orange-600">RewardSpinner</p>
+            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-orange-600">Repeat Mate</p>
             <h2 className="mt-3 font-display text-3xl font-semibold leading-tight tracking-tight text-stone-950 sm:text-4xl">Keep the coins from every visit.</h2>
             <p className="mt-3 max-w-lg text-sm leading-relaxed text-stone-600 sm:text-base">One account for games, orders, and rewards. The shop still sees you by the mobile you enter here.</p>
             <ul className="mt-8 space-y-5">

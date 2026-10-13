@@ -25,7 +25,7 @@ export function useInstallApp() {
   }
 
   const help = hint || (ready
-    ? 'Click Install, then confirm the browser window. RewardSpinner is added to the Start menu. No file is saved in Downloads.'
+    ? 'Click Install, then confirm the browser window. Repeat Mate is added to the Start menu. No file is saved in Downloads.'
     : '');
 
   return { ready, installed, hint: help, install };

@@ -22,15 +22,15 @@ export interface User {
 
 function token() { return localStorage.getItem('rs_token') || ''; }
 
-export async function api<T = any>(path: string, options: RequestInit & { quiet?: boolean } = {}): Promise<T> {
+export async function api<T = any>(path: string, options: RequestInit & { quiet?: boolean; timeout?: number } = {}): Promise<T> {
   const headers = new Headers(options.headers);
   if (!(options.body instanceof FormData) && options.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
   const bearer = token();
   if (bearer) headers.set('Authorization', `Bearer ${bearer}`);
   const controller = !options.signal ? new AbortController() : null;
-  const timer = controller ? window.setTimeout(() => controller.abort(), 60_000) : undefined;
+  const timer = controller ? window.setTimeout(() => controller.abort(), options.timeout ?? 60_000) : undefined;
   try {
-    const { quiet, ...request } = options;
+    const { quiet, timeout: _timeout, ...request } = options;
     const response = await fetch(`${BASE}${path}`, { ...request, headers, credentials: 'include', signal: options.signal || controller?.signal });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -92,4 +92,15 @@ export function asset(path?: string | null) {
   if (!path) return '';
   if (path.startsWith('http')) return path;
   return `${API_ORIGIN}${path.startsWith('/') ? path : `/${path}`}`;
+}
+
+export function howVideoSrc(admin = false, id = '') {
+  const query = new URLSearchParams();
+  if (id) query.set('id', id);
+  if (!admin) {
+    const extra = query.toString();
+    return `${BASE}/public/how-video/stream${extra ? `?${extra}` : ''}`;
+  }
+  query.set('access', token());
+  return `${BASE}/super/how-video/stream?${query.toString()}`;
 }

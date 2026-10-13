@@ -8,6 +8,13 @@ function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function weekStart() {
+  const date = new Date();
+  const day = date.getDay();
+  date.setDate(date.getDate() - (day === 0 ? 6 : day - 1));
+  return date.toISOString().slice(0, 10);
+}
+
 export function ListToolbar({
   from,
   to,
@@ -21,21 +28,34 @@ export function ListToolbar({
 }) {
   const [draftFrom, setDraftFrom] = useState(from);
   const [draftTo, setDraftTo] = useState(to);
+  const [custom, setCustom] = useState(false);
+  const day = today();
+  const start = weekStart();
+  const mode = from === day && to === day ? 'today' : from === start && to === day ? 'week' : 'custom';
   useEffect(() => { setDraftFrom(from); setDraftTo(to); }, [from, to]);
   function submit(event: FormEvent) {
     event.preventDefault();
-    onApply(draftFrom || today(), draftTo || today());
+    onApply(draftFrom || day, draftTo || day);
   }
+  const chip = (active: boolean) => `rounded-full px-3 py-1.5 text-sm font-semibold ${active ? 'bg-orange-600 text-white' : 'bg-white text-stone-600 ring-1 ring-stone-200'}`;
   return (
-    <form onSubmit={submit} className="mb-4 flex flex-wrap items-end justify-between gap-3 rounded-2xl border border-stone-200 bg-white p-4">
-      <div className="flex flex-wrap items-end gap-3">
-        <Field label="From" type="date" value={draftFrom} onChange={(e) => setDraftFrom(e.target.value)} />
-        <Field label="To" type="date" value={draftTo} onChange={(e) => setDraftTo(e.target.value)} />
-        <Button type="submit" kind="soft">Apply</Button>
-        <Button type="button" kind="ghost" onClick={() => { const day = today(); setDraftFrom(day); setDraftTo(day); onApply(day, day); }}>Today</Button>
+    <div className="mb-4 rounded-2xl border border-stone-200 bg-white p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className={chip(mode === 'today' && !custom)} onClick={() => { setCustom(false); onApply(day, day); }}>Today</button>
+          <button type="button" className={chip(mode === 'week' && !custom)} onClick={() => { setCustom(false); onApply(start, day); }}>This week</button>
+          <button type="button" className={chip(custom || mode === 'custom')} onClick={() => setCustom(true)}>Custom</button>
+        </div>
+        {children ? <div className="flex flex-wrap items-end gap-2">{children}</div> : null}
       </div>
-      {children ? <div className="flex flex-wrap items-end gap-2">{children}</div> : null}
-    </form>
+      {(custom || mode === 'custom') && (
+        <form onSubmit={submit} className="mt-3 flex flex-wrap items-end gap-3">
+          <Field label="From" type="date" value={draftFrom} onChange={(e) => setDraftFrom(e.target.value)} />
+          <Field label="To" type="date" value={draftTo} onChange={(e) => setDraftTo(e.target.value)} />
+          <Button type="submit" kind="soft">Apply</Button>
+        </form>
+      )}
+    </div>
   );
 }
 

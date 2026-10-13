@@ -105,15 +105,32 @@ export function PlaysPage() {
 export function RewardsAdminPage() {
   const [rows, setRows] = useState<any[]>([]);
   const [editing, setEditing] = useState<any>(null);
+  const [open, setOpen] = useState(false);
   const [error, setError] = useState('');
   function load() { api<any[]>('/business/rewards').then(setRows); }
   useEffect(load, []);
+  function start(row?: any) { setEditing(row || null); setError(''); setOpen(true); }
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = Object.fromEntries(new FormData(event.currentTarget).entries());
-    try { await api('/business/rewards', { method: 'POST', body: JSON.stringify(form) }); setEditing(null); setError(''); toastOk(editing ? 'Reward updated.' : 'Reward added.'); load(); } catch (err) { setError(err instanceof Error ? err.message : 'Save failed.'); }
+    try { await api('/business/rewards', { method: 'POST', body: JSON.stringify(form) }); setOpen(false); setEditing(null); setError(''); toastOk(editing ? 'Reward updated.' : 'Reward added.'); load(); } catch (err) { setError(err instanceof Error ? err.message : 'Save failed.'); }
   }
-  return <Frame><PageTitle title="Rewards" text="Add one here. Click a row to edit it." /><Form key={editing?.rewardid || 'new'} className="mb-5 grid gap-3 rounded-2xl border border-stone-200 bg-white p-5 shadow-sm md:grid-cols-2" onSubmit={onSubmit}>{editing && <input type="hidden" name="id" value={editing.rewardid} />}<Field label="Reward name" name="rewardName" defaultValue={editing?.rewardname} required /><Field label="Coins required" name="coinsRequired" defaultValue={editing?.coinsrequired} required /><div className="md:col-span-2"><Area label="Description" name="description" defaultValue={editing?.description} /></div><div className="flex items-center gap-2"><Button type="submit">{editing ? 'Update reward' : 'Add reward'}</Button>{error && <Alert text={error} />}</div></Form><Table rows={rows} columns={[{ key: 'rewardname', label: 'Reward', render: (row) => <button type="button" className="font-medium text-orange-600" onClick={() => setEditing(row)}>{row.rewardname}</button> }, { key: 'coinsrequired', label: 'Coins' }, { key: 'description', label: 'Description' }, { key: 'actions', label: '', render: (row) => <RowMenu items={[{ label: 'Remove', danger: true, onClick: () => api(`/business/rewards/${row.rewardid}/delete`, { method: 'POST' }).then(load) }]} /> }]} /></Frame>;
+  return <Frame>
+    <PageTitle title="Rewards" text="The list of what customers can redeem." actions={<Button onClick={() => start()}>Add reward</Button>} />
+    <Table empty="No rewards yet." rows={rows} columns={[{ key: 'rewardname', label: 'Reward', render: (row) => <button type="button" className="font-medium text-orange-600" onClick={() => start(row)}>{row.rewardname}</button> }, { key: 'coinsrequired', label: 'Coins' }, { key: 'description', label: 'Description' }, { key: 'actions', label: '', render: (row) => <RowMenu items={[{ label: 'Edit', onClick: () => start(row) }, { label: 'Remove', danger: true, onClick: () => api(`/business/rewards/${row.rewardid}/delete`, { method: 'POST' }).then(load) }]} /> }]} />
+    {open && (
+      <Modal title={editing ? 'Edit reward' : 'Add reward'} onClose={() => setOpen(false)}>
+        <Form key={editing?.rewardid || 'new'} className="grid gap-3" onSubmit={onSubmit}>
+          {editing && <input type="hidden" name="id" value={editing.rewardid} />}
+          <Field label="Reward name" name="rewardName" defaultValue={editing?.rewardname} required />
+          <Field label="Coins required" name="coinsRequired" defaultValue={editing?.coinsrequired} required />
+          <Area label="Description" name="description" defaultValue={editing?.description} />
+          {error && <Alert text={error} />}
+          <Button type="submit">{editing ? 'Update reward' : 'Add reward'}</Button>
+        </Form>
+      </Modal>
+    )}
+  </Frame>;
 }
 export function RedemptionsPage() {
   const list = usePagedQuery<any>('/business/redemptions');
@@ -161,7 +178,7 @@ export function QrPage() {
   return <Frame>
     <PageTitle title="QR and poster" text="The code is black, with joined lines and a lined frame in your shop color. The poster prints that same image. Regenerate if the shop name changed." />
     <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
-      <Card className="text-center">
+      <Card className="mx-auto w-full max-w-sm text-center lg:max-w-none">
         {data?.code?.imagepath && (
           <img alt="QR" src={asset(data.code.imagepath)} className="mx-auto h-72 w-72" />
         )}
@@ -330,13 +347,16 @@ export function BusinessProfilePage() {
     <PageTitle title="Business profile" />
     {profile.logoimagepath && <img alt="Logo" src={asset(profile.logoimagepath)} className="mb-4 h-16 w-16 rounded-2xl object-cover" />}
     <Form key={profile.businessid || 'new'} className="grid gap-3 rounded-2xl border border-stone-200 bg-white p-5 shadow-sm md:grid-cols-2" onSubmit={(e) => { e.preventDefault(); const body = new FormData(e.currentTarget); return api('/business/profile', { method: 'POST', body }).then((next) => { setProfile(next); toastOk('Profile saved.'); }); }}>
+      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-stone-400 md:col-span-2">Name and contact</p>
       <Field label="Name" name="businessName" defaultValue={profile.businessname} required /><Field label="Phone" name="phone" defaultValue={profile.phone} /><Field label="Email" name="email" defaultValue={profile.email} /><Field label="Tagline" name="tagline" defaultValue={profile.tagline} />
+      <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-stone-400 md:col-span-2">Address</p>
       <div className="md:col-span-2"><Area label="Address" name="address" required defaultValue={profile.address} /></div>
       <Select label="Country" name="countryId" required value={loc.countryId} onChange={(event) => setLoc({ countryId: event.target.value, stateId: '', districtId: '', cityId: '' })}><option value="">Select</option>{countries.map((row) => <option key={row.countryid} value={row.countryid}>{row.countryname}</option>)}</Select>
       <Select label="State" name="stateId" required value={loc.stateId} onChange={(event) => setLoc((current) => ({ ...current, stateId: event.target.value, districtId: '', cityId: '' }))}><option value="">Select</option>{states.map((row) => <option key={row.stateid} value={row.stateid}>{row.statename}</option>)}</Select>
       <Select label="District" name="districtId" value={loc.districtId} onChange={(event) => setLoc((current) => ({ ...current, districtId: event.target.value, cityId: '' }))}><option value="">Select</option>{districts.map((row) => <option key={row.districtid} value={row.districtid}>{row.districtname}</option>)}</Select>
       <Select label="City" name="cityId" value={loc.cityId} onChange={(event) => setLoc((current) => ({ ...current, cityId: event.target.value }))}><option value="">Select</option>{cities.map((row) => <option key={row.cityid} value={row.cityid}>{row.cityname}</option>)}</Select>
       <div className="md:col-span-2"><Area label="Description" name="description" defaultValue={profile.description} /></div>
+      <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-stone-400 md:col-span-2">Links</p>
       <Field label="Theme color" name="themeColor" defaultValue={profile.themecolor} /><Field label="Website" name="website" defaultValue={profile.website} />
       <Field label="Facebook" name="facebookUrl" defaultValue={profile.facebookurl} /><Field label="Instagram" name="instagramUrl" defaultValue={profile.instagramurl} />
       <Field label="LinkedIn" name="linkedinUrl" defaultValue={profile.linkedinurl} /><Field label="X" name="twitterUrl" defaultValue={profile.twitterurl} />
@@ -344,9 +364,10 @@ export function BusinessProfilePage() {
       <Field label="Support email" name="supportEmail" defaultValue={profile.supportemail} /><Field label="Pincode" name="pincode" defaultValue={profile.pincode} />
       <Field label="Latitude" name="latitude" defaultValue={profile.latitude} /><Field label="Longitude" name="longitude" defaultValue={profile.longitude} />
       <Field label="Google map URL" name="googleMapUrl" defaultValue={profile.googlemapurl} /><Field label="Google review URL" name="googleReviewUrl" defaultValue={profile.googlereviewurl} />
+      <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-stone-400 md:col-span-2">Images</p>
       <label className="text-sm">Logo<input className="mt-1 block w-full" type="file" name="logo" accept="image/png,image/jpeg,image/webp" /></label>
       <label className="text-sm">Banner<input className="mt-1 block w-full" type="file" name="banner" accept="image/png,image/jpeg,image/webp" /></label>
-      <Button type="submit">Save profile</Button>
+      <div className="md:col-span-2"><Button type="submit" className="w-full sm:w-auto">Save profile</Button></div>
     </Form>
     <Button kind="danger" className="mt-6" onClick={async () => {
       if (!window.confirm('Delete this shop account? The shop is paused and you will not be able to sign in. Orders and plays stay.')) return;
@@ -381,13 +402,12 @@ export function OrdersPage() {
     </ListToolbar>
     <div className="mb-4 flex gap-2 overflow-x-auto">{filters.map((item) => <button key={item} className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-semibold ${status === item ? 'bg-orange-600 text-white' : 'bg-white text-stone-500 ring-1 ring-stone-200'}`} onClick={() => setStatus(item)}>{item}</button>)}</div>
     <Table empty={list.loading ? 'Loading…' : 'No orders for this filter.'} rows={list.rows} columns={[
-      { key: 'ordernumber', label: 'Order', render: (row) => <Link className="font-medium text-orange-600" to={`/business/menu/orders/${row.orderid}`}>{row.ordernumber}</Link> },
+      { key: 'ordernumber', label: 'Order', render: (row) => <span className="inline-flex flex-wrap items-center gap-2"><Link className="font-medium text-orange-600" to={`/business/menu/orders/${row.orderid}`}>{row.ordernumber}</Link><Status value={row.status} /></span> },
       { key: 'customername', label: 'Customer' },
       { key: 'mobile', label: 'Mobile' },
       { key: 'fulfillment', label: 'Service', render: (row) => ({ DineIn: 'Dine in', Delivery: 'Delivery', Pickup: 'Pickup' } as Record<string, string>)[row.fulfillment] || '—' },
       { key: 'tablenumber', label: 'Where' },
       { key: 'totalamount', label: 'Total', render: (row) => `₹${Number(row.totalamount || 0).toFixed(2)}` },
-      { key: 'status', label: 'Status', render: (row) => <Status value={row.status} /> },
       { key: 'actions', label: '', render: (row) => <RowMenu items={(orderActions[row.status] || []).map(([command, label, kind]) => ({ label, danger: kind === 'danger', onClick: () => act(row.orderid, command) }))} /> },
     ]} />
     <Pager page={list.page} pageSize={list.pageSize} total={list.total} onPage={list.setPage} />
@@ -444,22 +464,51 @@ export function BusinessReviewsPage() {
   </Frame>;
 }
 
+const pushSegments = [
+  { value: 'All', label: 'Everyone' },
+  { value: 'ScannedQR', label: 'Scanned a QR' },
+  { value: 'Registered', label: 'Registered' },
+  { value: 'WalletBalance', label: 'Wallet balance' },
+  { value: 'ExpiringCoins', label: 'Expiring coins' },
+  { value: 'RedeemedRewards', label: 'Redeemed a reward' },
+  { value: 'Inactive30Days', label: 'Quiet for 30 days' },
+  { value: 'PendingClaims', label: 'Pending claims' },
+];
+
 export function PushPage() {
   const [rows, setRows] = useState<any[]>([]);
   const [message, setMessage] = useState('');
+  const [open, setOpen] = useState(false);
+  const [shop, setShop] = useState('Your shop');
+  const [draft, setDraft] = useState({ title: '', message: '', segment: 'All' });
   function load() { api<any[]>('/business/push/templates').then(setRows); }
   useEffect(load, []);
+  useEffect(() => { api<any>('/business/profile').then((profile) => setShop(profile?.businessname || 'Your shop')).catch(() => undefined); }, []);
   return <Frame>
-    <PageTitle title="Push campaigns" />
-    <Form className="mb-6 grid gap-3 rounded-2xl border border-stone-200 bg-white p-5 shadow-sm" onSubmit={async (e) => { e.preventDefault(); const form = Object.fromEntries(new FormData(e.currentTarget).entries()); const result = await api<{ recipientCount: number; browserPush?: { sent: number; attempted: number } }>('/business/push/send', { method: 'POST', body: JSON.stringify(form) }); const push = result.browserPush; const text = `Inbox: ${result.recipientCount} customers` + (push ? ` · Browser push: ${push.sent}/${push.attempted}` : ''); setMessage(text); toastOk(text); }}>
-      <Field label="Title" name="title" required />
-      <Area label="Message" name="message" required />
-      <Select label="Segment" name="segment"><option>All</option><option>ScannedQR</option><option>Registered</option><option>WalletBalance</option><option>ExpiringCoins</option><option>RedeemedRewards</option><option>Inactive30Days</option><option>PendingClaims</option></Select>
-      <p className="text-xs text-stone-500">Everyone who played, ordered, or signed up at this shop gets it in their inbox. If they allowed notifications, their phone shows a banner even when the site is closed.</p>
-      <Button type="submit">Send</Button>
-      {message && <p className="text-sm text-emerald-700">{message}</p>}
-    </Form>
-    <div className="space-y-2">{rows.map((row) => <Card key={row.templateid}><p className="font-medium">{row.title}</p><p className="text-sm text-stone-500">{row.message}</p></Card>)}</div>
+    <PageTitle title="Push campaigns" actions={<Button onClick={() => setOpen(true)}>New message</Button>} />
+    {message && <p className="mb-4 text-sm text-emerald-700">{message}</p>}
+    <div className="space-y-2">{rows.map((row) => <Card key={row.templateid}><p className="font-medium">{row.title}</p><p className="text-sm text-stone-500">{row.message}</p></Card>)}{!rows.length && <Card><p className="text-sm text-stone-500">No messages sent yet.</p></Card>}</div>
+    {open && (
+      <Modal title="New message" text="Everyone who played, ordered, or signed up at this shop gets it in their inbox." onClose={() => setOpen(false)}>
+        <Form className="grid gap-3" onSubmit={async (e) => { e.preventDefault(); const result = await api<{ recipientCount: number; browserPush?: { sent: number; attempted: number } }>('/business/push/send', { method: 'POST', body: JSON.stringify(draft) }); const push = result.browserPush; const text = `Inbox: ${result.recipientCount} customers` + (push ? ` · Browser push: ${push.sent}/${push.attempted}` : ''); setMessage(text); toastOk(text, { title: 'Message sent', detail: text }); setOpen(false); setDraft({ title: '', message: '', segment: 'All' }); load(); }}>
+          <Field label="Title" name="title" required value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} />
+          <Area label="Message" name="message" required value={draft.message} onChange={(event) => setDraft((current) => ({ ...current, message: event.target.value }))} />
+          <Select label="Segment" name="segment" value={draft.segment} onChange={(event) => setDraft((current) => ({ ...current, segment: event.target.value }))}>{pushSegments.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</Select>
+          <div className="rounded-3xl bg-stone-950 p-4 text-white">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-orange-300">Phone preview</p>
+            <div className="mt-3 flex gap-3 rounded-2xl bg-white/10 p-3">
+              <img src="/icons/icon-192.png" alt="" className="h-10 w-10 rounded-xl" />
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold">{shop}</p>
+                <p className="truncate text-sm">{draft.title || 'Title'}</p>
+                <p className="line-clamp-2 text-xs text-white/70">{draft.message || 'Message'}</p>
+              </div>
+            </div>
+          </div>
+          <Button type="submit" className="w-full">Send</Button>
+        </Form>
+      </Modal>
+    )}
   </Frame>;
 }
 export function GameAdminPage() {
@@ -467,15 +516,26 @@ export function GameAdminPage() {
   const [configs, setConfigs] = useState<any[]>([]);
   const [prizes, setPrizes] = useState<any[]>([]);
   const [configId, setConfigId] = useState<number | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
   useEffect(() => { api<any>(`/business/games/${code}`).then((data) => { const rows = Array.isArray(data) ? data : data.configs || []; setConfigs(rows); const first = rows[0]; if (first) { setConfigId(first.gameconfigurationid); api(`/business/prizes/${first.gameconfigurationid}`).then(setPrizes); } }); }, [code]);
   const tabs = ['SpinWheel', 'ScratchCard', 'MysteryGiftBox', 'SlotMachine'];
   return <Frame>
-    <PageTitle title="Games" text="Prize chances are still decided on the server." />
+    <PageTitle title="Games" text="Prize chances are still decided on the server." actions={configId ? <Button onClick={() => setAddOpen(true)}>Add sector</Button> : undefined} />
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-      <div className="inline-flex flex-wrap gap-1 rounded-2xl bg-white p-1 shadow-sm ring-1 ring-stone-200">{tabs.map((tab) => <Link key={tab} to={`/business/games/${tab}`} className={`rounded-xl px-3 py-2 text-sm font-semibold ${tab === code ? 'bg-orange-600 text-white' : 'text-stone-500 hover:bg-stone-100'}`}>{tab.replace(/([A-Z])/g, ' $1').trim()}</Link>)}</div>
-      <Button onClick={() => api(`/business/games/${code}`, { method: 'POST', body: JSON.stringify({ name: `New ${code}` }) }).then(() => api<any>(`/business/games/${code}`).then((data) => setConfigs(Array.isArray(data) ? data : data.configs || [])))}>New configuration</Button>
+      <div className="flex gap-1 overflow-x-auto rounded-2xl bg-white p-1 shadow-sm ring-1 ring-stone-200">{tabs.map((tab) => <Link key={tab} to={`/business/games/${tab}`} className={`shrink-0 rounded-xl px-3 py-2 text-sm font-semibold ${tab === code ? 'bg-orange-600 text-white' : 'text-stone-500 hover:bg-stone-100'}`}>{tab.replace(/([A-Z])/g, ' $1').trim()}</Link>)}</div>
+      <Button kind="ghost" onClick={() => api(`/business/games/${code}`, { method: 'POST', body: JSON.stringify({ name: `New ${code}` }) }).then(() => api<any>(`/business/games/${code}`).then((data) => setConfigs(Array.isArray(data) ? data : data.configs || [])))}>New configuration</Button>
     </div>
     <div className="space-y-2">{configs.map((config) => <Card key={config.gameconfigurationid} className={config.gameconfigurationid === configId ? 'ring-2 ring-orange-600' : ''}><button className="w-full text-left font-medium" onClick={() => { setConfigId(config.gameconfigurationid); api(`/business/prizes/${config.gameconfigurationid}`).then(setPrizes); }}>{config.configurationname}</button></Card>)}</div>
-    <div className="mt-4 space-y-2">{prizes.map((prize) => <Card key={prize.prizeconfigurationid}>{prize.prizename} · {prize.winningpercentage}%</Card>)}{configId && <Form className="grid gap-3 rounded-2xl border border-stone-200 bg-white p-5 md:grid-cols-3" onSubmit={(e) => { e.preventDefault(); const form = Object.fromEntries(new FormData(e.currentTarget).entries()); return api('/business/prizes', { method: 'POST', body: JSON.stringify({ ...form, configId }) }).then(() => api(`/business/prizes/${configId}`).then(setPrizes)); }}><Field label="Prize" name="prizeName" /><Field label="Coins" name="coins" /><Field label="Winning %" name="winningPercentage" /><div className="md:col-span-3"><Button type="submit">Add sector</Button></div></Form>}</div>
+    <div className="mt-4 space-y-2">{prizes.map((prize) => <Card key={prize.prizeconfigurationid}><p className="font-semibold">{prize.prizename}</p><p className="text-sm text-stone-500">{prize.winningpercentage}%</p></Card>)}</div>
+    {addOpen && configId && (
+      <Modal title="Add sector" onClose={() => setAddOpen(false)}>
+        <Form className="grid gap-3" onSubmit={(e) => { e.preventDefault(); const form = Object.fromEntries(new FormData(e.currentTarget).entries()); return api('/business/prizes', { method: 'POST', body: JSON.stringify({ ...form, configId }) }).then(() => { setAddOpen(false); api(`/business/prizes/${configId}`).then(setPrizes); }); }}>
+          <Field label="Prize" name="prizeName" required />
+          <Field label="Coins" name="coins" />
+          <Field label="Winning %" name="winningPercentage" />
+          <Button type="submit" className="w-full">Add sector</Button>
+        </Form>
+      </Modal>
+    )}
   </Frame>;
 }

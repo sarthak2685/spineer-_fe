@@ -1,7 +1,8 @@
 import { FormEvent, ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, asset } from '../../api/client';
-import { Button, Field, Form, Modal, PageTitle, RowMenu, Select, Status, Table } from '../../components/ui';
+import { api, asset, howVideoSrc } from '../../api/client';
+import { HowPlayer } from '../../components/how-player';
+import { Button, Card, Field, Form, Modal, PageTitle, RowMenu, Select, Status, Table } from '../../components/ui';
 import { digitsOnly, isTenDigitMobile } from '../../lib/mobile';
 import { toastErr, toastOk } from '../../lib/toast';
 
@@ -50,7 +51,7 @@ export function SuperDashboard() {
   const [data, setData] = useState<any>({ recent: [] });
   useEffect(() => { api('/super/dashboard').then(setData); }, []);
   return <Frame>
-    <PageTitle kicker="Platform" title="Overview" text="Every shop on RewardSpinner, and the newest ones to review." />
+    <PageTitle kicker="Platform" title="Overview" text="Every shop on Repeat Mate, and the newest ones to review." />
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <Metric label="Businesses" value={data.totalBusinesses ?? '—'}><Mark d="M4 10h16v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-9zM3 10l2-5h14l2 5" /></Metric>
       <Metric label="Customers" value={data.totalCustomers ?? '—'}><Mark d="M16 19v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1M9.5 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM20 19v-1a3.5 3.5 0 0 0-2.5-3.3M16 5.1a3 3 0 0 1 0 5.8" /></Metric>
@@ -386,4 +387,112 @@ export function SuperTypes() {
       </div>
     )}
   </Frame>;
+}
+
+type HowClip = { id: string; title: string; name: string | null; published: boolean; updated: string | null; hasFile: boolean };
+const videoFile = 'block w-full text-sm text-stone-600 file:mr-3 file:rounded-full file:border-0 file:bg-orange-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-orange-700';
+
+export function SuperHowVideo() {
+  const [videos, setVideos] = useState<HowClip[]>([]);
+  const [title, setTitle] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [picker, setPicker] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState('');
+  function apply(next: { videos: HowClip[] }) {
+    setVideos(next.videos);
+    setPreview((current) => (next.videos.some((video) => video.id === current) ? current : ''));
+  }
+  function load() { return api<{ videos: HowClip[] }>('/super/how-video').then(apply); }
+  useEffect(() => { load(); }, []);
+  async function add(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!file) return;
+    const body = new FormData();
+    body.set('file', file);
+    if (title.trim()) body.set('title', title.trim());
+    setBusy(true);
+    try {
+      apply(await api<{ videos: HowClip[] }>('/super/how-video', { method: 'POST', body, timeout: 180_000 }));
+      setFile(null);
+      setTitle('');
+      setPicker((value) => value + 1);
+      toastOk('Video added.');
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function publish(id: string, published: boolean) {
+    apply(await api<{ videos: HowClip[] }>(`/super/how-video/${id}/publish`, { method: 'POST', body: JSON.stringify({ published }) }));
+    toastOk(published ? 'Video is on the landing page.' : 'Video is hidden from the landing page.');
+  }
+  async function retitle(id: string, nextTitle: string) {
+    apply(await api<{ videos: HowClip[] }>(`/super/how-video/${id}/title`, { method: 'POST', body: JSON.stringify({ title: nextTitle }) }));
+  }
+  async function move(id: string, direction: 'up' | 'down') {
+    apply(await api<{ videos: HowClip[] }>(`/super/how-video/${id}/move`, { method: 'POST', body: JSON.stringify({ direction }) }));
+  }
+  async function replace(id: string, next: File) {
+    const body = new FormData();
+    body.set('file', next);
+    setBusy(true);
+    try {
+      apply(await api<{ videos: HowClip[] }>(`/super/how-video/${id}/replace`, { method: 'POST', body, timeout: 180_000 }));
+      toastOk('Video replaced.');
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function remove(id: string) {
+    if (!window.confirm('Remove this video from the landing page?')) return;
+    apply(await api<{ videos: HowClip[] }>(`/super/how-video/${id}/delete`, { method: 'POST' }));
+    toastOk('Video removed.');
+  }
+  return (
+    <Frame>
+      <PageTitle kicker="Platform" title="How it works" text="Add the videos visitors play from Watch How It Works. MP4 or WebM, up to 80 MB each. You can keep 12." />
+      <Card>
+        <form className="grid gap-4 sm:grid-cols-[1fr_1.2fr_auto] sm:items-end" onSubmit={add}>
+          <Field label="Title" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Scan the QR" maxLength={80} />
+          <label className="grid gap-1.5 text-sm font-medium text-stone-500">
+            Video file
+            <input key={picker} type="file" accept="video/mp4,video/webm,.mp4,.webm" onChange={(event) => setFile(event.target.files?.[0] || null)} className={videoFile} />
+          </label>
+          <Button type="submit" busy={busy} disabled={!file || videos.length >= 12}>Add video</Button>
+        </form>
+      </Card>
+      <div className="mt-4 grid gap-4">
+        {videos.length === 0 && <p className="rounded-3xl border border-stone-200 bg-white px-4 py-8 text-center text-sm text-stone-500">No videos yet.</p>}
+        {videos.map((video, index) => {
+          const when = video.updated ? String(video.updated).slice(0, 16).replace('T', ' ') : '';
+          return (
+            <Card key={video.id}>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <Field label={`Video ${index + 1}`} defaultValue={video.title} key={`${video.id}-${video.title}`} maxLength={80} onBlur={(event) => { if (event.target.value.trim() && event.target.value.trim() !== video.title) void retitle(video.id, event.target.value); }} />
+                  <p className="mt-2 text-sm text-stone-500">{video.hasFile ? video.name : 'File missing'} · {video.published ? 'Showing' : 'Hidden'}{when ? ` · ${when}` : ''}</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" kind="ghost" disabled={index === 0} onClick={() => move(video.id, 'up')}>Up</Button>
+                  <Button type="button" kind="ghost" disabled={index === videos.length - 1} onClick={() => move(video.id, 'down')}>Down</Button>
+                  {video.published ? <Button type="button" kind="ghost" onClick={() => publish(video.id, false)}>Hide</Button> : <Button type="button" kind="soft" onClick={() => publish(video.id, true)}>Show</Button>}
+                  <Button type="button" kind="ghost" onClick={() => setPreview((current) => current === video.id ? '' : video.id)}>{preview === video.id ? 'Close preview' : 'Preview'}</Button>
+                  <Button type="button" kind="danger" onClick={() => remove(video.id)}>Remove</Button>
+                </div>
+              </div>
+              <label className="mt-4 grid gap-1.5 text-sm font-medium text-stone-500">
+                Replace file
+                <input type="file" accept="video/mp4,video/webm,.mp4,.webm" onChange={(event) => { const next = event.target.files?.[0]; event.target.value = ''; if (next) void replace(video.id, next); }} className={videoFile} />
+              </label>
+              {preview === video.id && video.hasFile && (
+                <div className="mt-4">
+                  <HowPlayer key={video.updated || video.id} src={howVideoSrc(true, video.id)} />
+                </div>
+              )}
+            </Card>
+          );
+        })}
+      </div>
+    </Frame>
+  );
 }
