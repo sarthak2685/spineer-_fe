@@ -27,15 +27,17 @@ export async function enableBrowserPush() {
   if (!publicKey) throw new Error('Push is not configured on the server yet.');
 
   const registration = await navigator.serviceWorker.ready;
-  let subscription = await registration.pushManager.getSubscription();
-  const saved = subscription?.toJSON();
+  let existing = await registration.pushManager.getSubscription();
+  const saved = existing?.toJSON();
   if (!saved?.endpoint || !saved.keys?.p256dh || !saved.keys?.auth) {
-    await subscription?.unsubscribe().catch(() => undefined);
-    subscription = await registration.pushManager.subscribe({
+    await existing?.unsubscribe().catch(() => undefined);
+    existing = await registration.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(publicKey),
     });
   }
+  const subscription = existing;
+  if (!subscription) throw new Error('This browser did not finish turning alerts on. Try again.');
   const next = subscription.toJSON();
   if (!next.endpoint || !next.keys?.p256dh || !next.keys?.auth) {
     throw new Error('This browser did not finish turning alerts on. Try again.');
