@@ -390,7 +390,7 @@ export function Modal({ title, text, onClose, children, wide = false }: { title:
           <div><h2 className="font-display text-xl font-semibold tracking-tight text-stone-950">{title}</h2>{text && <p className="mt-1 text-sm text-stone-500">{text}</p>}</div>
           <button type="button" onClick={onClose} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-stone-100 text-lg text-stone-600 transition hover:bg-stone-200">×</button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-6 [&_form]:flex [&_form]:min-h-full [&_form]:flex-col [&_form>:last-child]:sticky [&_form>:last-child]:bottom-0 [&_form>:last-child]:z-10 [&_form>:last-child]:mt-auto [&_form>:last-child]:bg-white [&_form>:last-child]:pt-3 sm:[&_form]:block sm:[&_form]:min-h-0 sm:[&_form>:last-child]:static sm:[&_form>:last-child]:mt-0 sm:[&_form>:last-child]:bg-transparent sm:[&_form>:last-child]:pt-0">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-6 [&_form>:last-child]:sticky [&_form>:last-child]:bottom-0 [&_form>:last-child]:z-10 [&_form>:last-child]:bg-white [&_form>:last-child]:pt-3 [&_form>:last-child]:pb-[max(0.25rem,env(safe-area-inset-bottom))] sm:[&_form>:last-child]:static sm:[&_form>:last-child]:bg-transparent sm:[&_form>:last-child]:pb-0 sm:[&_form>:last-child]:pt-0">
           {children}
         </div>
       </div>

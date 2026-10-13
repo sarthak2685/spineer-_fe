@@ -6,11 +6,6 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim());
 });
 
-self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET') return;
-  event.respondWith(fetch(event.request));
-});
-
 self.addEventListener('push', (event) => {
   let data = { title: 'Repeat Mate', body: 'You have a new update.', url: '/customer/notifications', tag: 'repeat-mate' };
   try {

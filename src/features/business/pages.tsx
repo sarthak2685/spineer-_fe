@@ -481,10 +481,11 @@ export function PushPage() {
   const [message, setMessage] = useState('');
   const [draft, setDraft] = useState({ title: '', message: '', segment: 'All' });
   function load() {
-    api<{ templates: any[]; phones: number }>('/business/push/templates').then((data) => {
-      setRows(Array.isArray(data) ? data : data.templates || []);
-      setPhones(Array.isArray(data) ? 0 : Number(data.phones || 0));
-    });
+    api<any>('/business/push/templates').then((data) => {
+      const list = Array.isArray(data) ? data : Array.isArray(data?.templates) ? data.templates : Array.isArray(data?.rows) ? data.rows : [];
+      setRows(list);
+      setPhones(Array.isArray(data) ? 0 : Number(data?.phones || 0));
+    }).catch(() => { setRows([]); setPhones(0); });
   }
   useEffect(load, []);
   return <Frame>
@@ -512,7 +513,7 @@ export function PushPage() {
       </Form>
     </div>
     <h2 className="mb-3 mt-10 text-sm font-semibold uppercase tracking-[0.16em] text-stone-400">Sent</h2>
-    <div className="space-y-2">{rows.map((row) => <Card key={row.notificationid || row.templateid}><p className="font-medium text-stone-950">{row.title}</p><p className="mt-1 text-sm text-stone-500">{row.message}</p>{row.recipientcount != null && <p className="mt-2 text-xs font-medium text-stone-400">{row.recipientcount} in the inbox · {pushSegments.find((item) => item.value === row.targetsegment)?.label || row.targetsegment}</p>}</Card>)}{!rows.length && <Card><p className="text-sm text-stone-500">No messages sent yet.</p></Card>}</div>
+    <div className="space-y-2">{(Array.isArray(rows) ? rows : []).map((row) => <Card key={row.notificationid || row.templateid}><p className="font-medium text-stone-950">{row.title}</p><p className="mt-1 text-sm text-stone-500">{row.message}</p>{row.recipientcount != null && <p className="mt-2 text-xs font-medium text-stone-400">{row.recipientcount} in the inbox · {pushSegments.find((item) => item.value === row.targetsegment)?.label || row.targetsegment}</p>}</Card>)}{!(Array.isArray(rows) && rows.length) && <Card><p className="text-sm text-stone-500">No messages sent yet.</p></Card>}</div>
   </Frame>;
 }
 export function GameAdminPage() {
