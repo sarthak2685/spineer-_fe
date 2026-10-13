@@ -90,16 +90,7 @@ export function PlaceFrame({ business, token, current, children }: { business: R
       {icon}{label}
     </a>
   );
-  const tabClass = (id: GuestTab) =>
-    `shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition ${current === id ? 'text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'}`;
-  const tabs = () => (
-    <>
-      <NavLink to={`/play/${token}`} className={tabClass('play')} style={current === 'play' ? { background: color } : undefined}>Play</NavLink>
-      <NavLink to={`/menu/${token}`} className={tabClass('menu')} style={current === 'menu' ? { background: color } : undefined}>{catalogCopy(business.businesstype).tab}</NavLink>
-      <NavLink to={`/bill/${token}`} className={tabClass('bill')} style={current === 'bill' ? { background: color } : undefined}>Bill</NavLink>
-      <NavLink to={`/review/${token}`} className={tabClass('review')} style={current === 'review' ? { background: color } : undefined}>Review</NavLink>
-    </>
-  );
+  const menuLabel = catalogCopy(business.businesstype).tab;
   return (
     <div className="public-enter min-h-screen bg-orange-50 text-stone-900">
       <div className="h-52 sm:h-64" style={{ background: `linear-gradient(120deg, ${color}, #0c0a09)` }}>
@@ -119,30 +110,47 @@ export function PlaceFrame({ business, token, current, children }: { business: R
             {business.instagramurl && link(business.instagramurl, 'Instagram', <Icon><svg viewBox="0 0 24 24" className="h-4 w-4 fill-pink-600"><path d="M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4zm5 5a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm6.2-.9a1 1 0 1 0 0 2 1 1 0 0 0 0-2zM12 10a2 2 0 1 1 0 4 2 2 0 0 1 0-4z" /></svg></Icon>)}
             {business.facebookurl && link(business.facebookurl, 'Facebook', <Icon><svg viewBox="0 0 24 24" className="h-4 w-4 fill-blue-600"><path d="M14 9h3V6h-3c-2.2 0-4 1.8-4 4v2H8v3h2v7h3v-7h2.6l.4-3H13v-2c0-.6.4-1 1-1z" /></svg></Icon>)}
           </div>
-          <div className="mt-5 hidden gap-2 overflow-x-auto sm:flex sm:justify-center">{tabs()}</div>
           {!signedIn && token && (
             <button type="button" className="mt-5 w-full rounded-full border border-stone-200 py-3 text-sm font-semibold text-stone-950" onClick={() => setLoginOpen(true)}>Sign in</button>
           )}
           <div className="mt-6">{children}</div>
         </div>
       </div>
-      <nav className="fixed inset-x-0 bottom-0 z-30 flex gap-2 overflow-x-auto border-t border-stone-200 bg-white/95 px-3 py-2 backdrop-blur sm:hidden" style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }}>{tabs()}</nav>
+      <ShopDock token={token} current={current} menuLabel={menuLabel} />
       {loginOpen && !signedIn && token && <SaveCoinsModal token={token} onClose={() => setLoginOpen(false)} />}
     </div>
   );
 }
 
-function GetAppCard() {
-  const { ready, installed, hint, install } = useInstallApp();
-  if (installed) return null;
-  return (
-    <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3">
-      <div className="min-w-0">
-        <p className="text-sm font-semibold text-stone-950">Get the app</p>
-        <p className="mt-0.5 text-xs text-stone-500">{hint || (ready ? 'Click Install to download it onto this device.' : 'Preparing the download…')}</p>
+function DockGlyph({ name }: { name: 'play' | 'calendar' | 'list' | 'bill' | 'review' | 'app' }) {
+  const common = { viewBox: '0 0 24 24', className: 'h-5 w-5', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+  if (name === 'play') return <svg {...common}><path d="M9 6.5v11l9-5.5z" /></svg>;
+  if (name === 'bill') return <svg {...common}><path d="M8 3.5h8a1 1 0 0 1 1 1V20l-2.2-1.4L12.5 20l-2.3-1.4L8 20l-2.2-1.4L3.5 20V4.5a1 1 0 0 1 1-1H8z" /><path d="M8 8h8M8 12h8" /></svg>;
+  if (name === 'review') return <svg {...common}><path d="M12 4.2 13.8 8l4.2.4-3.2 2.8.9 4.1L12 13.4 8.3 15.3l.9-4.1L6 8.4 10.2 8z" /></svg>;
+  if (name === 'app') return <svg {...common}><path d="M12 4v9M8.5 10.5 12 14l3.5-3.5M6 19h12" /></svg>;
+  if (name === 'calendar') return <svg {...common}><rect x="4" y="5" width="16" height="15" rx="2" /><path d="M8 3.5v3M16 3.5v3M4 10h16" /></svg>;
+  return <svg {...common}><path d="M6 7h12M6 12h12M6 17h8" /></svg>;
+}
+
+function catalogGlyph(label: string): 'calendar' | 'list' {
+  return /^menu$/i.test(label) ? 'list' : 'calendar';
+}
+
+function ShopDock({ token, current, menuLabel }: { token?: string; current: GuestTab; menuLabel: string }) {
+  const { install } = useInstallApp();
+  const item = (active: boolean) => `flex min-w-0 flex-1 flex-col items-center gap-1 px-1 py-1 text-[11px] font-semibold ${active ? 'text-orange-600' : 'text-stone-400'}`;
+  const bubble = (active: boolean) => `grid h-11 w-11 place-items-center rounded-full ${active ? 'bg-orange-600 text-white shadow-md shadow-orange-600/30' : ''}`;
+  return createPortal(
+    <nav className="fixed inset-x-0 z-30 flex justify-center px-3" style={{ bottom: 'max(0.75rem, env(safe-area-inset-bottom))' }} aria-label="Shop">
+      <div className="flex w-full max-w-md items-end justify-between rounded-[1.75rem] bg-white px-1.5 py-2 shadow-[0_10px_30px_rgba(28,25,23,0.14)] ring-1 ring-stone-200">
+        <NavLink to={`/play/${token}`} className={item(current === 'play')}><span className={bubble(current === 'play')}><DockGlyph name="play" /></span>Play</NavLink>
+        <NavLink to={`/menu/${token}`} className={item(current === 'menu')}><span className={bubble(current === 'menu')}><DockGlyph name={catalogGlyph(menuLabel)} /></span>{menuLabel}</NavLink>
+        <NavLink to={`/bill/${token}`} className={item(current === 'bill')}><span className={bubble(current === 'bill')}><DockGlyph name="bill" /></span>Bill</NavLink>
+        <NavLink to={`/review/${token}`} className={item(current === 'review')}><span className={bubble(current === 'review')}><DockGlyph name="review" /></span>Review</NavLink>
+        <button type="button" className={item(false)} onClick={() => { void install(); }}><span className={bubble(false)}><DockGlyph name="app" /></span>Get App</button>
       </div>
-      <button type="button" className="shrink-0 rounded-full bg-orange-600 px-4 py-2 text-sm font-semibold text-white" onClick={install}>Install</button>
-    </div>
+    </nav>,
+    document.body,
   );
 }
 
@@ -204,8 +212,7 @@ export function GuestPlaceShell() {
   return (
     <GuestCtx.Provider value={ctx}>
       {signedIn ? (
-        <Workspace groups={customerGroups} title="Wallet">
-          <Link to="/customer/dashboard" className="mb-4 inline-flex text-sm font-semibold text-orange-600">Back</Link>
+        <Workspace groups={customerGroups} title="Wallet" bleed>
           {shop}
         </Workspace>
       ) : shop}
@@ -486,7 +493,6 @@ function OffersList() {
         </div>
       )}
     </section>
-    <GetAppCard />
     </>
   );
 }
@@ -695,7 +701,7 @@ export function MenuPanel() {
       </div>
 
       {count > 0 && !custom && createPortal(
-        <div className="fixed inset-x-0 bottom-0 z-40 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 sm:px-4">
+        <div className="fixed inset-x-0 z-40 px-3 pt-2 sm:px-4" style={{ bottom: 'calc(5.5rem + env(safe-area-inset-bottom))' }}>
           <button
             type="button"
             className="mx-auto flex w-full max-w-xl items-center justify-between gap-3 rounded-2xl px-5 py-3.5 text-left text-white shadow-2xl shadow-stone-950/30"

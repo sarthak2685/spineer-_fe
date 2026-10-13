@@ -28,16 +28,22 @@ export async function enableBrowserPush() {
 
   const registration = await navigator.serviceWorker.ready;
   let subscription = await registration.pushManager.getSubscription();
-  if (!subscription) {
+  const saved = subscription?.toJSON();
+  if (!saved?.endpoint || !saved.keys?.p256dh || !saved.keys?.auth) {
+    await subscription?.unsubscribe().catch(() => undefined);
     subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(publicKey),
     });
   }
+  const next = subscription.toJSON();
+  if (!next.endpoint || !next.keys?.p256dh || !next.keys?.auth) {
+    throw new Error('This browser did not finish turning alerts on. Try again.');
+  }
 
   await api('/customer/push/subscribe', {
     method: 'POST',
-    body: JSON.stringify({ token: JSON.stringify(subscription.toJSON()), action: 'subscribe' }),
+    body: JSON.stringify({ token: JSON.stringify(next), action: 'subscribe' }),
   });
   return subscription;
 }

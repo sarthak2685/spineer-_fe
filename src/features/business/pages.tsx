@@ -176,7 +176,7 @@ export function QrPage() {
   function load() { api('/business/qr').then(setData); }
   useEffect(load, []);
   return <Frame>
-    <PageTitle title="QR and poster" text="The code is black, with joined lines and a lined frame in your shop color. The poster prints that same image. Regenerate if the shop name changed." />
+    <PageTitle title="QR and poster" text="The code is black on white. The frame uses your shop color. The poster prints that same image. Regenerate if the shop name changed." />
     <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
       <Card className="mx-auto w-full max-w-sm text-center lg:max-w-none">
         {data?.code?.imagepath && (
@@ -477,38 +477,42 @@ const pushSegments = [
 
 export function PushPage() {
   const [rows, setRows] = useState<any[]>([]);
+  const [phones, setPhones] = useState(0);
   const [message, setMessage] = useState('');
-  const [open, setOpen] = useState(false);
-  const [shop, setShop] = useState('Your shop');
   const [draft, setDraft] = useState({ title: '', message: '', segment: 'All' });
-  function load() { api<any[]>('/business/push/templates').then(setRows); }
+  function load() {
+    api<{ templates: any[]; phones: number }>('/business/push/templates').then((data) => {
+      setRows(Array.isArray(data) ? data : data.templates || []);
+      setPhones(Array.isArray(data) ? 0 : Number(data.phones || 0));
+    });
+  }
   useEffect(load, []);
-  useEffect(() => { api<any>('/business/profile').then((profile) => setShop(profile?.businessname || 'Your shop')).catch(() => undefined); }, []);
   return <Frame>
-    <PageTitle title="Push campaigns" actions={<Button onClick={() => setOpen(true)}>New message</Button>} />
-    {message && <p className="mb-4 text-sm text-emerald-700">{message}</p>}
-    <div className="space-y-2">{rows.map((row) => <Card key={row.templateid}><p className="font-medium">{row.title}</p><p className="text-sm text-stone-500">{row.message}</p></Card>)}{!rows.length && <Card><p className="text-sm text-stone-500">No messages sent yet.</p></Card>}</div>
-    {open && (
-      <Modal title="New message" text="Everyone who played, ordered, or signed up at this shop gets it in their inbox." onClose={() => setOpen(false)}>
-        <Form className="grid gap-3" onSubmit={async (e) => { e.preventDefault(); const result = await api<{ recipientCount: number; browserPush?: { sent: number; attempted: number } }>('/business/push/send', { method: 'POST', body: JSON.stringify(draft) }); const push = result.browserPush; const text = `Inbox: ${result.recipientCount} customers` + (push ? ` · Browser push: ${push.sent}/${push.attempted}` : ''); setMessage(text); toastOk(text, { title: 'Message sent', detail: text }); setOpen(false); setDraft({ title: '', message: '', segment: 'All' }); load(); }}>
-          <Field label="Title" name="title" required value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} />
-          <Area label="Message" name="message" required value={draft.message} onChange={(event) => setDraft((current) => ({ ...current, message: event.target.value }))} />
-          <Select label="Segment" name="segment" value={draft.segment} onChange={(event) => setDraft((current) => ({ ...current, segment: event.target.value }))}>{pushSegments.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</Select>
-          <div className="rounded-3xl bg-stone-950 p-4 text-white">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-orange-300">Phone preview</p>
-            <div className="mt-3 flex gap-3 rounded-2xl bg-white/10 p-3">
-              <img src="/icons/icon-192.png" alt="" className="h-10 w-10 rounded-xl" />
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold">{shop}</p>
-                <p className="truncate text-sm">{draft.title || 'Title'}</p>
-                <p className="line-clamp-2 text-xs text-white/70">{draft.message || 'Message'}</p>
-              </div>
-            </div>
-          </div>
-          <Button type="submit" className="w-full">Send</Button>
-        </Form>
-      </Modal>
-    )}
+    <PageTitle title="Push" text="The message goes into each customer’s inbox. A browser alert only appears on a phone that already turned alerts on." />
+    <div className="max-w-xl">
+      <Form className="grid gap-4 rounded-3xl border border-stone-200 bg-white p-5 shadow-sm sm:p-6" onSubmit={async (e) => {
+        e.preventDefault();
+        const result = await api<{ recipientCount: number; browserPush?: { sent: number; attempted: number } }>('/business/push/send', { method: 'POST', body: JSON.stringify(draft) });
+        const push = result.browserPush;
+        const inbox = `Saved for ${result.recipientCount} ${result.recipientCount === 1 ? 'customer' : 'customers'}.`;
+        const detail = !push || push.attempted === 0
+          ? `${inbox} None of them have browser alerts turned on, so it stays in the inbox.`
+          : `${inbox} Browser alert reached ${push.sent} of ${push.attempted} ${push.attempted === 1 ? 'phone' : 'phones'}.`;
+        setMessage(detail);
+        toastOk(detail, { title: 'Message sent', detail });
+        setDraft({ title: '', message: '', segment: 'All' });
+        load();
+      }}>
+        <Field label="Title" name="title" required value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} />
+        <Area label="Message" name="message" required value={draft.message} onChange={(event) => setDraft((current) => ({ ...current, message: event.target.value }))} />
+        <Select label="Who receives it" name="segment" value={draft.segment} onChange={(event) => setDraft((current) => ({ ...current, segment: event.target.value }))}>{pushSegments.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</Select>
+        <p className="rounded-2xl bg-orange-50 px-4 py-3 text-sm text-stone-600">{phones === 0 ? 'No phone at this shop has browser alerts on yet. Customers turn them on from their home screen.' : `${phones} ${phones === 1 ? 'phone has' : 'phones have'} browser alerts on for this shop.`}</p>
+        {message && <p className="text-sm text-stone-600">{message}</p>}
+        <Button type="submit" className="w-full">Send</Button>
+      </Form>
+    </div>
+    <h2 className="mb-3 mt-10 text-sm font-semibold uppercase tracking-[0.16em] text-stone-400">Sent</h2>
+    <div className="space-y-2">{rows.map((row) => <Card key={row.notificationid || row.templateid}><p className="font-medium text-stone-950">{row.title}</p><p className="mt-1 text-sm text-stone-500">{row.message}</p>{row.recipientcount != null && <p className="mt-2 text-xs font-medium text-stone-400">{row.recipientcount} in the inbox · {pushSegments.find((item) => item.value === row.targetsegment)?.label || row.targetsegment}</p>}</Card>)}{!rows.length && <Card><p className="text-sm text-stone-500">No messages sent yet.</p></Card>}</div>
   </Frame>;
 }
 export function GameAdminPage() {

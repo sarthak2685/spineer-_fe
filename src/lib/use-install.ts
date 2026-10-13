@@ -24,9 +24,6 @@ export function useInstallApp() {
     if (outcome === 'accepted') setInstalled(true);
   }
 
-  const help = hint || (ready
-    ? 'Click Install, then confirm the browser window. Repeat Mate is added to the Start menu. No file is saved in Downloads.'
-    : '');
 
-  return { ready, installed, hint: help, install };
+  return { ready, installed, install, hint:null };
 }

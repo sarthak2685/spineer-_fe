@@ -211,7 +211,7 @@ function RailIcon({ to }: { to: string }) {
   return <svg {...common}><circle cx="12" cy="12" r="3" /></svg>;
 }
 
-export function Workspace({ groups, children, title, variant = 'default' }: { groups: NavGroup[]; children?: ReactNode; title?: string; variant?: 'default' | 'platform' }) {
+export function Workspace({ groups, children, title, variant = 'default', bleed = false }: { groups: NavGroup[]; children?: ReactNode; title?: string; variant?: 'default' | 'platform'; bleed?: boolean }) {
   const auth = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -340,7 +340,7 @@ export function Workspace({ groups, children, title, variant = 'default' }: { gr
               </div>
             </div>
           </header>
-          <main className={platform ? 'px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-6 sm:px-6' : 'mx-auto max-w-6xl px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-6 sm:px-8'}><Rise key={location.pathname}>{children ?? <Outlet />}</Rise></main>
+          <main className={bleed ? 'pb-[max(1.5rem,env(safe-area-inset-bottom))]' : platform ? 'px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-6 sm:px-6' : 'mx-auto max-w-6xl px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-6 sm:px-8'}><Rise key={location.pathname}>{children ?? <Outlet />}</Rise></main>
         </div>
       </div>
     </PageMetaContext.Provider>

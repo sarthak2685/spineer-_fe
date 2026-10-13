@@ -28,7 +28,15 @@ self.addEventListener('push', (event) => {
   const url = data.url || '/customer/notifications';
   event.waitUntil((async () => {
     const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    const visible = windows.some((client) => client.visibilityState === 'visible');
+    const visible = windows.some((client) => {
+      if (client.visibilityState !== 'visible') return false;
+      try {
+        const path = new URL(client.url).pathname;
+        return path === url || path.startsWith('/customer');
+      } catch {
+        return false;
+      }
+    });
     windows.forEach((client) => client.postMessage({ type: 'push', title, body, url }));
     if (visible) return;
     await self.registration.showNotification(title, {
