@@ -224,9 +224,9 @@ function BulkUpload({ onSaved }: { onSaved: () => void }) {
       onSaved();
     }}>
       <input className="block w-full rounded-xl border border-dashed border-stone-300 bg-stone-50 px-3 py-6 text-sm" type="file" name="file" accept=".csv,text/csv,.txt" required />
-      <div className="flex gap-2">
-        <Button type="submit">Upload</Button>
-        <Button type="button" kind="ghost" onClick={sampleCsv}>Sample file</Button>
+      <div className="flex gap-2 rounded-2xl bg-orange-50 p-2">
+        <Button type="submit" className="flex-1">Upload</Button>
+        <Button type="button" kind="ghost" className="flex-1" onClick={sampleCsv}>Sample file</Button>
       </div>
     </Form>
   );

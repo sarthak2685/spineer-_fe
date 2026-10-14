@@ -39,10 +39,10 @@ export function Button({ children, kind = 'primary', className = '', busy = fals
   const [clickPending, setClickPending] = useState(false);
   const waiting = busy || clickPending || (formPending && type !== 'button');
   const styles = {
-    primary: 'bg-orange-600 text-white shadow-md shadow-orange-600/20 hover:bg-orange-700',
-    ghost: 'border border-stone-200 bg-white text-stone-950 hover:bg-orange-100',
-    danger: 'bg-rose-600 text-white hover:bg-rose-700',
-    soft: 'bg-orange-100 text-orange-600 hover:bg-orange-200',
+    primary: '!bg-orange-600 !text-white shadow-md shadow-orange-600/20 hover:!bg-orange-700',
+    ghost: 'border-2 border-stone-300 !bg-white !text-stone-950 hover:!bg-orange-50',
+    danger: '!bg-rose-600 !text-white hover:!bg-rose-700',
+    soft: '!bg-orange-100 !text-orange-700 hover:!bg-orange-200',
   }[kind];
   return (
     <button
@@ -397,7 +397,7 @@ export function Modal({ title, text, onClose, children, wide = false }: { title:
           <div><h2 className="font-display text-xl font-semibold tracking-tight text-stone-950">{title}</h2>{text && <p className="mt-1 text-sm text-stone-500">{text}</p>}</div>
           <button type="button" onClick={onClose} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-stone-100 text-lg text-stone-600 transition hover:bg-stone-200">×</button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-6 [&_form>:last-child]:sticky [&_form>:last-child]:bottom-0 [&_form>:last-child]:z-10 [&_form>:last-child]:bg-white [&_form>:last-child]:pt-3 [&_form>:last-child]:pb-[max(0.25rem,env(safe-area-inset-bottom))] sm:[&_form>:last-child]:static sm:[&_form>:last-child]:bg-transparent sm:[&_form>:last-child]:pb-0 sm:[&_form>:last-child]:pt-0">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-6 [&_button]:relative [&_button]:z-10">
           {children}
         </div>
       </div>

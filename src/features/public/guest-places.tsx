@@ -110,9 +110,6 @@ export function PlaceFrame({ business, token, current, children }: { business: R
             {business.instagramurl && link(business.instagramurl, 'Instagram', <Icon><svg viewBox="0 0 24 24" className="h-4 w-4 fill-pink-600"><path d="M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4zm5 5a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm6.2-.9a1 1 0 1 0 0 2 1 1 0 0 0 0-2zM12 10a2 2 0 1 1 0 4 2 2 0 0 1 0-4z" /></svg></Icon>)}
             {business.facebookurl && link(business.facebookurl, 'Facebook', <Icon><svg viewBox="0 0 24 24" className="h-4 w-4 fill-blue-600"><path d="M14 9h3V6h-3c-2.2 0-4 1.8-4 4v2H8v3h2v7h3v-7h2.6l.4-3H13v-2c0-.6.4-1 1-1z" /></svg></Icon>)}
           </div>
-          {!signedIn && token && (
-            <button type="button" className="mt-5 w-full rounded-full border border-stone-200 py-3 text-sm font-semibold text-stone-950" onClick={() => setLoginOpen(true)}>Sign in</button>
-          )}
           <div className="mt-6">{children}</div>
         </div>
       </div>
