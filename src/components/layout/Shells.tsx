@@ -11,6 +11,7 @@ import { legalNav } from '../../features/public/legal-nav';
 import { playNotify, unlockSound } from '../../lib/sounds';
 import { toastInfo } from '../../lib/toast';
 import { InboxCountProvider, useInboxCount } from '../../features/customer/inbox';
+import { CustomerDock } from '../../features/customer/dock';
 
 export type NavItem = { to: string; label: string; match?: string };
 export type NavGroup = { heading: string; items: NavItem[] };
@@ -211,7 +212,7 @@ function RailIcon({ to }: { to: string }) {
   return <svg {...common}><circle cx="12" cy="12" r="3" /></svg>;
 }
 
-export function Workspace({ groups, children, title, variant = 'default', bleed = false }: { groups: NavGroup[]; children?: ReactNode; title?: string; variant?: 'default' | 'platform'; bleed?: boolean }) {
+export function Workspace({ groups, children, title, variant = 'default', bleed = false, bottomDock = false }: { groups: NavGroup[]; children?: ReactNode; title?: string; variant?: 'default' | 'platform'; bleed?: boolean; bottomDock?: boolean }) {
   const auth = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -252,6 +253,9 @@ export function Workspace({ groups, children, title, variant = 'default', bleed 
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = previous; };
   }, [menuOpen]);
+  const bottom = bottomDock
+    ? 'pb-[calc(6.25rem+env(safe-area-inset-bottom))] xl:pb-[max(1.5rem,env(safe-area-inset-bottom))]'
+    : 'pb-[max(1.5rem,env(safe-area-inset-bottom))]';
   function Sidebar() {
     return (
     <>
@@ -298,17 +302,17 @@ export function Workspace({ groups, children, title, variant = 'default', bleed 
         )}
         <div className="min-w-0">
           <header className="sticky top-0 z-20 border-b border-stone-200 bg-white/95 px-4 py-2.5 shadow-[0_1px_0_rgba(0,0,0,0.04)] backdrop-blur sm:px-6">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-3">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+              <div className="flex min-w-0 flex-1 items-center gap-3">
                 <button type="button" className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-stone-200 bg-white text-stone-700 lg:hidden" aria-label="Open menu" onClick={() => { setAccountOpen(false); setMenuOpen(true); }}>
                   <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
                 </button>
                 {current && <span className="hidden text-orange-600 lg:grid"><RailIcon to={current.to} /></span>}
-                <h1 className="truncate font-display text-lg font-semibold tracking-tight text-stone-950 sm:text-xl">{heading}</h1>
-                {meta?.gold && meta.text && <p className="hidden truncate text-sm font-semibold text-amber-500 sm:block">{meta.text}</p>}
+                <h1 className="min-w-0 truncate font-display text-lg font-semibold tracking-tight text-stone-950 sm:text-xl">{heading}</h1>
+                {meta?.gold && meta.text && <p className="hidden min-w-0 truncate text-sm font-semibold text-amber-500 sm:block">{meta.text}</p>}
               </div>
+              {meta?.actions && <div className="order-last flex w-full min-w-0 flex-wrap items-center gap-2 [&>*]:flex [&>*]:w-full [&>*]:min-w-0 [&>*]:flex-wrap [&>*]:items-center [&>*]:gap-2 md:order-none md:w-auto md:[&>*]:w-auto">{meta.actions}</div>}
               <div className="flex shrink-0 items-center gap-1">
-                {meta?.actions}
                 {inboxTo && (
                   <Link to={inboxTo} aria-label={inbox.count ? `Inbox, ${inbox.count} unread` : 'Inbox'} title="Inbox" className={`relative grid h-10 w-10 place-items-center rounded-full ${location.pathname.startsWith(inboxTo) ? 'bg-orange-50 text-orange-700' : 'text-stone-600 hover:bg-orange-50'}`}>
                     <RailIcon to={inboxTo} />
@@ -340,7 +344,7 @@ export function Workspace({ groups, children, title, variant = 'default', bleed 
               </div>
             </div>
           </header>
-          <main className={bleed ? 'pb-[max(1.5rem,env(safe-area-inset-bottom))]' : platform ? 'px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-6 sm:px-6' : 'mx-auto max-w-6xl px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-6 sm:px-8'}><Rise key={location.pathname}>{children ?? <Outlet />}</Rise></main>
+          <main className={bleed ? bottom : platform ? `px-4 pt-6 sm:px-6 ${bottom}` : `mx-auto max-w-6xl px-4 pt-6 sm:px-8 ${bottom}`}><Rise key={location.pathname}>{children ?? <Outlet />}</Rise></main>
         </div>
       </div>
     </PageMetaContext.Provider>
@@ -456,7 +460,7 @@ function CustomerAlerts() {
 }
 
 export function WalletShell() {
-  return <InboxCountProvider><CustomerAlerts /><Workspace groups={customerGroups} title="Wallet" /></InboxCountProvider>;
+  return <InboxCountProvider><CustomerAlerts /><Workspace groups={customerGroups} title="Wallet" bottomDock /><CustomerDock /></InboxCountProvider>;
 }
 
 export function PlatformShell() {

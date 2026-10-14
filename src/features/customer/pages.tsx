@@ -1,11 +1,12 @@
-import { FormEvent, useEffect, useRef, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../app/auth';
-import { api, client } from '../../api/client';
+import { api, asset, client } from '../../api/client';
 import { ListToolbar, Pager, usePagedQuery } from '../../components/list';
 import { Alert, Button, Card, Empty, Field, Form, Modal, PageTitle, Quick, Select, Stat, Status, Table } from '../../components/ui';
 import { toastErr, toastOk } from '../../lib/toast';
 import { LatestInboxLink, LatestNotices, NotificationsPage } from './inbox';
+import { ScanQr } from './dock';
 
 function Frame({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
@@ -29,7 +30,8 @@ export function CustomerDashboard() {
       <Stat label="Plays" value={data?.prizes ?? '—'} />
       <Stat label="Unread" value={data?.unread ?? '—'} />
     </div>
-    <div className="mt-4"><ScanQr /></div>
+    <DashboardOffers />
+    <div className="mt-4 hidden xl:block"><ScanQr /></div>
     <div className="mt-4 grid gap-4 sm:grid-cols-2">
       <Quick to="/customer/explore" title="Shops" text="Places you have opened, and a search for any other shop." />
       <Quick to="/customer/my-orders" title="Orders" text="Track what you already sent to the station." />
@@ -40,75 +42,48 @@ export function CustomerDashboard() {
   </Frame>;
 }
 
-function shopPath(value: string) {
-  try {
-    const url = value.startsWith('http') ? new URL(value) : new URL(value, window.location.origin);
-    const match = url.pathname.match(/^\/(play|menu|bill|review)\/([^/]+)/);
-    return match ? `/${match[1]}/${decodeURIComponent(match[2])}` : null;
-  } catch {
-    return null;
-  }
+function DashboardOffers() {
+  const [rows, setRows] = useState<any[]>([]);
+  useEffect(() => {
+    api<{ rewards?: any[] }>('/customer/offers').then((data) => setRows(Array.isArray(data?.rewards) ? data.rewards : [])).catch(() => setRows([]));
+  }, []);
+  if (!rows.length) return null;
+  return (
+    <section className="mt-4">
+      <div className="mb-3 flex items-end justify-between gap-3">
+        <div>
+          <h2 className="font-display text-lg font-semibold text-stone-950">Offers</h2>
+          <p className="text-sm text-stone-500">Open the shop to redeem.</p>
+        </div>
+        <Link to="/customer/offers" className="text-sm font-semibold text-orange-600">All offers</Link>
+      </div>
+      <div className="grid gap-3">
+        {rows.slice(0, 4).map((reward) => <OfferCard key={reward.rewardid} reward={reward} />)}
+      </div>
+    </section>
+  );
 }
 
-function ScanQr() {
-  const navigate = useNavigate();
-  const [open, setOpen] = useState(false);
-  const [error, setError] = useState('');
-  const videoRef = useRef<HTMLVideoElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    let stop = false;
-    let stream: MediaStream | null = null;
-    const Detector = (window as unknown as { BarcodeDetector?: new (options: { formats: string[] }) => { detect: (source: HTMLVideoElement) => Promise<{ rawValue?: string }[]> } }).BarcodeDetector;
-    if (!Detector || !navigator.mediaDevices?.getUserMedia) {
-      setError('This browser cannot use the camera. Open this page in Chrome or Edge.');
-      return;
-    }
-    const detector = new Detector({ formats: ['qr_code'] });
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }).then(async (next) => {
-      stream = next;
-      if (!videoRef.current) return;
-      videoRef.current.srcObject = next;
-      await videoRef.current.play();
-      const tick = async () => {
-        if (stop || !videoRef.current) return;
-        try {
-          const codes = await detector.detect(videoRef.current);
-          const raw = codes[0]?.rawValue;
-          if (raw) {
-            const path = shopPath(raw);
-            if (path) {
-              stop = true;
-              stream?.getTracks().forEach((track) => track.stop());
-              setOpen(false);
-              navigate(path);
-              return;
-            }
-            setError('This is not a Repeat Mate QR.');
-          }
-        } catch { /* the next frame may be readable */ }
-        if (!stop) window.setTimeout(() => { void tick(); }, 250);
-      };
-      void tick();
-    }).catch(() => setError('Allow the camera to scan a shop QR.'));
-    return () => {
-      stop = true;
-      stream?.getTracks().forEach((track) => track.stop());
-    };
-  }, [open, navigate]);
+function OfferCard({ reward }: { reward: any }) {
+  const token = reward.publicslug || reward.businesstoken;
+  const status = String(reward.redemptionstatus || '');
+  const closed = status === 'Pending' || status === 'Approved';
+  const href = token ? `/play/${token}#offers` : '/customer/offers';
   return (
-    <>
-      <button type="button" className="w-full rounded-3xl border border-stone-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-orange-600 hover:shadow-lg" onClick={() => { setError(''); setOpen(true); }}>
-        <p className="font-semibold text-stone-950">Scan QR</p>
-        <p className="mt-1 text-sm text-stone-500">Point the camera at any shop QR to open its game and menu.</p>
-      </button>
-      {open && (
-        <Modal title="Scan a shop QR" text="The code on a poster, table, or screen." onClose={() => setOpen(false)}>
-          {error && <Alert text={error} />}
-          <video ref={videoRef} className="mt-3 aspect-square w-full rounded-2xl bg-stone-950 object-cover" muted playsInline />
-        </Modal>
-      )}
-    </>
+    <Link to={href} className="flex items-center gap-3 rounded-3xl border border-stone-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-orange-600 hover:shadow-lg">
+      <span className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-2xl bg-amber-100 text-amber-700">
+        {reward.imagepath ? <img alt="" src={asset(reward.imagepath)} className="h-full w-full object-cover" /> : (
+          <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="3" y="10" width="18" height="10" rx="2" /><path d="M3 14h18M12 10v10M12 10c-2-3-6-3.5-6-1s4 1 6 1 6-1.5 6-1-4-2-6 1z" /></svg>
+        )}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block font-semibold leading-snug text-stone-950">{reward.rewardname}</span>
+        <span className="mt-0.5 block truncate text-sm text-stone-500">{reward.businessname}</span>
+        {reward.description && <span className="mt-1 line-clamp-2 block text-xs leading-relaxed text-stone-400">{reward.description}</span>}
+        <span className="mt-1 block text-sm font-semibold text-orange-600">{reward.coinsrequired} coins</span>
+      </span>
+      <span className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${closed ? 'bg-stone-100 text-stone-500' : 'bg-orange-600 text-white'}`}>{closed ? (status === 'Approved' ? 'Redeemed' : 'Pending') : 'Redeem'}</span>
+    </Link>
   );
 }
 
@@ -247,9 +222,10 @@ export function RewardsPage({ offers = false }: { offers?: boolean }) {
     } catch (err) { setError(err instanceof Error ? err.message : 'Could not redeem.'); }
   }
   return <Frame>
-    <PageTitle title={offers ? 'Offers' : 'Rewards'} text={`${data.customer?.totalcoins ?? 0} coins available`} gold />
+    <PageTitle title={offers ? 'Offers' : 'Rewards'} text={offers ? 'Open the shop to redeem an offer.' : `${data.customer?.totalcoins ?? 0} coins available`} gold={!offers} />
     {error && <Alert text={error} />}
     <div className="grid gap-3 sm:grid-cols-2">{(data.rewards || []).map((reward: any) => {
+      if (offers) return <OfferCard key={reward.rewardid} reward={reward} />;
       const status = String(reward.redemptionstatus || '');
       const closed = status === 'Pending' || status === 'Approved';
       const label = status === 'Pending' ? 'Pending' : status === 'Approved' ? 'Redeemed' : status === 'Rejected' ? 'Redeem again' : 'Redeem';

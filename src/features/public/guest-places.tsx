@@ -96,7 +96,7 @@ export function PlaceFrame({ business, token, current, children }: { business: R
       <div className="h-52 sm:h-64" style={{ background: `linear-gradient(120deg, ${color}, #0c0a09)` }}>
         {business.bannerimagepath && <img alt="" src={asset(business.bannerimagepath)} className="h-full w-full object-cover" />}
       </div>
-      <div className="relative z-10 mx-auto -mt-16 max-w-xl px-3 pb-28 sm:px-4">
+      <div className="relative z-10 mx-auto -mt-16 max-w-xl px-3 pb-36 sm:px-4">
         <div className="relative rounded-[28px] bg-white px-5 pb-8 pt-14 shadow-xl shadow-stone-950/10">
           <div className="absolute left-1/2 top-0 grid h-20 w-20 -translate-x-1/2 -translate-y-1/2 place-items-center overflow-hidden rounded-full bg-white shadow-lg ring-4 ring-white">
             {business.logoimagepath ? <img alt="" src={asset(business.logoimagepath)} className="h-full w-full object-cover" /> : <span className="text-xs font-bold text-stone-400">LOGO</span>}
@@ -122,13 +122,14 @@ export function PlaceFrame({ business, token, current, children }: { business: R
   );
 }
 
-function DockGlyph({ name }: { name: 'play' | 'calendar' | 'list' | 'bill' | 'review' | 'app' }) {
+function DockGlyph({ name }: { name: 'play' | 'calendar' | 'list' | 'bill' | 'review' | 'app' | 'user' }) {
   const common = { viewBox: '0 0 24 24', className: 'h-5 w-5', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
   if (name === 'play') return <svg {...common}><path d="M9 6.5v11l9-5.5z" /></svg>;
   if (name === 'bill') return <svg {...common}><path d="M8 3.5h8a1 1 0 0 1 1 1V20l-2.2-1.4L12.5 20l-2.3-1.4L8 20l-2.2-1.4L3.5 20V4.5a1 1 0 0 1 1-1H8z" /><path d="M8 8h8M8 12h8" /></svg>;
   if (name === 'review') return <svg {...common}><path d="M12 4.2 13.8 8l4.2.4-3.2 2.8.9 4.1L12 13.4 8.3 15.3l.9-4.1L6 8.4 10.2 8z" /></svg>;
   if (name === 'app') return <svg {...common}><path d="M12 4v9M8.5 10.5 12 14l3.5-3.5M6 19h12" /></svg>;
   if (name === 'calendar') return <svg {...common}><rect x="4" y="5" width="16" height="15" rx="2" /><path d="M8 3.5v3M16 3.5v3M4 10h16" /></svg>;
+  if (name === 'user') return <svg {...common}><circle cx="12" cy="8" r="3" /><path d="M5.5 19a6.5 6.5 0 0 1 13 0" /></svg>;
   return <svg {...common}><path d="M6 7h12M6 12h12M6 17h8" /></svg>;
 }
 
@@ -137,17 +138,24 @@ function catalogGlyph(label: string): 'calendar' | 'list' {
 }
 
 function ShopDock({ token, current, menuLabel }: { token?: string; current: GuestTab; menuLabel: string }) {
+  const auth = useAuth();
+  const signedIn = Boolean(auth.user && auth.user.role === 'Customer' && !auth.user.name.startsWith('Guest_'));
   const { install } = useInstallApp();
-  const item = (active: boolean) => `flex min-w-0 flex-1 flex-col items-center gap-1 px-1 py-1 text-[11px] font-semibold ${active ? 'text-orange-600' : 'text-stone-400'}`;
-  const bubble = (active: boolean) => `grid h-11 w-11 place-items-center rounded-full ${active ? 'bg-orange-600 text-white shadow-md shadow-orange-600/30' : ''}`;
+  const item = (active: boolean) => `flex min-w-0 flex-1 flex-col items-center gap-1 px-0.5 py-1 text-[10px] font-semibold leading-none sm:text-[11px] ${active ? 'text-orange-600' : 'text-stone-400'}`;
+  const bubble = (active: boolean) => `grid h-10 w-10 place-items-center rounded-full sm:h-11 sm:w-11 ${active ? 'bg-orange-600 text-white shadow-md shadow-orange-600/30' : ''}`;
   return createPortal(
-    <nav className="fixed inset-x-0 z-30 flex justify-center px-3" style={{ bottom: 'max(0.75rem, env(safe-area-inset-bottom))' }} aria-label="Shop">
-      <div className="flex w-full max-w-md items-end justify-between rounded-[1.75rem] bg-white px-1.5 py-2 shadow-[0_10px_30px_rgba(28,25,23,0.14)] ring-1 ring-stone-200">
-        <NavLink to={`/play/${token}`} className={item(current === 'play')}><span className={bubble(current === 'play')}><DockGlyph name="play" /></span>Play</NavLink>
-        <NavLink to={`/menu/${token}`} className={item(current === 'menu')}><span className={bubble(current === 'menu')}><DockGlyph name={catalogGlyph(menuLabel)} /></span>{menuLabel}</NavLink>
-        <NavLink to={`/bill/${token}`} className={item(current === 'bill')}><span className={bubble(current === 'bill')}><DockGlyph name="bill" /></span>Bill</NavLink>
-        <NavLink to={`/review/${token}`} className={item(current === 'review')}><span className={bubble(current === 'review')}><DockGlyph name="review" /></span>Review</NavLink>
-        <button type="button" className={item(false)} onClick={() => { void install(); }}><span className={bubble(false)}><DockGlyph name="app" /></span>Get App</button>
+    <nav className="fixed inset-x-0 bottom-0 z-30 px-2 pt-2" style={{ paddingBottom: 'max(0.55rem, env(safe-area-inset-bottom))' }} aria-label="Shop">
+      <div className="mx-auto flex w-full max-w-md items-end justify-between rounded-[1.75rem] bg-white px-1 py-2 shadow-[0_-8px_30px_rgba(28,25,23,0.12)] ring-1 ring-stone-200">
+        <NavLink to={`/play/${token}`} className={item(current === 'play')}><span className={bubble(current === 'play')}><DockGlyph name="play" /></span><span className="max-w-full truncate">Play</span></NavLink>
+        <NavLink to={`/menu/${token}`} className={item(current === 'menu')}><span className={bubble(current === 'menu')}><DockGlyph name={catalogGlyph(menuLabel)} /></span><span className="max-w-full truncate">{menuLabel}</span></NavLink>
+        <NavLink to={`/bill/${token}`} className={item(current === 'bill')}><span className={bubble(current === 'bill')}><DockGlyph name="bill" /></span><span className="max-w-full truncate">Bill</span></NavLink>
+        <NavLink to={`/review/${token}`} className={item(current === 'review')}><span className={bubble(current === 'review')}><DockGlyph name="review" /></span><span className="max-w-full truncate">Review</span></NavLink>
+        <button type="button" className={item(false)} onClick={() => { void install(); }}><span className={bubble(false)}><DockGlyph name="app" /></span><span className="max-w-full truncate">Get App</span></button>
+        {signedIn ? (
+          <NavLink to="/customer/dashboard" className={item(false)}><span className={bubble(false)}><DockGlyph name="user" /></span><span className="max-w-full truncate">Account</span></NavLink>
+        ) : (
+          <button type="button" className={item(false)} onClick={() => window.dispatchEvent(new Event('rs-open-shop-signin'))}><span className={bubble(false)}><DockGlyph name="user" /></span><span className="max-w-full truncate">Sign In</span></button>
+        )}
       </div>
     </nav>,
     document.body,
@@ -438,8 +446,22 @@ function offerLabel(status?: string) {
   return 'Redeem';
 }
 
+function OfferMark({ image }: { image?: string }) {
+  return (
+    <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-2xl bg-amber-100 text-amber-700">
+      {image ? <img alt="" src={asset(image)} className="h-full w-full object-cover" /> : (
+        <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+          <rect x="3" y="10" width="18" height="10" rx="2" />
+          <path d="M3 14h18M12 10v10M12 10c-2-3-6-3.5-6-1s4 1 6 1 6-1.5 6-1-4-2-6 1z" />
+        </svg>
+      )}
+    </div>
+  );
+}
+
 function OffersList() {
   const { hub, business } = useGuestPlace();
+  const location = useLocation();
   const auth = useAuth();
   const signedIn = Boolean(auth.user && auth.user.role === 'Customer' && !auth.user.name.startsWith('Guest_'));
   const offers = (hub?.offers || []) as { rewardid: number; rewardname: string; description?: string; coinsrequired: number; imagepath?: string }[];
@@ -455,6 +477,10 @@ function OffersList() {
       })
       .catch(() => undefined);
   }, [signedIn, businessId]);
+  useEffect(() => {
+    if (location.hash !== '#offers') return;
+    document.getElementById('offers')?.scrollIntoView({ block: 'start' });
+  }, [location.hash, offers.length]);
   async function redeem(offer: { rewardid: number }) {
     const status = statuses[offer.rewardid];
     if (status === 'Pending' || status === 'Approved') return;
@@ -467,33 +493,30 @@ function OffersList() {
     setStatuses((current) => ({ ...current, [offer.rewardid]: 'Pending' }));
   }
   return (
-    <>
-    <section className="mt-8 border-t border-stone-100 pt-5">
+    <section id="offers" className="mt-8 scroll-mt-6 border-t border-stone-100 pt-5">
       <h2 className="text-base font-bold">Current offers</h2>
-      <p className="mt-1 text-xs text-stone-400">Tap an offer to redeem it.</p>
-      {!offers.length && <p className="mt-3 text-sm text-stone-400">No active offers right now.</p>}
+      <p className="mt-1 text-xs text-stone-400">Tap an offer to redeem it at this shop.</p>
+      {!offers.length && <p className="mt-3 rounded-2xl bg-stone-50 px-3 py-4 text-sm text-stone-400">No active offers right now.</p>}
       {offers.length > 0 && (
-        <div className="mt-3 flex gap-3 overflow-x-auto pb-2">
+        <div className="mt-3 space-y-3">
           {offers.map((offer) => {
             const status = statuses[offer.rewardid];
             const closed = status === 'Pending' || status === 'Approved';
             return (
-            <button key={offer.rewardid} type="button" disabled={closed} className="flex w-64 shrink-0 items-center gap-3 rounded-2xl border border-stone-100 bg-stone-50 p-3 text-left disabled:opacity-70" onClick={() => redeem(offer)}>
-              <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-amber-100 text-lg">
-                {offer.imagepath ? <img alt="" src={asset(offer.imagepath)} className="h-full w-full object-cover" /> : '🎁'}
-              </div>
-              <div className="min-w-0">
-                <p className="truncate font-semibold text-stone-950">{offer.rewardname}</p>
-                {offer.description && <p className="line-clamp-2 text-xs text-stone-500">{offer.description}</p>}
-                <p className="mt-0.5 text-xs font-semibold text-amber-600">{offer.coinsrequired} coins · {offerLabel(status)}</p>
-              </div>
-            </button>
+              <button key={offer.rewardid} type="button" disabled={closed} className="flex w-full items-center gap-3 rounded-2xl border border-amber-100 bg-amber-50/70 p-3 text-left disabled:opacity-70" onClick={() => redeem(offer)}>
+                <OfferMark image={offer.imagepath} />
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold leading-snug text-stone-950">{offer.rewardname}</p>
+                  {offer.description && <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-stone-500">{offer.description}</p>}
+                  <p className="mt-1 text-xs font-semibold text-amber-700">{offer.coinsrequired} coins</p>
+                </div>
+                <span className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${closed ? 'bg-stone-200 text-stone-600' : 'bg-orange-600 text-white'}`}>{offerLabel(status)}</span>
+              </button>
             );
           })}
         </div>
       )}
     </section>
-    </>
   );
 }
 
@@ -599,7 +622,6 @@ export function MenuPanel() {
     if (sending) return;
     if (!cart.length) { toastErr(`Add something from the ${copy.tab.toLowerCase()} list first.`); return; }
     if (!isTenDigitMobile(mobile)) { toastErr('Enter a 10-digit mobile number.'); return; }
-    if (fulfillment === 'DineIn' && !station.trim()) { toastErr(copy.stationError); return; }
     if (fulfillment === 'Delivery' && !address.trim()) { toastErr('Delivery address is required.'); return; }
     setSending(true);
     const popup = window.open('', '_blank');
@@ -609,7 +631,7 @@ export function MenuPanel() {
         body: JSON.stringify({
           token,
           fulfillment,
-          tableNumber: station,
+          tableNumber: station.trim() || '0',
           deliveryAddress: address,
           customerName: guestName,
           customerMobile: mobile,
@@ -701,7 +723,7 @@ export function MenuPanel() {
       </div>
 
       {count > 0 && !custom && createPortal(
-        <div className="fixed inset-x-0 z-40 px-3 pt-2 sm:px-4" style={{ bottom: 'calc(5.5rem + env(safe-area-inset-bottom))' }}>
+        <div className="fixed inset-x-0 z-40 px-3 pt-2 sm:px-4" style={{ bottom: 'calc(6.75rem + env(safe-area-inset-bottom))' }}>
           <button
             type="button"
             className="mx-auto flex w-full max-w-xl items-center justify-between gap-3 rounded-2xl px-5 py-3.5 text-left text-white shadow-2xl shadow-stone-950/30"
@@ -760,7 +782,8 @@ export function MenuPanel() {
               {fulfillment === 'DineIn' && (
                 <label className="block text-sm">
                   <span className="mb-1.5 block font-medium">{hub?.settings?.stationlabel || 'Table / room'}</span>
-                  <input value={station} onChange={(event) => setStation(event.target.value)} placeholder={hub?.settings?.stationplaceholder || 'Table 4'} className="h-11 w-full rounded-xl border border-stone-200 px-3" />
+                  <input value={station} onChange={(event) => setStation(event.target.value)} placeholder={hub?.settings?.stationplaceholder || 'Table 4, or 0'} className="h-11 w-full rounded-xl border border-stone-200 px-3" />
+                  <span className="mt-1.5 block text-xs font-normal text-stone-400">{copy.stationNote}</span>
                 </label>
               )}
               {fulfillment === 'Delivery' && (

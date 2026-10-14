@@ -46,6 +46,7 @@ export function catalogCopy(type?: string | null) {
     addButton: 'Add',
     added: 'Added',
     stationError: 'Add the station so the shop knows where you are.',
+    stationNote: 'If you don’t have one, enter 0.',
   };
   if (kind === 'food') {
     return {
@@ -75,6 +76,7 @@ export function catalogCopy(type?: string | null) {
       addonLabel: 'Add-ons',
       addButton: 'Add to cart',
       stationError: 'Table or room number is required for dine in.',
+      stationNote: 'No table or room? Enter 0.',
     };
   }
   if (kind === 'salon') {
@@ -110,6 +112,7 @@ export function catalogCopy(type?: string | null) {
       addButton: 'Add service',
       added: 'Service added',
       stationError: 'Add the chair or seat so the salon knows where to book you.',
+      stationNote: 'No chair or seat? Enter 0.',
     };
   }
   if (kind === 'gym') {
@@ -145,6 +148,7 @@ export function catalogCopy(type?: string | null) {
       addButton: 'Add plan',
       added: 'Plan added',
       stationError: 'Add the batch or trainer so the gym knows which slot you want.',
+      stationNote: 'No batch or trainer? Enter 0.',
     };
   }
   if (kind === 'clinic') {
@@ -180,6 +184,7 @@ export function catalogCopy(type?: string | null) {
       addButton: 'Add visit',
       added: 'Visit added',
       stationError: 'Add the cabin or patient reference so the clinic can place the appointment.',
+      stationNote: 'No cabin or patient ID? Enter 0.',
     };
   }
   if (kind === 'retail') {
@@ -212,6 +217,7 @@ export function catalogCopy(type?: string | null) {
       addButton: 'Add to bag',
       added: 'Added to bag',
       stationError: 'Add the counter or pickup spot.',
+      stationNote: 'No counter or pickup spot? Enter 0.',
     };
   }
   return shared;

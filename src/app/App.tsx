@@ -9,6 +9,7 @@ import { BusinessClaimsPage, BusinessDashboard, BusinessProfilePage, BusinessRev
 import { SuperBusinesses, SuperDashboard, SuperDemos, SuperHowVideo, SuperTypes } from '../features/super-admin/pages';
 import { PlatformShell, StoreShell, WalletShell } from '../components/layout/Shells';
 import { SiteInstall } from '../components/install-app';
+import { PushPrompt } from '../features/customer/push-prompt';
 
 function Guard({ role }: { role: string }) {
   const auth = useAuth();
@@ -22,6 +23,7 @@ export function App() {
   return (
     <>
     <SiteInstall />
+    <PushPrompt />
     <Routes>
       <Route path="/" element={<HomePage />} />
       <Route path="/about" element={<AboutPage />} />

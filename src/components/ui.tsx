@@ -280,23 +280,30 @@ export function Table({ columns, rows, empty = 'Nothing here yet.', variant = 'r
   };
   const phoneRows = (articleClass: string) => list.map((row, index) => {
     const fields = columns.filter((column) => column.key !== 'actions');
+    const actions = columns.filter((column) => column.key === 'actions');
     const [lead, ...rest] = fields;
     return (
       <article key={rowKey(row, index)} className={articleClass}>
-        {lead && <div className="text-sm font-semibold text-stone-950">{lead.render ? lead.render(row) : row[lead.key] ?? '—'}</div>}
-        {rest.length > 0 && (
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-stone-500">
-            {rest.map((column, columnIndex) => (
-              <span key={column.key} className="inline-flex max-w-full items-center gap-2">
-                {columnIndex > 0 && <span className="text-stone-300" aria-hidden="true">·</span>}
-                <span className="min-w-0">{column.render ? column.render(row) : row[column.key] ?? '—'}</span>
-              </span>
-            ))}
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            {lead && <div className="text-sm font-semibold text-stone-950">{lead.render ? lead.render(row) : row[lead.key] ?? '—'}</div>}
+            {rest.length > 0 && (
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-stone-500">
+                {rest.map((column, columnIndex) => (
+                  <span key={column.key} className="inline-flex max-w-full items-center gap-2">
+                    {columnIndex > 0 && <span className="text-stone-300" aria-hidden="true">·</span>}
+                    <span className="min-w-0 break-words">{column.render ? column.render(row) : row[column.key] ?? '—'}</span>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
-        )}
-        {columns.filter((column) => column.key === 'actions').map((column) => (
-          <div key={column.key} className="mt-3 [&>div]:flex [&>div]:w-full [&>div]:justify-start">{cell(column, row)}</div>
-        ))}
+          {actions.length > 0 && (
+            <div className="flex shrink-0 items-center gap-1">
+              {actions.map((column) => <div key={column.key}>{column.render?.(row)}</div>)}
+            </div>
+          )}
+        </div>
       </article>
     );
   });
