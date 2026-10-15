@@ -1,7 +1,7 @@
 import { createContext, FormEvent, ReactNode, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, NavLink, useLocation, useParams } from 'react-router-dom';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion, useScroll, useTransform } from 'framer-motion';
 import { api, asset, client } from '../../api/client';
 import { useAuth } from '../../app/auth';
 import { ActionIcon, Alert, Button, Field, Form, IconButton, Modal } from '../../components/ui';
@@ -30,6 +30,7 @@ type GuestPlaceContext = {
 };
 
 const GuestCtx = createContext<GuestPlaceContext | null>(null);
+const GameDockCtx = createContext<HTMLDivElement | null>(null);
 
 function useGuestPlace() {
   const ctx = useContext(GuestCtx);
@@ -38,11 +39,23 @@ function useGuestPlace() {
 }
 
 export function GuestSkeleton() {
+  const pulse = 'animate-pulse motion-reduce:animate-none';
   return (
     <div className="public-enter min-h-screen bg-orange-50" aria-busy="true" aria-label="Loading shop">
-      <div className="h-52 animate-pulse bg-stone-200 sm:h-64" />
-      <div className="mx-auto -mt-16 max-w-xl px-4">
-        <div className="h-80 animate-pulse rounded-[28px] bg-white shadow" />
+      <div className={`flex min-h-[100dvh] flex-col items-center justify-center bg-orange-200/80 px-6 pb-28 ${pulse}`}>
+        <div className="h-24 w-24 rounded-full bg-white/80" />
+        <div className="mt-4 h-7 w-40 rounded-full bg-white/70" />
+        <div className="mt-3 h-3 w-56 max-w-full rounded-full bg-white/50" />
+      </div>
+      <div className="fixed inset-x-0 bottom-0 z-30 px-2 pt-2" style={{ paddingBottom: 'max(0.55rem, env(safe-area-inset-bottom))' }}>
+        <div className="mx-auto flex max-w-md items-end justify-between rounded-[1.75rem] bg-white px-2 py-3 shadow-[0_-8px_30px_rgba(28,25,23,0.12)] ring-1 ring-stone-200">
+          {Array.from({ length: 6 }, (_, index) => (
+            <div key={index} className="flex flex-1 flex-col items-center gap-1">
+              <div className={`h-8 w-8 rounded-full ${index === 0 ? 'bg-orange-200' : 'bg-stone-100'} ${pulse}`} />
+              <div className={`h-2 w-8 rounded-full bg-stone-100 ${pulse}`} />
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -60,8 +73,8 @@ export function GuestError({ message }: { message: string }) {
   );
 }
 
-function Icon({ children }: { children: ReactNode }) {
-  return <span className="grid h-9 w-9 place-items-center rounded-full bg-stone-100 ring-1 ring-stone-100">{children}</span>;
+function Icon({ children, className = 'h-9 w-9' }: { children: ReactNode; className?: string }) {
+  return <span className={`grid place-items-center rounded-full bg-stone-100 ring-1 ring-stone-100 ${className}`}>{children}</span>;
 }
 
 function tabFromPath(pathname: string): GuestTab {
@@ -78,6 +91,7 @@ export function PlaceFrame({ business, token, current, children }: { business: R
   const [loginOpen, setLoginOpen] = useState(false);
   const [wifiOpen, setWifiOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [gameDock, setGameDock] = useState<HTMLDivElement | null>(null);
   const signedIn = Boolean(auth.user && !auth.user.name.startsWith('Guest_'));
   useEffect(() => {
     const open = () => setLoginOpen(true);
@@ -85,11 +99,81 @@ export function PlaceFrame({ business, token, current, children }: { business: R
     return () => window.removeEventListener('rs-open-shop-signin', open);
   }, []);
   const color = brandColor(business.themecolor);
+  const shopName = business.businessname || 'Repeat Mate';
+  const shopMark = String(shopName).trim().slice(0, 1).toUpperCase() || 'R';
+  const heroRef = useRef<HTMLDivElement>(null);
+  const frame = useRef({ height: 720, width: 390, bar: 180, banner: 36, logoEnd: 36 });
+  const { scrollY } = useScroll();
+  const playTab = current === 'play';
+  useEffect(() => {
+    const measure = () => {
+      const height = heroRef.current?.offsetHeight || window.innerHeight;
+      const bar = playTab ? Math.round(height * 0.33) : 136;
+      frame.current = {
+        height,
+        width: window.innerWidth,
+        bar,
+        banner: playTab ? Math.round(bar * 0.16) : 40,
+        logoEnd: 44,
+      };
+      scrollY.set(scrollY.get());
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [scrollY, playTab]);
+  const collapse = (value: number) => {
+    const full = frame.current.height || window.innerHeight;
+    const bar = frame.current.bar || Math.round(full * 0.33);
+    return Math.min(1, Math.max(0, value / Math.max(full - bar, 1)));
+  };
+  const headerHeight = useTransform(scrollY, (value) => {
+    const full = frame.current.height || window.innerHeight;
+    const bar = frame.current.bar || Math.round(full * 0.33);
+    return Math.max(bar, full - value);
+  });
+  const logoSize = useTransform(scrollY, (value) => {
+    const end = frame.current.logoEnd || 44;
+    return 96 - collapse(value) * (96 - end);
+  });
+  const logoLeft = useTransform(scrollY, (value) => {
+    const end = frame.current.logoEnd || 44;
+    const size = 96 - collapse(value) * (96 - end);
+    const width = frame.current.width || window.innerWidth;
+    const centered = width / 2 - size / 2;
+    const sheet = Math.min(width, 576);
+    const parked = (width - sheet) / 2 + 12;
+    const t = collapse(value);
+    return centered * (1 - t) + parked * t;
+  });
+  const logoTop = useTransform(scrollY, (value) => {
+    const full = frame.current.height || window.innerHeight;
+    const t = collapse(value);
+    const banner = frame.current.banner || 44;
+    return full * 0.32 * (1 - t) + (banner + 6) * t;
+  });
+  const coverTop = useTransform(scrollY, (value) => {
+    const t = collapse(value);
+    const full = frame.current.height || window.innerHeight;
+    const end = frame.current.logoEnd || 44;
+    const size = 96 - t * (96 - end);
+    const banner = frame.current.banner || 44;
+    const top = full * 0.32 * (1 - t) + (banner + 6) * t;
+    return top + size + 14;
+  });
+  const identityHeight = useTransform(scrollY, (value) => {
+    const shown = Math.min(1, Math.max(0, (collapse(value) - 0.62) / 0.38));
+    const bar = frame.current.bar || Math.round(window.innerHeight * 0.33);
+    const banner = frame.current.banner || Math.round(bar * 0.2);
+    return shown * (bar - banner);
+  });
+  const coverOpacity = useTransform(scrollY, (value) => Math.max(0, 1 - collapse(value) / 0.42));
+  const hintOpacity = useTransform(scrollY, (value) => Math.max(0, 1 - collapse(value) / 0.18));
   const whatsapp = String(business.whatsappnumber || '').replace(/\D/g, '');
   const wa = whatsapp.length === 10 ? `91${whatsapp}` : whatsapp;
   const link = (href: string, label: string, icon: ReactNode) => (
-    <a href={href} target={href.startsWith('http') ? '_blank' : undefined} rel="noreferrer" className="grid justify-items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-stone-500">
-      {icon}{label}
+    <a href={href} target={href.startsWith('http') ? '_blank' : undefined} rel="noreferrer" aria-label={label} title={label} className="shrink-0">
+      {icon}
     </a>
   );
   const web = (value?: string) => {
@@ -100,49 +184,74 @@ export function PlaceFrame({ business, token, current, children }: { business: R
   const wifiName = String(business.wifiname || '').trim();
   const wifiPassword = String(business.wifipassword || '').trim();
   const menuLabel = catalogCopy(business.businesstype).tab;
+  const compactIcon = 'h-8 w-8 [&_svg]:h-4 [&_svg]:w-4';
   return (
+    <GameDockCtx.Provider value={gameDock}>
     <div className="public-enter min-h-screen bg-orange-50 text-stone-900">
-      <div className="h-52 sm:h-64" style={{ background: `linear-gradient(120deg, ${color}, #0c0a09)` }}>
-        {business.bannerimagepath && <img alt="" src={asset(business.bannerimagepath)} className="h-full w-full object-cover" />}
-      </div>
-      <div className="relative z-10 mx-auto -mt-16 max-w-xl px-3 pb-36 sm:px-4">
-        <div className="relative rounded-[28px] bg-white px-5 pb-8 pt-14 shadow-xl shadow-stone-950/10">
-          <div className="absolute left-1/2 top-0 grid h-20 w-20 -translate-x-1/2 -translate-y-1/2 place-items-center overflow-hidden rounded-full bg-white shadow-lg ring-4 ring-white">
-            {business.logoimagepath ? <img alt="" src={asset(business.logoimagepath)} className="h-full w-full object-cover" /> : <span className="text-xs font-bold text-stone-400">LOGO</span>}
+      <div ref={heroRef} className="h-[100dvh]" aria-hidden="true" />
+      {createPortal(
+        <motion.header style={{ height: headerHeight }} className="fixed inset-x-0 top-0 z-20">
+          <div className="absolute inset-0 overflow-hidden" style={{ background: `linear-gradient(160deg, ${color}, #7c2d12 55%, #0c0a09)` }}>
+            {business.bannerimagepath && <img alt="" src={asset(business.bannerimagepath)} className="h-full w-full object-cover" />}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/20 to-black/25" />
           </div>
-          <h1 className="truncate text-center text-2xl font-bold" title={business.businessname || 'Repeat Mate'}>{business.businessname || 'Repeat Mate'}</h1>
-          <p className="mt-1 text-center text-sm text-stone-500">{business.tagline || business.description || 'Play, order, and review in one place.'}</p>
-          {business.address && <p className="mt-2 text-center text-sm text-stone-600">{business.address}</p>}
-          <div className="mt-5">
-            <div className="flex flex-wrap justify-center gap-6">
-              {business.phone && link(`tel:${business.phone}`, 'Call', <Icon><svg viewBox="0 0 24 24" className="h-4 w-4 fill-stone-700"><path d="M6.6 10.8a15 15 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11 11 0 0 0 3.5.55 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 7a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11 11 0 0 0 .55 3.5 1 1 0 0 1-.25 1L6.6 10.8z" /></svg></Icon>)}
-              {wa && link(`https://wa.me/${wa}`, 'WhatsApp', <Icon><svg viewBox="0 0 24 24" className="h-4 w-4 fill-emerald-600"><path d="M12 3a9 9 0 0 0-7.8 13.5L3 21l4.7-1.2A9 9 0 1 0 12 3zm5 12.4c-.2.6-1.2 1.1-1.7 1.1-.4.1-.9.2-3-.8-2.5-1.2-4.1-3.6-4.2-3.8-.2-.2-1.2-1.6-1.2-3s.7-2.1 1-2.4c.2-.2.5-.3.8-.3h.6c.2 0 .4 0 .6.5.2.6.8 2 .8 2.1.1.1 0 .3-.1.5l-.4.5c-.1.2-.3.3-.1.6.2.3.7 1.2 1.5 1.9 1 .9 1.8 1.2 2.1 1.3.3.1.4.1.6-.1l.7-.8c.2-.2.4-.2.6-.1l2 .9c.2.1.4.2.4.4.1.2 0 .8-.2 1.3z" /></svg></Icon>)}
-              {business.instagramurl && link(web(business.instagramurl), 'Instagram', <Icon><svg viewBox="0 0 24 24" className="h-4 w-4 fill-pink-600"><path d="M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4zm5 5a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm6.2-.9a1 1 0 1 0 0 2 1 1 0 0 0 0-2zM12 10a2 2 0 1 1 0 4 2 2 0 0 1 0-4z" /></svg></Icon>)}
-              {business.facebookurl && link(web(business.facebookurl), 'Facebook', <Icon><svg viewBox="0 0 24 24" className="h-4 w-4 fill-blue-600"><path d="M14 9h3V6h-3c-2.2 0-4 1.8-4 4v2H8v3h2v7h3v-7h2.6l.4-3H13v-2c0-.6.4-1 1-1z" /></svg></Icon>)}
-              {business.twitterurl && link(web(business.twitterurl), 'X', <Icon><svg viewBox="0 0 24 24" className="h-4 w-4 fill-stone-950"><path d="M14.7 4h2.4l-5.2 6 6.1 8h-4.8l-3.8-5-4.3 5H2.7l5.6-6.4L2.5 4h4.9l3.4 4.5L14.7 4zm-.8 12.6h1.3L7.2 5.3H5.8l8.1 11.3z" /></svg></Icon>)}
-              {business.youtubeurl && link(web(business.youtubeurl), 'YouTube', <Icon><svg viewBox="0 0 24 24" className="h-4 w-4 fill-red-600"><path d="M23 12.2s0-3.2-.4-4.6c-.2-.9-.9-1.6-1.8-1.8C19.2 5.4 12 5.4 12 5.4s-7.2 0-8.8.4c-.9.2-1.6.9-1.8 1.8C1 9 1 12.2 1 12.2s0 3.2.4 4.6c.2.9.9 1.6 1.8 1.8 1.6.4 8.8.4 8.8.4s7.2 0 8.8-.4c.9-.2 1.6-.9 1.8-1.8.4-1.4.4-4.6.4-4.6zM9.8 15.5v-6.6l6.2 3.3-6.2 3.3z" /></svg></Icon>)}
-              {business.website && link(web(business.website), 'Website', <Icon><svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-orange-600" strokeWidth="1.8"><circle cx="12" cy="12" r="8" /><path d="M4 12h16M12 4c2.5 2.8 2.5 13.2 0 16M12 4c-2.5 2.8-2.5 13.2 0 16" /></svg></Icon>)}
-              {(wifiName || wifiPassword) && (
-                <button type="button" onClick={() => setWifiOpen((open) => !open)} className="grid justify-items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-stone-500" aria-expanded={wifiOpen}>
-                  <Icon><svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-orange-600" strokeWidth="1.8" strokeLinecap="round"><path d="M5 12.5a10 10 0 0 1 14 0M8 15.2a6 6 0 0 1 8 0" /><circle cx="12" cy="18" r="1" fill="currentColor" stroke="none" /></svg></Icon>
-                  Wi‑Fi
-                </button>
-              )}
-            </div>
-            {wifiOpen && (wifiName || wifiPassword) && (
-              <div className="mx-auto mt-4 max-w-xs rounded-2xl bg-orange-50 px-4 py-3 text-left text-sm text-stone-700">
-                {wifiName && <p>Network <span className="font-semibold text-stone-950">{wifiName}</span></p>}
-                {wifiPassword && <p className="mt-1">Password <span className="font-semibold text-stone-950">{wifiPassword}</span></p>}
-                <button type="button" className="mt-2 text-xs font-semibold text-orange-600" onClick={() => { void navigator.clipboard?.writeText([wifiName, wifiPassword].filter(Boolean).join('\n')).then(() => setCopied(true)); }}>{copied ? 'Copied' : 'Copy details'}</button>
+          <motion.div style={{ height: identityHeight }} className="absolute inset-x-0 bottom-0 overflow-hidden bg-orange-50">
+            <div className="mx-auto flex h-full max-w-xl flex-col bg-white px-3 pb-2 pt-1.5 sm:rounded-t-[28px]">
+              <div className="flex min-h-11 items-center pl-14">
+                <div className="min-w-0 text-left">
+                  <h1 className="truncate text-base font-bold leading-tight text-stone-950">{shopName}</h1>
+                  <p className="truncate text-xs leading-tight text-stone-500">{business.tagline || business.description || 'Play, order, and review in one place.'}</p>
+                </div>
               </div>
-            )}
-          </div>
-          <div className="mt-6">{children}</div>
+              <div className="mt-2 flex flex-nowrap justify-center gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {business.phone && link(`tel:${business.phone}`, 'Call', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-stone-700"><path d="M6.6 10.8a15 15 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11 11 0 0 0 3.5.55 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 7a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11 11 0 0 0 .55 3.5 1 1 0 0 1-.25 1L6.6 10.8z" /></svg></Icon>)}
+                {wa && link(`https://wa.me/${wa}`, 'WhatsApp', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-emerald-600"><path d="M12 3a9 9 0 0 0-7.8 13.5L3 21l4.7-1.2A9 9 0 1 0 12 3zm5 12.4c-.2.6-1.2 1.1-1.7 1.1-.4.1-.9.2-3-.8-2.5-1.2-4.1-3.6-4.2-3.8-.2-.2-1.2-1.6-1.2-3s.7-2.1 1-2.4c.2-.2.5-.3.8-.3h.6c.2 0 .4 0 .6.5.2.6.8 2 .8 2.1.1.1 0 .3-.1.5l-.4.5c-.1.2-.3.3-.1.6.2.3.7 1.2 1.5 1.9 1 .9 1.8 1.2 2.1 1.3.3.1.4.1.6-.1l.7-.8c.2-.2.4-.2.6-.1l2 .9c.2.1.4.2.4.4.1.2 0 .8-.2 1.3z" /></svg></Icon>)}
+                {business.instagramurl && link(web(business.instagramurl), 'Instagram', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-pink-600"><path d="M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4zm5 5a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm6.2-.9a1 1 0 1 0 0 2 1 1 0 0 0 0-2zM12 10a2 2 0 1 1 0 4 2 2 0 0 1 0-4z" /></svg></Icon>)}
+                {business.facebookurl && link(web(business.facebookurl), 'Facebook', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-blue-600"><path d="M14 9h3V6h-3c-2.2 0-4 1.8-4 4v2H8v3h2v7h3v-7h2.6l.4-3H13v-2c0-.6.4-1 1-1z" /></svg></Icon>)}
+                {business.twitterurl && link(web(business.twitterurl), 'X', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-stone-950"><path d="M14.7 4h2.4l-5.2 6 6.1 8h-4.8l-3.8-5-4.3 5H2.7l5.6-6.4L2.5 4h4.9l3.4 4.5L14.7 4zm-.8 12.6h1.3L7.2 5.3H5.8l8.1 11.3z" /></svg></Icon>)}
+                {business.youtubeurl && link(web(business.youtubeurl), 'YouTube', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-red-600"><path d="M23 12.2s0-3.2-.4-4.6c-.2-.9-.9-1.6-1.8-1.8C19.2 5.4 12 5.4 12 5.4s-7.2 0-8.8.4c-.9.2-1.6.9-1.8 1.8C1 9 1 12.2 1 12.2s0 3.2.4 4.6c.2.9.9 1.6 1.8 1.8 1.6.4 8.8.4 8.8.4s7.2 0 8.8-.4c.9-.2 1.6-.9 1.8-1.8.4-1.4.4-4.6.4-4.6zM9.8 15.5v-6.6l6.2 3.3-6.2 3.3z" /></svg></Icon>)}
+                {business.website && link(web(business.website), 'Website', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-orange-600" strokeWidth="1.8"><circle cx="12" cy="12" r="8" /><path d="M4 12h16M12 4c2.5 2.8 2.5 13.2 0 16M12 4c-2.5 2.8-2.5 13.2 0 16" /></svg></Icon>)}
+                {(wifiName || wifiPassword) && (
+                  <button type="button" onClick={() => setWifiOpen((open) => !open)} className="shrink-0" aria-label="Wi-Fi" title="Wi-Fi" aria-expanded={wifiOpen}>
+                    <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-orange-600" strokeWidth="1.8" strokeLinecap="round"><path d="M5 12.5a10 10 0 0 1 14 0M8 15.2a6 6 0 0 1 8 0" /><circle cx="12" cy="18" r="1" fill="currentColor" stroke="none" /></svg></Icon>
+                  </button>
+                )}
+              </div>
+              {playTab && <div ref={setGameDock} className="mt-2 min-h-0 flex-1" />}
+            </div>
+          </motion.div>
+          <motion.div style={{ width: logoSize, height: logoSize, left: logoLeft, top: logoTop }} className="absolute z-10 grid place-items-center overflow-hidden rounded-full bg-white shadow-lg ring-4 ring-white">
+            {business.logoimagepath ? <img alt="" src={asset(business.logoimagepath)} className="h-full w-full object-cover" /> : <span className="font-display text-[1.6rem] font-semibold text-orange-600">{shopMark}</span>}
+          </motion.div>
+          <motion.div style={{ top: coverTop, opacity: coverOpacity }} className="absolute inset-x-6 text-center text-white">
+            <h1 className="text-[1.7rem] font-bold leading-tight">{shopName}</h1>
+            <p className="mt-2 text-sm leading-relaxed text-white/85">{business.tagline || business.description || 'Play, order, and review in one place.'}</p>
+          </motion.div>
+          <motion.div style={{ opacity: hintOpacity }} className="absolute bottom-[5.75rem] left-1/2 -translate-x-1/2 text-white/90">
+            <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+              <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </motion.div>
+        </motion.header>,
+        document.body,
+      )}
+      <div className="relative z-10 mx-auto max-w-xl pb-52 sm:px-4">
+        <div className="relative bg-white px-5 pb-8 pt-3 shadow-xl shadow-stone-950/10 sm:rounded-b-[28px]">
+          {business.address && <p className="mb-3 text-center text-sm text-stone-500">{business.address}</p>}
+          {wifiOpen && (wifiName || wifiPassword) && (
+            <div className="mx-auto mb-3 max-w-xs rounded-2xl bg-orange-50 px-4 py-3 text-left text-sm text-stone-700">
+              {wifiName && <p>Network <span className="font-semibold text-stone-950">{wifiName}</span></p>}
+              {wifiPassword && <p className="mt-1">Password <span className="font-semibold text-stone-950">{wifiPassword}</span></p>}
+              <button type="button" className="mt-2 text-xs font-semibold text-orange-600" onClick={() => { void navigator.clipboard?.writeText([wifiName, wifiPassword].filter(Boolean).join('\n')).then(() => setCopied(true)); }}>{copied ? 'Copied' : 'Copy details'}</button>
+            </div>
+          )}
+          {children}
         </div>
       </div>
       <ShopDock token={token} current={current} menuLabel={menuLabel} />
       {loginOpen && !signedIn && token && <SaveCoinsModal token={token} onClose={() => setLoginOpen(false)} />}
     </div>
+    </GameDockCtx.Provider>
   );
 }
 
@@ -165,8 +274,8 @@ function ShopDock({ token, current, menuLabel }: { token?: string; current: Gues
   const auth = useAuth();
   const signedIn = Boolean(auth.user && auth.user.role === 'Customer' && !auth.user.name.startsWith('Guest_'));
   const { install } = useInstallApp();
-  const item = (active: boolean) => `flex min-w-0 flex-1 flex-col items-center gap-1 px-0.5 py-1 text-[10px] font-semibold leading-none sm:text-[11px] ${active ? 'text-orange-600' : 'text-stone-400'}`;
-  const bubble = (active: boolean) => `grid h-10 w-10 place-items-center rounded-full sm:h-11 sm:w-11 ${active ? 'bg-orange-600 text-white shadow-md shadow-orange-600/30' : ''}`;
+  const item = (active: boolean) => `flex min-w-0 flex-1 flex-col items-center gap-0.5 px-0.5 py-1 text-[9px] font-semibold leading-none sm:text-[11px] ${active ? 'text-orange-600' : 'text-stone-400'}`;
+  const bubble = (active: boolean) => `grid h-8 w-8 place-items-center rounded-full sm:h-10 sm:w-10 ${active ? 'bg-orange-600 text-white shadow-md shadow-orange-600/30' : 'bg-stone-100 text-stone-500'}`;
   return createPortal(
     <nav className={`fixed bottom-0 z-30 px-2 pt-2 ${signedIn ? 'inset-x-0 lg:left-[240px] lg:right-0' : 'inset-x-0'}`} style={{ paddingBottom: 'max(0.55rem, env(safe-area-inset-bottom))' }} aria-label="Shop">
       <div className="mx-auto flex w-full max-w-md items-end justify-between rounded-[1.75rem] bg-white px-1 py-2 shadow-[0_-8px_30px_rgba(28,25,23,0.12)] ring-1 ring-stone-200">
@@ -174,11 +283,11 @@ function ShopDock({ token, current, menuLabel }: { token?: string; current: Gues
         <NavLink to={`/menu/${token}`} className={item(current === 'menu')}><span className={bubble(current === 'menu')}><DockGlyph name={catalogGlyph(menuLabel)} /></span><span className="max-w-full truncate">{menuLabel}</span></NavLink>
         <NavLink to={`/bill/${token}`} className={item(current === 'bill')}><span className={bubble(current === 'bill')}><DockGlyph name="bill" /></span><span className="max-w-full truncate">Bill</span></NavLink>
         <NavLink to={`/review/${token}`} className={item(current === 'review')}><span className={bubble(current === 'review')}><DockGlyph name="review" /></span><span className="max-w-full truncate">Review</span></NavLink>
-        <button type="button" className={item(false)} onClick={() => { void install(); }}><span className={bubble(false)}><DockGlyph name="app" /></span><span className="max-w-full truncate">Get App</span></button>
+        <button type="button" className={item(false)} onClick={() => { void install(); }}><span className={bubble(false)}><DockGlyph name="app" /></span><span className="max-w-full truncate">Get app</span></button>
         {signedIn ? (
           <NavLink to="/customer/dashboard" className={item(false)}><span className={bubble(false)}><DockGlyph name="user" /></span><span className="max-w-full truncate">Account</span></NavLink>
         ) : (
-          <button type="button" className={item(false)} onClick={() => window.dispatchEvent(new Event('rs-open-shop-signin'))}><span className={bubble(false)}><DockGlyph name="user" /></span><span className="max-w-full truncate">Sign In</span></button>
+          <button type="button" className={item(false)} onClick={() => window.dispatchEvent(new Event('rs-open-shop-signin'))}><span className={bubble(false)}><DockGlyph name="user" /></span><span className="max-w-full truncate">Sign in</span></button>
         )}
       </div>
     </nav>,
@@ -356,7 +465,7 @@ function SaveCoinsModal({ onClose, token, coins = 0, prizeName = '' }: { onClose
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     try {
-      const result = await client.login({ mobile: form.get('mobile'), password: form.get('password'), remember: true });
+      const result = await client.login({ mobile: form.get('mobile'), password: form.get('password'), email: String(form.get('email') || '').trim() || undefined, remember: true });
       auth.setSession(result.user, result.accessToken);
       toastOk('Coins saved to your Repeat Mate wallet.');
       onClose();
@@ -369,8 +478,13 @@ function SaveCoinsModal({ onClose, token, coins = 0, prizeName = '' }: { onClose
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     try {
+      const email = String(form.get('email') || '').trim();
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        setError('Enter a valid email, or leave it blank.');
+        return;
+      }
       const guestId = auth.user?.name?.startsWith('Guest_') ? auth.user.id : undefined;
-      const result = await client.registerCustomer({ name: form.get('name'), mobile: form.get('mobile'), password: form.get('password'), token, guestId });
+      const result = await client.registerCustomer({ name: form.get('name'), mobile: form.get('mobile'), email: email || undefined, password: form.get('password'), token, guestId });
       auth.setSession(result.user, result.accessToken);
       toastOk('Account created. Coins are saved.');
       onClose();
@@ -388,12 +502,14 @@ function SaveCoinsModal({ onClose, token, coins = 0, prizeName = '' }: { onClose
         <Form onSubmit={onCreate} className="space-y-3">
           <Field label="Full name" name="name" required />
           <Field label="Mobile" name="mobile" inputMode="numeric" maxLength={10} pattern="[6-9][0-9]{9}" required />
+          <Field label="Email (optional)" name="email" type="email" autoComplete="email" />
           <Field label="Password" name="password" type="password" required />
           <Button type="submit" className="w-full">Create and save</Button>
         </Form>
       ) : (
         <Form onSubmit={onLogin} className="space-y-3">
           <Field label="Mobile" name="mobile" inputMode="numeric" maxLength={10} pattern="[6-9][0-9]{9}" required />
+          <Field label="Email (optional)" name="email" type="email" autoComplete="email" />
           <Field label="Password" name="password" type="password" required />
           <Button type="submit" className="w-full">Sign in and save</Button>
         </Form>
@@ -405,6 +521,7 @@ function SaveCoinsModal({ onClose, token, coins = 0, prizeName = '' }: { onClose
 export function PlayPanel() {
   const { token, hub, color, business } = useGuestPlace();
   const auth = useAuth();
+  const reduce = useReducedMotion();
   const [game, setGame] = useState('SpinWheel');
   const [prizes, setPrizes] = useState<PrizeSlice[]>([]);
   const [result, setResult] = useState<PlayResult | null>(null);
@@ -431,19 +548,47 @@ export function PlayPanel() {
   }
 
   const signedIn = auth.user && !auth.user.name.startsWith('Guest_');
-  const games = (hub?.games?.length ? hub.games : [{ gamecode: 'SpinWheel' }, { gamecode: 'ScratchCard' }, { gamecode: 'MysteryGiftBox' }, { gamecode: 'SlotMachine' }]) as { gamecode: string }[];
+  const gameDock = useContext(GameDockCtx);
+  const gameOrder = ['SpinWheel', 'ScratchCard', 'MysteryGiftBox', 'SlotMachine'];
+  const available = new Set(((hub?.games || []) as { gamecode: string }[]).map((item) => item.gamecode));
+  const games = (available.size ? gameOrder.filter((code) => available.has(code)) : gameOrder).map((gamecode) => ({ gamecode }));
+  const chooser = (
+    <div className="grid h-full grid-cols-2 content-center gap-1.5">
+      {games.map((item) => {
+        const active = game === item.gamecode;
+        return (
+          <button key={item.gamecode} type="button" className={`relative w-full rounded-full px-2 py-1.5 text-xs font-semibold leading-none shadow-sm transition-colors duration-200 ${active ? 'text-white delay-100' : 'bg-white text-stone-600 ring-1 ring-stone-200'}`} onClick={() => { setGame(item.gamecode); setResult(null); setSaveOpen(false); setWinOpen(false); }}>
+            {active && (
+              <motion.span
+                layoutId={reduce ? undefined : 'play-game-choice'}
+                className="absolute inset-0 rounded-full"
+                style={{ background: color }}
+                transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+              />
+            )}
+            <span className="relative">{gameNames[item.gamecode] || item.gamecode}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
 
   return (
     <>
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {games.map((item) => (
-          <button key={item.gamecode} type="button" className="whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold shadow-sm" style={game === item.gamecode ? { background: color, color: '#fff' } : { background: '#fff', color: '#57534e' }} onClick={() => { setGame(item.gamecode); setResult(null); setSaveOpen(false); setWinOpen(false); }}>
-            {gameNames[item.gamecode] || item.gamecode}
-          </button>
-        ))}
-      </div>
-      <section className="mt-4 grid place-items-center overflow-visible rounded-[28px] bg-[radial-gradient(ellipse_at_top,#fff,#fafaf9_46%,#e7e5e4)] px-3 py-6 shadow-[inset_0_1px_0_rgba(255,255,255,.9)] sm:mt-5 sm:px-6 sm:py-8">
-        <GameStage key={game} game={game} prizes={prizes} busy={busy} onPlay={play} onReveal={(value) => { setResult(value); setWinOpen(true); }} accent={color} />
+      {gameDock ? createPortal(chooser, gameDock) : chooser}
+      <section className="mb-4 overflow-visible rounded-[28px] bg-[radial-gradient(ellipse_at_top,#fff,#fafaf9_46%,#e7e5e4)] px-3 py-6 shadow-[inset_0_1px_0_rgba(255,255,255,.9)] sm:px-6 sm:py-8">
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={game}
+            className="grid place-items-center"
+            initial={reduce ? false : { opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={reduce ? undefined : { opacity: 0, y: -8 }}
+            transition={{ duration: 0.22, ease: 'easeOut' }}
+          >
+            <GameStage game={game} prizes={prizes} busy={busy} onPlay={play} onReveal={(value) => { setResult(value); setWinOpen(true); }} accent={color} />
+          </motion.div>
+        </AnimatePresence>
       </section>
       {error && <p className="mt-4 rounded-2xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
       {winOpen && result && !saveOpen && (
@@ -531,7 +676,10 @@ function OffersList() {
   }
   return (
     <section id="offers" className="mt-8 scroll-mt-6 border-t border-stone-100 pt-5">
-      <h2 className="text-base font-bold">Current offers</h2>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-base font-bold">Current offers</h2>
+        {offers.length > 1 && <p className="text-xs font-semibold text-stone-400">{index + 1} of {offers.length}</p>}
+      </div>
       <p className="mt-1 text-xs text-stone-400">Tap an offer to redeem it at this shop.</p>
       {!offers.length && <p className="mt-3 rounded-2xl bg-stone-50 px-3 py-4 text-sm text-stone-400">No active offers right now.</p>}
       {offers.length > 0 && (
@@ -618,8 +766,9 @@ export function MenuPanel() {
       const key = item.categoryid || 0;
       map.set(key, [...(map.get(key) || []), item]);
     });
-    return map;
-  }, [visible]);
+    const order = new Map(categories.map((category, index) => [category.categoryid, index]));
+    return [...map.entries()].sort((a, b) => (order.get(a[0]) ?? 99) - (order.get(b[0]) ?? 99));
+  }, [visible, categories]);
   const count = cart.reduce((sum, line) => sum + line.qty, 0);
   const total = cart.reduce((sum, line) => sum + line.unitPrice * line.qty, 0);
 
@@ -709,7 +858,7 @@ export function MenuPanel() {
 
   return (
     <>
-      <div className="flex gap-2 overflow-x-auto pb-2">
+      <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <button type="button" className="whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold" style={chip(filter === 'all')} onClick={() => setFilter('all')}>{copy.guestAll}</button>
         {categories.map((category) => (
           <button key={category.categoryid} type="button" className="whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold" style={chip(filter === category.categoryid)} onClick={() => setFilter(category.categoryid)}>{category.categoryname}</button>
@@ -721,7 +870,7 @@ export function MenuPanel() {
         </p>
       )}
       <div className={`mt-4 space-y-8 ${count ? 'pb-28' : ''}`}>
-        {[...grouped.entries()].map(([categoryId, rows]) => (
+        {grouped.map(([categoryId, rows]) => (
           <section key={categoryId}>
             <h2 className="text-lg font-bold">{categories.find((category) => category.categoryid === categoryId)?.categoryname || copy.pageTitle}</h2>
             <div className="mt-3 space-y-3">
@@ -910,7 +1059,10 @@ export function BillPanel() {
           <label className="block text-sm"><span className="mb-1.5 block font-medium">Bill amount</span><input value={amount} onChange={(event) => setAmount(event.target.value.replace(/[^\d.]/g, ''))} inputMode="decimal" placeholder="₹" className="h-11 w-full rounded-xl border border-stone-200 px-3" /></label>
           <label className="block text-sm"><span className="mb-1.5 block font-medium">Invoice number</span><input value={invoice} onChange={(event) => setInvoice(event.target.value)} className="h-11 w-full rounded-xl border border-stone-200 px-3" /></label>
           <label className="block text-sm"><span className="mb-1.5 block font-medium">Note</span><textarea value={note} onChange={(event) => setNote(event.target.value)} rows={3} className="w-full rounded-xl border border-stone-200 px-3 py-2" /></label>
-          <label className="block text-sm"><span className="mb-1.5 block font-medium">Bill photo</span><input type="file" accept="image/png,image/jpeg,image/webp" className="block w-full text-sm" onChange={(event) => setFile(event.target.files?.[0] || null)} /></label>
+          <label className="flex h-11 cursor-pointer items-center justify-center rounded-xl border border-dashed border-stone-300 bg-stone-50 px-3 text-sm font-medium text-stone-600">
+            <span className="truncate">{file ? file.name : 'Add a bill photo'}</span>
+            <input type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" onChange={(event) => setFile(event.target.files?.[0] || null)} />
+          </label>
           <Button className="w-full" busy={busy} onClick={submit}>Submit bill</Button>
         </div>
       )}

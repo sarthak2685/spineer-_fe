@@ -407,7 +407,7 @@ function BusinessTypes() {
       <div className="mx-auto mt-12 max-w-7xl">
         <AnimatePresence mode="wait">
           <motion.div key={current.id} initial={reduce ? false : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={reduce ? undefined : { opacity: 0, y: -8 }} transition={{ duration: 0.28, ease }}>
-            <p className="text-center font-mono text-[10px] uppercase tracking-[0.2em] text-stone-400">The Repeat Mate loop · {current.label}</p>
+            <p className="px-2 text-center font-mono text-xs font-semibold uppercase leading-relaxed tracking-[0.12em] text-stone-700">The Repeat Mate loop · {current.label}</p>
             <LoopFlow chain={current.chain} active={beat % current.chain.length} reduce={reduce} />
           </motion.div>
         </AnimatePresence>
