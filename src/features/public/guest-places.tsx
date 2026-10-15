@@ -1,4 +1,4 @@
-import { createContext, FormEvent, ReactNode, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, FormEvent, ReactNode, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, NavLink, useLocation, useParams } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion, useScroll, useTransform } from 'framer-motion';
@@ -73,6 +73,16 @@ export function GuestError({ message }: { message: string }) {
   );
 }
 
+function shopFrame(play: boolean, height = typeof window === 'undefined' ? 720 : window.innerHeight, width = typeof window === 'undefined' ? 1200 : window.innerWidth) {
+  const bar = play ? Math.round(height * 0.33) : 136;
+  return {
+    height,
+    width,
+    bar,
+    banner: play ? Math.round(bar * 0.16) : 40,
+    logoEnd: 44,
+  };
+}
 function Icon({ children, className = 'h-9 w-9' }: { children: ReactNode; className?: string }) {
   return <span className={`grid place-items-center rounded-full bg-stone-100 ring-1 ring-stone-100 ${className}`}>{children}</span>;
 }
@@ -102,21 +112,16 @@ export function PlaceFrame({ business, token, current, children }: { business: R
   const shopName = business.businessname || 'Repeat Mate';
   const shopMark = String(shopName).trim().slice(0, 1).toUpperCase() || 'R';
   const heroRef = useRef<HTMLDivElement>(null);
-  const frame = useRef({ height: 720, width: 390, bar: 180, banner: 36, logoEnd: 36 });
-  const { scrollY } = useScroll();
   const playTab = current === 'play';
-  useEffect(() => {
+  const frame = useRef(shopFrame(playTab));
+  const { scrollY } = useScroll();
+  useLayoutEffect(() => {
     const measure = () => {
       const height = heroRef.current?.offsetHeight || window.innerHeight;
-      const bar = playTab ? Math.round(height * 0.33) : 136;
-      frame.current = {
-        height,
-        width: window.innerWidth,
-        bar,
-        banner: playTab ? Math.round(bar * 0.16) : 40,
-        logoEnd: 44,
-      };
-      scrollY.set(scrollY.get());
+      frame.current = shopFrame(playTab, height, window.innerWidth);
+      const current = scrollY.get();
+      scrollY.set(current + 0.01);
+      scrollY.set(current);
     };
     measure();
     window.addEventListener('resize', measure);
