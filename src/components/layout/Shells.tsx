@@ -85,17 +85,17 @@ export function Marketing({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-orange-50">
       <header className={`sticky top-0 z-20 border-b transition ${scrolled || open ? 'border-stone-200 bg-white/95 shadow-sm shadow-stone-950/5 backdrop-blur' : 'border-transparent bg-orange-50/80 backdrop-blur'}`}>
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-5">
-          <Brand />
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-3 py-3 sm:gap-3 sm:px-5">
+          <span className="min-w-0"><Brand /></span>
           <nav className="hidden items-center gap-1 lg:flex">
             {productLinks.map((link) => <SectionLink key={link.hash} hash={link.hash} current={visible} className={desk}>{link.label}</SectionLink>)}
             <NavLink to="/about" className={pageLink}>About</NavLink>
             <SectionLink hash="demo" current={visible} className={desk}>Contact</SectionLink>
           </nav>
           <div className="flex items-center gap-2">
-            <NavLink to={deskTo} className="inline-flex h-9 items-center rounded-full px-3 text-sm font-semibold text-stone-600 transition hover:bg-orange-50 hover:text-orange-600">{member ? 'Dashboard' : 'Sign in'}</NavLink>
-            <button type="button" className="hidden h-9 items-center rounded-full bg-orange-600 px-4 text-sm font-semibold text-white shadow-lg shadow-orange-600/20 transition hover:bg-orange-700 lg:inline-flex" onClick={openDemo}>Book a Free Demo</button>
-            <button type="button" className="grid h-11 w-11 place-items-center rounded-full border border-stone-200 bg-white lg:hidden" aria-expanded={open} aria-controls="marketing-menu" aria-label={open ? 'Close menu' : 'Open menu'} onClick={() => setOpen((value) => !value)}>
+            <NavLink to={deskTo} className="hidden h-9 shrink-0 items-center rounded-full px-3 text-sm font-semibold text-stone-600 transition hover:bg-orange-50 hover:text-orange-600 sm:inline-flex">{member ? 'Dashboard' : 'Sign in'}</NavLink>
+            <button type="button" className="hidden h-9 shrink-0 items-center rounded-full bg-orange-600 px-4 text-sm font-semibold text-white shadow-lg shadow-orange-600/20 transition hover:bg-orange-700 lg:inline-flex" onClick={openDemo}>Book a Free Demo</button>
+            <button type="button" className="grid h-11 w-11 shrink-0 place-items-center rounded-full border border-stone-200 bg-white lg:hidden" aria-expanded={open} aria-controls="marketing-menu" aria-label={open ? 'Close menu' : 'Open menu'} onClick={() => setOpen((value) => !value)}>
               <span className="relative block h-3.5 w-4" aria-hidden="true">
                 <span className={`absolute left-0 h-0.5 w-4 bg-stone-950 transition ${open ? 'top-1.5 rotate-45' : 'top-0'}`} />
                 <span className={`absolute left-0 top-1.5 h-0.5 w-4 bg-stone-950 transition ${open ? 'opacity-0' : ''}`} />
@@ -105,7 +105,7 @@ export function Marketing({ children }: { children: ReactNode }) {
           </div>
         </div>
         {open && (
-          <nav id="marketing-menu" className="grid gap-1 border-t border-stone-100 px-4 py-3 lg:hidden">
+          <nav id="marketing-menu" className="grid max-h-[min(70dvh,32rem)] gap-1 overflow-y-auto overscroll-contain border-t border-stone-100 px-4 py-3 lg:hidden">
             <button type="button" className="inline-flex min-h-11 items-center justify-center rounded-full bg-orange-600 px-4 text-sm font-semibold text-white" onClick={() => { setOpen(false); openDemo(); }}>Book a Free Demo</button>
             {productLinks.map((link) => <SectionLink key={link.hash} hash={link.hash} current={visible} rail className={item} onNavigate={() => setOpen(false)}>{link.label}</SectionLink>)}
             <NavLink to="/about" className={menuLink} onClick={() => setOpen(false)}>About</NavLink>
@@ -116,48 +116,52 @@ export function Marketing({ children }: { children: ReactNode }) {
         )}
       </header>
       <DemoModalHost />
-      <main>{location.pathname === '/' ? children : <Rise key={location.pathname}>{children}</Rise>}</main>
+      <main className="overflow-x-clip">{location.pathname === '/' ? children : <Rise key={location.pathname}>{children}</Rise>}</main>
       <footer className="bg-stone-950 text-sm text-stone-300">
         <div className="mx-auto max-w-7xl px-5 py-14 sm:px-8">
-          <div className="grid gap-10 lg:grid-cols-[1.25fr_0.8fr_0.9fr_0.7fr]">
+          <div className="grid gap-10 lg:grid-cols-[1.25fr_2.4fr]">
             <div>
               <Brand light />
-              <p className="mt-4 max-w-xs leading-relaxed text-stone-400">One QR for the menu, games, coins, coupons, reviews, and the next visit. Built for counters, tables, and chairs.</p>
+              <p className="mt-4 max-w-xs leading-relaxed text-stone-400">RepeatMate helps businesses grow with smart QR menus, AI reviews, games, rewards, loyalty coins, CRM, notifications, and customer engagement tools.</p>
               <button type="button" className="mt-6 inline-flex min-h-11 items-center rounded-full bg-orange-600 px-5 text-sm font-semibold text-white shadow-lg shadow-orange-600/20 transition hover:bg-orange-700" onClick={openDemo}>Book a Free Demo</button>
               <p className="mt-6 space-y-1 text-sm">
                 <a href="mailto:repeatmate@gmail.com" className="block hover:text-white">repeatmate@gmail.com</a>
                 <a href="tel:+919296756289" className="block hover:text-white">+91 92967 56289</a>
               </p>
             </div>
-            <FooterColumn title="Product">
-              {productLinks.map((link) => <SectionLink key={link.hash} hash={link.hash} light current={visible} className="block py-1">{link.label}</SectionLink>)}
-            </FooterColumn>
-            <FooterColumn title="Accounts">
-              <Linkish to={deskTo} light>{member ? 'Dashboard' : 'Sign in'}</Linkish>
-              <Linkish to="/register" light>Business signup</Linkish>
-              <Linkish to="/customer-register" light>Customer signup</Linkish>
-            </FooterColumn>
-            <FooterColumn title="Company">
-              <Linkish to="/about" light>About</Linkish>
-              <SectionLink hash="demo" light current={visible} className="block py-1">Contact</SectionLink>
-            </FooterColumn>
-          </div>
-          <div className="mt-12 border-t border-white/10 pt-6">
-            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-orange-300">Policies</p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {legalNav.slice(0, 4).map((link) => <Link key={link.to} to={link.to} className="rounded-full border border-white/10 px-3 py-1.5 text-stone-300 transition hover:border-orange-600 hover:text-white">{link.label}</Link>)}
-            </div>
-            <details className="group mt-4">
-              <summary className="inline-flex cursor-pointer list-none items-center gap-2 font-medium text-white [&::-webkit-details-marker]:hidden">
-                All policies
-                <svg viewBox="0 0 20 20" className="h-4 w-4 transition duration-200 group-open:rotate-180" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M5 8l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-              </summary>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {legalNav.slice(4).map((link) => <Link key={link.to} to={link.to} className="rounded-full border border-white/10 px-3 py-1.5 text-stone-300 transition hover:border-orange-600 hover:text-white">{link.label}</Link>)}
+            <div>
+              <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+                <FooterColumn title="Product">
+                  {productLinks.map((link) => <SectionLink key={link.hash} hash={link.hash} light current={visible} className="block py-1">{link.label}</SectionLink>)}
+                </FooterColumn>
+                <FooterColumn title="Accounts">
+                  <Linkish to={deskTo} light>{member ? 'Dashboard' : 'Sign in'}</Linkish>
+                  <Linkish to="/register" light>Business signup</Linkish>
+                  <Linkish to="/customer-register" light>Customer signup</Linkish>
+                </FooterColumn>
+                <FooterColumn title="Company">
+                  <Linkish to="/about" light>About</Linkish>
+                  <SectionLink hash="demo" light current={visible} className="block py-1">Contact</SectionLink>
+                </FooterColumn>
+                <FooterColumn title="Policies">
+                  {legalNav.slice(0, 4).map((link) => <Linkish key={link.to} to={link.to} light>{link.label}</Linkish>)}
+                  <details className="group mt-1">
+                    <summary className="inline-flex cursor-pointer list-none items-center gap-2 py-1 font-medium text-white [&::-webkit-details-marker]:hidden">
+                      All policies
+                      <svg viewBox="0 0 20 20" className="h-4 w-4 transition duration-200 group-open:rotate-180" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M5 8l5 5 5-5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                    </summary>
+                    <div className="mt-1 flex flex-col">
+                      {legalNav.slice(4).map((link) => <Linkish key={link.to} to={link.to} light>{link.label}</Linkish>)}
+                    </div>
+                  </details>
+                </FooterColumn>
               </div>
-            </details>
+            </div>
           </div>
-          <p className="mt-8 text-xs text-stone-500">Repeat Mate · WebGrow.store · One QR. Four games. One wallet.</p>
+          <div className="mt-10 flex flex-col gap-2 border-t border-white/10 pt-6 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-stone-300">RepeatMate — Powered by <a href="https://webgrowstore.com" className="font-semibold text-orange-300 hover:text-white">WebGrowstore.com</a></p>
+            <p className="shrink-0 text-xs text-stone-500">© 2026 RepeatMate. All rights reserved.</p>
+          </div>
         </div>
       </footer>
     </div>

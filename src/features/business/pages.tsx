@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, asset } from '../../api/client';
 import { useAuth } from '../../app/auth';
 import { CsvButton, ListToolbar, Pager, usePagedQuery } from '../../components/list';
-import { ActionIcon, Alert, Button, Card, Field, Form, Modal, PageTitle, Quick, RowMenu, Select, Stat, Status, Area, Table } from '../../components/ui';
+import { ActionIcon, Alert, Button, Card, Field, Form, IconButton, Modal, PageTitle, Quick, RowMenu, Select, Stat, Status, Area, Table } from '../../components/ui';
 import { toastOk } from '../../lib/toast';
 
 function Frame({ children }: { children: React.ReactNode }) {
@@ -359,8 +359,9 @@ export function BusinessProfilePage() {
       <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-stone-400 md:col-span-2">Links</p>
       <Field label="Theme color" name="themeColor" defaultValue={profile.themecolor} /><Field label="Website" name="website" defaultValue={profile.website} />
       <Field label="Facebook" name="facebookUrl" defaultValue={profile.facebookurl} /><Field label="Instagram" name="instagramUrl" defaultValue={profile.instagramurl} />
-      <Field label="LinkedIn" name="linkedinUrl" defaultValue={profile.linkedinurl} /><Field label="X" name="twitterUrl" defaultValue={profile.twitterurl} />
-      <Field label="YouTube" name="youtubeUrl" defaultValue={profile.youtubeurl} /><Field label="WhatsApp for orders" name="whatsappNumber" defaultValue={profile.whatsappnumber} inputMode="numeric" maxLength={10} placeholder="10-digit mobile" />
+      <Field label="Wi‑Fi name" name="wifiName" defaultValue={profile.wifiname} placeholder="Network name" /><Field label="Wi‑Fi password" name="wifiPassword" defaultValue={profile.wifipassword} placeholder="Password guests can use" />
+      <Field label="X" name="twitterUrl" defaultValue={profile.twitterurl} /><Field label="YouTube" name="youtubeUrl" defaultValue={profile.youtubeurl} />
+      <Field label="WhatsApp for orders" name="whatsappNumber" defaultValue={profile.whatsappnumber} inputMode="numeric" maxLength={10} placeholder="10-digit mobile" />
       <Field label="Support email" name="supportEmail" defaultValue={profile.supportemail} /><Field label="Pincode" name="pincode" defaultValue={profile.pincode} />
       <Field label="Latitude" name="latitude" defaultValue={profile.latitude} /><Field label="Longitude" name="longitude" defaultValue={profile.longitude} />
       <Field label="Google map URL" name="googleMapUrl" defaultValue={profile.googlemapurl} /><Field label="Google review URL" name="googleReviewUrl" defaultValue={profile.googlereviewurl} />
@@ -522,16 +523,81 @@ export function GameAdminPage() {
   const [prizes, setPrizes] = useState<any[]>([]);
   const [configId, setConfigId] = useState<number | null>(null);
   const [addOpen, setAddOpen] = useState(false);
-  useEffect(() => { api<any>(`/business/games/${code}`).then((data) => { const rows = Array.isArray(data) ? data : data.configs || []; setConfigs(rows); const first = rows[0]; if (first) { setConfigId(first.gameconfigurationid); api(`/business/prizes/${first.gameconfigurationid}`).then(setPrizes); } }); }, [code]);
   const tabs = ['SpinWheel', 'ScratchCard', 'MysteryGiftBox', 'SlotMachine'];
+  const total = prizes.reduce((sum, prize) => sum + Number(prize.winningpercentage || 0), 0);
+
+  async function load(prefer?: number | null) {
+    const data = await api<any>(`/business/games/${code}`);
+    const rows = Array.isArray(data) ? data : data.configs || [];
+    setConfigs(rows);
+    const picked = rows.find((row: { gameconfigurationid: number }) => row.gameconfigurationid === prefer) || rows[0];
+    if (!picked) {
+      setConfigId(null);
+      setPrizes([]);
+      return;
+    }
+    setConfigId(picked.gameconfigurationid);
+    setPrizes(await api(`/business/prizes/${picked.gameconfigurationid}`));
+  }
+
+  useEffect(() => { load().catch(() => { setConfigs([]); setPrizes([]); }); }, [code]);
+
+  async function openConfig(id: number) {
+    setConfigId(id);
+    setPrizes(await api(`/business/prizes/${id}`));
+  }
+
   return <Frame>
-    <PageTitle title="Games" text="Prize chances are still decided on the server." actions={configId ? <Button onClick={() => setAddOpen(true)}>Add sector</Button> : undefined} />
+    <PageTitle title="Games" text="The percentages on the configuration marked In use are the chances a customer gets. They should add up to 100." actions={configId ? <Button onClick={() => setAddOpen(true)}>Add sector</Button> : undefined} />
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
       <div className="flex gap-1 overflow-x-auto rounded-2xl bg-white p-1 shadow-sm ring-1 ring-stone-200">{tabs.map((tab) => <Link key={tab} to={`/business/games/${tab}`} className={`shrink-0 rounded-xl px-3 py-2 text-sm font-semibold ${tab === code ? 'bg-orange-600 text-white' : 'text-stone-500 hover:bg-stone-100'}`}>{tab.replace(/([A-Z])/g, ' $1').trim()}</Link>)}</div>
-      <Button kind="ghost" onClick={() => api(`/business/games/${code}`, { method: 'POST', body: JSON.stringify({ name: `New ${code}` }) }).then(() => api<any>(`/business/games/${code}`).then((data) => setConfigs(Array.isArray(data) ? data : data.configs || [])))}>New configuration</Button>
+      <Button kind="ghost" onClick={async () => { const created = await api<{ id: number }>(`/business/games/${code}`, { method: 'POST', body: JSON.stringify({ name: `New ${code}` }) }); await load(created.id); }}>New configuration</Button>
     </div>
-    <div className="space-y-2">{configs.map((config) => <Card key={config.gameconfigurationid} className={config.gameconfigurationid === configId ? 'ring-2 ring-orange-600' : ''}><button className="w-full text-left font-medium" onClick={() => { setConfigId(config.gameconfigurationid); api(`/business/prizes/${config.gameconfigurationid}`).then(setPrizes); }}>{config.configurationname}</button></Card>)}</div>
-    <div className="mt-4 space-y-2">{prizes.map((prize) => <Card key={prize.prizeconfigurationid}><p className="font-semibold">{prize.prizename}</p><p className="text-sm text-stone-500">{prize.winningpercentage}%</p></Card>)}</div>
+    <div className="space-y-2">{configs.map((config) => (
+      <Card key={config.gameconfigurationid} className={config.gameconfigurationid === configId ? 'ring-2 ring-orange-600' : ''}>
+        <div className="flex items-center justify-between gap-3">
+          <button type="button" className="min-w-0 flex-1 text-left" onClick={() => openConfig(config.gameconfigurationid)}>
+            <p className="font-medium text-stone-950">{config.configurationname}</p>
+            <p className="text-xs text-stone-500">{config.isactive ? 'In use on the shop' : 'Saved, not in use'}</p>
+          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {!config.isactive && <Button type="button" kind="ghost" className="!h-8 px-3" onClick={() => api(`/business/games/${config.gameconfigurationid}/active`, { method: 'POST', body: JSON.stringify({ isActive: true }) }).then(() => load(config.gameconfigurationid))}>Use this</Button>}
+            <IconButton type="button" kind="ghost" label={`Delete ${config.configurationname}`} onClick={() => { if (!window.confirm(`Delete ${config.configurationname}? Its sectors are removed too.`)) return; return api(`/business/games/${config.gameconfigurationid}/delete`, { method: 'POST' }).then(() => load(config.gameconfigurationid === configId ? null : configId)); }}><ActionIcon name="trash" /></IconButton>
+          </div>
+        </div>
+      </Card>
+    ))}</div>
+    {!!prizes.length && <p className={`mb-2 mt-4 text-sm ${total === 100 ? 'text-stone-500' : 'text-rose-600'}`}>Chances add up to {total}%. {total === 100 ? 'A customer’s spin uses these odds.' : 'Set them to 100 so every spin lands on a sector you chose.'}</p>}
+    <div className={`space-y-2 ${prizes.length ? '' : 'mt-4'}`}>{prizes.map((prize) => (
+      <Card key={prize.prizeconfigurationid}>
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-semibold text-stone-950">{prize.prizename}</p>
+            <p className="text-sm text-stone-500">{Number(prize.coins)} coins</p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <label className="flex items-center gap-1 text-sm font-semibold text-stone-700">
+              <input
+                key={`${prize.prizeconfigurationid}-${prize.winningpercentage}`}
+                type="number"
+                min={0}
+                max={100}
+                defaultValue={Number(prize.winningpercentage)}
+                aria-label={`Winning chance for ${prize.prizename}`}
+                className="h-9 w-16 rounded-xl border border-stone-200 px-2 text-right"
+                onBlur={(event) => {
+                  const next = Number(event.target.value);
+                  if (!Number.isFinite(next) || next === Number(prize.winningpercentage)) return;
+                  api('/business/prizes', { method: 'POST', body: JSON.stringify({ id: prize.prizeconfigurationid, configId, prizeName: prize.prizename, coins: prize.coins, winningPercentage: next }) }).then(() => { if (configId) return api(`/business/prizes/${configId}`).then(setPrizes); });
+                }}
+              />
+              %
+            </label>
+            <IconButton type="button" kind="ghost" label={`Delete ${prize.prizename}`} onClick={() => api(`/business/prizes/${prize.prizeconfigurationid}/delete`, { method: 'POST' }).then(() => { if (configId) return api(`/business/prizes/${configId}`).then(setPrizes); })}><ActionIcon name="trash" /></IconButton>
+          </div>
+        </div>
+      </Card>
+    ))}</div>
     {addOpen && configId && (
       <Modal title="Add sector" onClose={() => setAddOpen(false)}>
         <Form className="grid gap-3" onSubmit={(e) => { e.preventDefault(); const form = Object.fromEntries(new FormData(e.currentTarget).entries()); return api('/business/prizes', { method: 'POST', body: JSON.stringify({ ...form, configId }) }).then(() => { setAddOpen(false); api(`/business/prizes/${configId}`).then(setPrizes); }); }}>

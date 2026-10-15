@@ -113,6 +113,40 @@ export function ErrorPage() {
   );
 }
 
+const loyaltyPoints = [
+  { title: 'One QR Code. Endless Possibilities.', text: 'Let customers explore your digital menu, play games, earn rewards, and discover your offers with a single QR scan.' },
+  { title: 'Rewards That Bring Customers Back.', text: 'Let customers earn loyalty coins, unlock coupons, and redeem rewards that encourage repeat visits.' },
+  { title: 'Your Business. Smarter Customer Engagement.', text: 'Manage customers, track activity, collect feedback, and send promotional notifications from one dashboard.' },
+];
+
+function LoyaltyPanel() {
+  return (
+    <Rise className="flex flex-col justify-center rounded-[28px] border border-orange-200/80 bg-gradient-to-br from-orange-50 via-white to-amber-50 p-7 sm:p-9">
+      <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-orange-600">RepeatMate — Smart customer loyalty</p>
+      <h2 className="mt-3 font-display text-3xl font-semibold leading-tight tracking-tight text-stone-950 sm:text-4xl">
+        Turn every customer into a repeat customer.
+      </h2>
+      <p className="mt-3 max-w-lg text-sm leading-relaxed text-stone-600 sm:text-base">
+        Attract new customers, reward loyal ones, and bring people back with one smart QR-powered platform. Perfect for restaurants, cafés, salons, bakeries, and local businesses.
+      </p>
+      <ul className="mt-8 space-y-5">
+        {loyaltyPoints.map((point, index) => (
+          <li key={point.title} className="flex gap-4">
+            <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-orange-600 text-xs font-bold text-white">{String(index + 1).padStart(2, '0')}</span>
+            <span>
+              <span className="block text-sm font-semibold text-stone-950">{point.title}</span>
+              <span className="mt-1 block text-sm leading-relaxed text-stone-600">{point.text}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-8 text-sm text-stone-500">
+        One platform to engage customers, build loyalty, and grow repeat business.
+      </p>
+    </Rise>
+  );
+}
+
 export function LoginPage() {
   const auth = useAuth();
   const navigate = useNavigate();
@@ -127,11 +161,6 @@ export function LoginPage() {
     navigate(result.redirect || homeFor(result.user.role));
   }
   if (hold) return null;
-  const productPoints = [
-    { title: 'One counter QR', text: 'Guests play games, order from the menu, and leave a review from the same link. No app download.' },
-    { title: 'Coins that come back', text: 'Wins land in one wallet. Rewards and claims bring the same person to your desk again.' },
-    { title: 'Desk that runs the visit', text: 'Owners manage orders, redemptions, and claims. Guests keep the same mobile account across shops.' },
-  ];
   return (
     <Marketing>
       <section className="relative overflow-hidden px-5 py-12 lg:py-16">
@@ -162,29 +191,7 @@ export function LoginPage() {
               </Link>
             </div>
           </Lift>
-          <Rise className="flex flex-col justify-center rounded-[28px] border border-orange-200/80 bg-gradient-to-br from-orange-50 via-white to-amber-50 p-7 sm:p-9">
-            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-orange-600">Repeat Mate</p>
-            <h2 className="mt-3 font-display text-3xl font-semibold leading-tight tracking-tight text-stone-950 sm:text-4xl">
-              Transform every customer visit into rewards.
-            </h2>
-            <p className="mt-3 max-w-lg text-sm leading-relaxed text-stone-600 sm:text-base">
-              Chai shops, bakeries, cafes, salons, and stores put one QR on the counter. Guests play, earn coins, order, and come back — no app download.
-            </p>
-            <ul className="mt-8 space-y-5">
-              {productPoints.map((point, index) => (
-                <li key={point.title} className="flex gap-4">
-                  <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-orange-600 text-xs font-bold text-white">{String(index + 1).padStart(2, '0')}</span>
-                  <span>
-                    <span className="block text-sm font-semibold text-stone-950">{point.title}</span>
-                    <span className="mt-1 block text-sm leading-relaxed text-stone-600">{point.text}</span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-            <p className="mt-8 text-sm text-stone-500">
-              Owners land on the store desk. Guests open the same wallet.
-            </p>
-          </Rise>
+          <LoyaltyPanel />
         </div>
       </section>
     </Marketing>
@@ -403,49 +410,33 @@ export function CustomerRegisterPage() {
     } catch (err) { setError(err instanceof Error ? err.message : 'Could not register.'); }
   }
   if (hold) return null;
-  const guestPoints = [
-    { title: 'One mobile', text: 'The same 10-digit number signs you in at every shop.' },
-    { title: 'Coins stay put', text: 'A win from a guest play can move onto this account.' },
-    { title: 'No app', text: 'Play, order, and review in the browser from the counter QR.' },
-  ];
+  const shopToken = params.get('token') || auth.user?.businessToken || '';
   return (
     <Marketing>
       <section className="relative overflow-hidden px-5 py-12 lg:py-16">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(720px_320px_at_15%_0%,rgba(234,88,12,.18),transparent_55%),radial-gradient(520px_280px_at_90%_20%,rgba(245,158,11,.14),transparent_50%)]" />
-        <div className="relative mx-auto grid max-w-6xl gap-10 lg:grid-cols-[0.92fr_1.08fr] lg:items-stretch">
-          <Lift className="rounded-[28px] border border-stone-200 bg-white/95 p-6 shadow-xl shadow-stone-950/10 sm:p-8">
+        <div className="relative mx-auto grid max-w-6xl items-start gap-8 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)]">
+          <Lift className="rounded-[28px] border border-stone-200 bg-white/95 p-5 shadow-xl shadow-stone-950/10 sm:p-6">
             <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-orange-600">For guests</p>
-            <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight text-stone-950 sm:text-4xl">Create a customer account</h1>
-            <p className="mt-2 text-sm text-stone-500">{guestId ? 'This keeps the coins from your guest play.' : 'Use a 10-digit mobile and a password of at least 6 characters.'}</p>
-            <Form onSubmit={onSubmit} className="mt-6 space-y-4">
+            <h1 className="mt-2 font-display text-2xl font-semibold tracking-tight text-stone-950 sm:text-3xl">Create a customer account</h1>
+            <p className="mt-1 text-sm text-stone-500">{guestId ? 'This keeps the coins from your guest play.' : 'Use a 10-digit mobile and a password of at least 6 characters.'}</p>
+            <Form onSubmit={onSubmit} className="mt-4 space-y-3">
               {error && <Alert text={error} />}
               <Field label="Full name" name="name" required />
               <Field label="Mobile" name="mobile" inputMode="numeric" maxLength={10} pattern="[6-9][0-9]{9}" required />
-              <Field label="Email" name="email" />
-              <Field label="Password" name="password" type="password" required />
-              <Field label="Business token, if you scanned a QR" name="token" defaultValue={params.get('token') || auth.user?.businessToken || ''} />
-              <p className="text-sm text-stone-600">By creating an account you agree to the <Link className="font-semibold text-orange-600" to="/terms">Terms</Link> and <Link className="font-semibold text-orange-600" to="/privacy">Privacy Policy</Link>.</p>
+              <Field label="Email (optional)" name="email" type="email" />
+              <Field label="Password" name="password" type="password" required minLength={6} />
+              <p className="-mt-1 text-xs text-stone-500">At least 6 characters.</p>
+              {shopToken && <Field label="Business token" name="token" defaultValue={shopToken} />}
+              <label className="flex items-start gap-3 rounded-2xl border border-stone-200 px-3 py-3 text-sm text-stone-600">
+                <input name="termsAccepted" type="checkbox" required className="mt-0.5 h-4 w-4 rounded border-stone-300" />
+                <span>I accept the <Link className="font-semibold text-orange-600" to="/terms" target="_blank">Terms</Link> and <Link className="font-semibold text-orange-600" to="/privacy" target="_blank">Privacy Policy</Link>.</span>
+              </label>
               <Button type="submit" className="w-full">Create account</Button>
             </Form>
-            <p className="mt-6 text-sm text-stone-500">Already have an account? <Link className="font-semibold text-orange-600" to="/login">Sign in</Link></p>
+            <p className="mt-4 text-sm text-stone-500">Already have an account? <Link className="font-semibold text-orange-600" to="/login">Sign in</Link> <span className="text-stone-300">·</span> Opening a shop? <Link className="font-semibold text-orange-600" to="/register">Create a business</Link></p>
           </Lift>
-          <Rise className="flex flex-col justify-center rounded-[28px] border border-orange-200/80 bg-gradient-to-br from-orange-50 via-white to-amber-50 p-7 sm:p-9">
-            <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-orange-600">Repeat Mate</p>
-            <h2 className="mt-3 font-display text-3xl font-semibold leading-tight tracking-tight text-stone-950 sm:text-4xl">Keep the coins from every visit.</h2>
-            <p className="mt-3 max-w-lg text-sm leading-relaxed text-stone-600 sm:text-base">One account for games, orders, and rewards. The shop still sees you by the mobile you enter here.</p>
-            <ul className="mt-8 space-y-5">
-              {guestPoints.map((point, index) => (
-                <li key={point.title} className="flex gap-4">
-                  <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-orange-600 text-xs font-bold text-white">{String(index + 1).padStart(2, '0')}</span>
-                  <span>
-                    <span className="block text-sm font-semibold text-stone-950">{point.title}</span>
-                    <span className="mt-1 block text-sm leading-relaxed text-stone-600">{point.text}</span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-            <p className="mt-8 text-sm text-stone-500">Opening a shop? <Link className="font-semibold text-orange-600" to="/register">Create a business</Link></p>
-          </Rise>
+          <LoyaltyPanel />
         </div>
       </section>
     </Marketing>

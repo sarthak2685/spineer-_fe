@@ -76,6 +76,8 @@ const tabOrder: GuestTab[] = ['play', 'menu', 'bill', 'review'];
 export function PlaceFrame({ business, token, current, children }: { business: Record<string, any>; token?: string; current: GuestTab; children: ReactNode }) {
   const auth = useAuth();
   const [loginOpen, setLoginOpen] = useState(false);
+  const [wifiOpen, setWifiOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
   const signedIn = Boolean(auth.user && !auth.user.name.startsWith('Guest_'));
   useEffect(() => {
     const open = () => setLoginOpen(true);
@@ -90,6 +92,13 @@ export function PlaceFrame({ business, token, current, children }: { business: R
       {icon}{label}
     </a>
   );
+  const web = (value?: string) => {
+    const text = String(value || '').trim();
+    if (!text) return '';
+    return /^https?:\/\//i.test(text) ? text : `https://${text}`;
+  };
+  const wifiName = String(business.wifiname || '').trim();
+  const wifiPassword = String(business.wifipassword || '').trim();
   const menuLabel = catalogCopy(business.businesstype).tab;
   return (
     <div className="public-enter min-h-screen bg-orange-50 text-stone-900">
@@ -104,11 +113,29 @@ export function PlaceFrame({ business, token, current, children }: { business: R
           <h1 className="truncate text-center text-2xl font-bold" title={business.businessname || 'Repeat Mate'}>{business.businessname || 'Repeat Mate'}</h1>
           <p className="mt-1 text-center text-sm text-stone-500">{business.tagline || business.description || 'Play, order, and review in one place.'}</p>
           {business.address && <p className="mt-2 text-center text-sm text-stone-600">{business.address}</p>}
-          <div className="mt-5 flex flex-wrap justify-center gap-6">
-            {business.phone && link(`tel:${business.phone}`, 'Call', <Icon><svg viewBox="0 0 24 24" className="h-4 w-4 fill-stone-700"><path d="M6.6 10.8a15 15 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11 11 0 0 0 3.5.55 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 7a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11 11 0 0 0 .55 3.5 1 1 0 0 1-.25 1L6.6 10.8z" /></svg></Icon>)}
-            {wa && link(`https://wa.me/${wa}`, 'WhatsApp', <Icon><svg viewBox="0 0 24 24" className="h-4 w-4 fill-emerald-600"><path d="M12 3a9 9 0 0 0-7.8 13.5L3 21l4.7-1.2A9 9 0 1 0 12 3zm5 12.4c-.2.6-1.2 1.1-1.7 1.1-.4.1-.9.2-3-.8-2.5-1.2-4.1-3.6-4.2-3.8-.2-.2-1.2-1.6-1.2-3s.7-2.1 1-2.4c.2-.2.5-.3.8-.3h.6c.2 0 .4 0 .6.5.2.6.8 2 .8 2.1.1.1 0 .3-.1.5l-.4.5c-.1.2-.3.3-.1.6.2.3.7 1.2 1.5 1.9 1 .9 1.8 1.2 2.1 1.3.3.1.4.1.6-.1l.7-.8c.2-.2.4-.2.6-.1l2 .9c.2.1.4.2.4.4.1.2 0 .8-.2 1.3z" /></svg></Icon>)}
-            {business.instagramurl && link(business.instagramurl, 'Instagram', <Icon><svg viewBox="0 0 24 24" className="h-4 w-4 fill-pink-600"><path d="M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4zm5 5a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm6.2-.9a1 1 0 1 0 0 2 1 1 0 0 0 0-2zM12 10a2 2 0 1 1 0 4 2 2 0 0 1 0-4z" /></svg></Icon>)}
-            {business.facebookurl && link(business.facebookurl, 'Facebook', <Icon><svg viewBox="0 0 24 24" className="h-4 w-4 fill-blue-600"><path d="M14 9h3V6h-3c-2.2 0-4 1.8-4 4v2H8v3h2v7h3v-7h2.6l.4-3H13v-2c0-.6.4-1 1-1z" /></svg></Icon>)}
+          <div className="mt-5">
+            <div className="flex flex-wrap justify-center gap-6">
+              {business.phone && link(`tel:${business.phone}`, 'Call', <Icon><svg viewBox="0 0 24 24" className="h-4 w-4 fill-stone-700"><path d="M6.6 10.8a15 15 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11 11 0 0 0 3.5.55 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 7a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11 11 0 0 0 .55 3.5 1 1 0 0 1-.25 1L6.6 10.8z" /></svg></Icon>)}
+              {wa && link(`https://wa.me/${wa}`, 'WhatsApp', <Icon><svg viewBox="0 0 24 24" className="h-4 w-4 fill-emerald-600"><path d="M12 3a9 9 0 0 0-7.8 13.5L3 21l4.7-1.2A9 9 0 1 0 12 3zm5 12.4c-.2.6-1.2 1.1-1.7 1.1-.4.1-.9.2-3-.8-2.5-1.2-4.1-3.6-4.2-3.8-.2-.2-1.2-1.6-1.2-3s.7-2.1 1-2.4c.2-.2.5-.3.8-.3h.6c.2 0 .4 0 .6.5.2.6.8 2 .8 2.1.1.1 0 .3-.1.5l-.4.5c-.1.2-.3.3-.1.6.2.3.7 1.2 1.5 1.9 1 .9 1.8 1.2 2.1 1.3.3.1.4.1.6-.1l.7-.8c.2-.2.4-.2.6-.1l2 .9c.2.1.4.2.4.4.1.2 0 .8-.2 1.3z" /></svg></Icon>)}
+              {business.instagramurl && link(web(business.instagramurl), 'Instagram', <Icon><svg viewBox="0 0 24 24" className="h-4 w-4 fill-pink-600"><path d="M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4zm5 5a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm6.2-.9a1 1 0 1 0 0 2 1 1 0 0 0 0-2zM12 10a2 2 0 1 1 0 4 2 2 0 0 1 0-4z" /></svg></Icon>)}
+              {business.facebookurl && link(web(business.facebookurl), 'Facebook', <Icon><svg viewBox="0 0 24 24" className="h-4 w-4 fill-blue-600"><path d="M14 9h3V6h-3c-2.2 0-4 1.8-4 4v2H8v3h2v7h3v-7h2.6l.4-3H13v-2c0-.6.4-1 1-1z" /></svg></Icon>)}
+              {business.twitterurl && link(web(business.twitterurl), 'X', <Icon><svg viewBox="0 0 24 24" className="h-4 w-4 fill-stone-950"><path d="M14.7 4h2.4l-5.2 6 6.1 8h-4.8l-3.8-5-4.3 5H2.7l5.6-6.4L2.5 4h4.9l3.4 4.5L14.7 4zm-.8 12.6h1.3L7.2 5.3H5.8l8.1 11.3z" /></svg></Icon>)}
+              {business.youtubeurl && link(web(business.youtubeurl), 'YouTube', <Icon><svg viewBox="0 0 24 24" className="h-4 w-4 fill-red-600"><path d="M23 12.2s0-3.2-.4-4.6c-.2-.9-.9-1.6-1.8-1.8C19.2 5.4 12 5.4 12 5.4s-7.2 0-8.8.4c-.9.2-1.6.9-1.8 1.8C1 9 1 12.2 1 12.2s0 3.2.4 4.6c.2.9.9 1.6 1.8 1.8 1.6.4 8.8.4 8.8.4s7.2 0 8.8-.4c.9-.2 1.6-.9 1.8-1.8.4-1.4.4-4.6.4-4.6zM9.8 15.5v-6.6l6.2 3.3-6.2 3.3z" /></svg></Icon>)}
+              {business.website && link(web(business.website), 'Website', <Icon><svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-orange-600" strokeWidth="1.8"><circle cx="12" cy="12" r="8" /><path d="M4 12h16M12 4c2.5 2.8 2.5 13.2 0 16M12 4c-2.5 2.8-2.5 13.2 0 16" /></svg></Icon>)}
+              {(wifiName || wifiPassword) && (
+                <button type="button" onClick={() => setWifiOpen((open) => !open)} className="grid justify-items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-stone-500" aria-expanded={wifiOpen}>
+                  <Icon><svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-orange-600" strokeWidth="1.8" strokeLinecap="round"><path d="M5 12.5a10 10 0 0 1 14 0M8 15.2a6 6 0 0 1 8 0" /><circle cx="12" cy="18" r="1" fill="currentColor" stroke="none" /></svg></Icon>
+                  Wi‑Fi
+                </button>
+              )}
+            </div>
+            {wifiOpen && (wifiName || wifiPassword) && (
+              <div className="mx-auto mt-4 max-w-xs rounded-2xl bg-orange-50 px-4 py-3 text-left text-sm text-stone-700">
+                {wifiName && <p>Network <span className="font-semibold text-stone-950">{wifiName}</span></p>}
+                {wifiPassword && <p className="mt-1">Password <span className="font-semibold text-stone-950">{wifiPassword}</span></p>}
+                <button type="button" className="mt-2 text-xs font-semibold text-orange-600" onClick={() => { void navigator.clipboard?.writeText([wifiName, wifiPassword].filter(Boolean).join('\n')).then(() => setCopied(true)); }}>{copied ? 'Copied' : 'Copy details'}</button>
+              </div>
+            )}
           </div>
           <div className="mt-6">{children}</div>
         </div>
@@ -320,7 +347,7 @@ function QtyControl({ color, qty, onChange }: { color: string; qty: number; onCh
 
 const gameNames: Record<string, string> = { SpinWheel: 'Spin wheel', ScratchCard: 'Scratch card', MysteryGiftBox: 'Mystery box', SlotMachine: 'Slots' };
 
-function SaveCoinsModal({ onClose, token }: { onClose: () => void; token: string }) {
+function SaveCoinsModal({ onClose, token, coins = 0, prizeName = '' }: { onClose: () => void; token: string; coins?: number; prizeName?: string }) {
   const auth = useAuth();
   const [mode, setMode] = useState<'create' | 'login'>('create');
   const [error, setError] = useState('');
@@ -351,7 +378,7 @@ function SaveCoinsModal({ onClose, token }: { onClose: () => void; token: string
   }
 
   return (
-    <Modal title="Save these coins" text="Keep the prize in a wallet, or sign in if you already have one." onClose={onClose}>
+    <Modal title={coins > 0 ? `Save ${coins} coins` : 'Save these coins'} text={prizeName ? `${prizeName}. Keep it in a wallet, or sign in if you already have one.` : 'Keep the prize in a wallet, or sign in if you already have one.'} onClose={onClose}>
       <div className="mb-4 grid grid-cols-2 rounded-xl bg-stone-100 p-1">
         <button type="button" className={`h-10 rounded-lg text-sm font-semibold ${mode === 'create' ? 'bg-white shadow-sm' : 'text-stone-500'}`} onClick={() => { setMode('create'); setError(''); }}>Create account</button>
         <button type="button" className={`h-10 rounded-lg text-sm font-semibold ${mode === 'login' ? 'bg-white shadow-sm' : 'text-stone-500'}`} onClick={() => { setMode('login'); setError(''); }}>Already exist? Login</button>
@@ -384,10 +411,13 @@ export function PlayPanel() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [saveOpen, setSaveOpen] = useState(false);
+  const [winOpen, setWinOpen] = useState(false);
 
   async function play() {
     setError('');
     setResult(null);
+    setSaveOpen(false);
+    setWinOpen(false);
     setBusy(true);
     try {
       const data = await api<PlayResult & { prizes?: PrizeSlice[]; accessToken?: string; user?: typeof auth.user }>(`/public/play`, { method: 'POST', body: JSON.stringify({ token, gameCode: game }) });
@@ -403,33 +433,30 @@ export function PlayPanel() {
   const signedIn = auth.user && !auth.user.name.startsWith('Guest_');
   const games = (hub?.games?.length ? hub.games : [{ gamecode: 'SpinWheel' }, { gamecode: 'ScratchCard' }, { gamecode: 'MysteryGiftBox' }, { gamecode: 'SlotMachine' }]) as { gamecode: string }[];
 
-  useEffect(() => {
-    if (result && !signedIn) setSaveOpen(true);
-  }, [result, signedIn]);
-
   return (
     <>
       <div className="flex gap-2 overflow-x-auto pb-1">
         {games.map((item) => (
-          <button key={item.gamecode} type="button" className="whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold" style={game === item.gamecode ? { background: color, color: '#fff' } : { background: '#f1f5f9', color: '#475569' }} onClick={() => { setGame(item.gamecode); setResult(null); }}>
+          <button key={item.gamecode} type="button" className="whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold shadow-sm" style={game === item.gamecode ? { background: color, color: '#fff' } : { background: '#fff', color: '#57534e' }} onClick={() => { setGame(item.gamecode); setResult(null); setSaveOpen(false); setWinOpen(false); }}>
             {gameNames[item.gamecode] || item.gamecode}
           </button>
         ))}
       </div>
-      <section className="mt-4 grid place-items-center overflow-visible rounded-3xl bg-stone-100 px-2 py-5 sm:mt-5 sm:px-4 sm:py-6">
-        <GameStage key={game} game={game} prizes={prizes} busy={busy} onPlay={play} onReveal={setResult} />
+      <section className="mt-4 grid place-items-center overflow-visible rounded-[28px] bg-[radial-gradient(ellipse_at_top,#fff,#fafaf9_46%,#e7e5e4)] px-3 py-6 shadow-[inset_0_1px_0_rgba(255,255,255,.9)] sm:mt-5 sm:px-6 sm:py-8">
+        <GameStage key={game} game={game} prizes={prizes} busy={busy} onPlay={play} onReveal={(value) => { setResult(value); setWinOpen(true); }} accent={color} />
       </section>
       {error && <p className="mt-4 rounded-2xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p>}
-      {result && (
-        <div className="mt-5 rounded-2xl bg-amber-50 p-5 text-center ring-1 ring-amber-100">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-500">You won</p>
-          <p className="mt-1 text-3xl font-semibold">{result.prizeName}</p>
-          <p className="text-sm font-semibold text-amber-500">{result.coins} coins</p>
-        </div>
+      {winOpen && result && !saveOpen && (
+        <Modal title="You won" text={result.prizeName} onClose={() => { setWinOpen(false); if (!signedIn) setSaveOpen(true); }}>
+          <p className="text-center text-4xl font-semibold text-amber-600">{result.coins} coins</p>
+          {signedIn ? (
+            <p className="mt-4 text-center text-sm text-stone-500">Saved to your Repeat Mate wallet. <Link className="font-semibold text-orange-600" to="/customer/wallet">Open wallet</Link></p>
+          ) : (
+            <Button type="button" className="mt-5 w-full" onClick={() => { setWinOpen(false); setSaveOpen(true); }}>Save these coins</Button>
+          )}
+        </Modal>
       )}
-      {result && signedIn && <p className="mt-4 text-center text-sm text-stone-500">Saved to your Repeat Mate wallet. <Link className="font-semibold text-orange-600" to="/customer/wallet">Open wallet</Link></p>}
-      {result && !signedIn && !saveOpen && <button type="button" className="mx-auto mt-4 block text-sm font-semibold text-orange-600" onClick={() => setSaveOpen(true)}>Sign in to keep these coins</button>}
-      {saveOpen && !signedIn && <SaveCoinsModal token={token} onClose={() => setSaveOpen(false)} />}
+      {saveOpen && result && !signedIn && <SaveCoinsModal token={token} coins={result.coins} prizeName={result.prizeName} onClose={() => setSaveOpen(false)} />}
       <OffersList />
       {!business && null}
     </>
@@ -489,28 +516,52 @@ function OffersList() {
     toastOk(result.message || 'This offer is pending until the shop approves it.');
     setStatuses((current) => ({ ...current, [offer.rewardid]: 'Pending' }));
   }
+  const scroller = useRef<HTMLDivElement>(null);
+  const [index, setIndex] = useState(0);
+  function onScroll() {
+    const node = scroller.current;
+    if (!node || !node.clientWidth) return;
+    const next = Math.round(node.scrollLeft / node.clientWidth);
+    setIndex(Math.min(offers.length - 1, Math.max(0, next)));
+  }
+  function go(next: number) {
+    const node = scroller.current;
+    if (!node) return;
+    node.scrollTo({ left: next * node.clientWidth, behavior: 'smooth' });
+  }
   return (
     <section id="offers" className="mt-8 scroll-mt-6 border-t border-stone-100 pt-5">
       <h2 className="text-base font-bold">Current offers</h2>
       <p className="mt-1 text-xs text-stone-400">Tap an offer to redeem it at this shop.</p>
       {!offers.length && <p className="mt-3 rounded-2xl bg-stone-50 px-3 py-4 text-sm text-stone-400">No active offers right now.</p>}
       {offers.length > 0 && (
-        <div className="mt-3 space-y-3">
-          {offers.map((offer) => {
-            const status = statuses[offer.rewardid];
-            const closed = status === 'Pending' || status === 'Approved';
-            return (
-              <button key={offer.rewardid} type="button" disabled={closed} className="flex w-full items-center gap-3 rounded-2xl border border-amber-100 bg-amber-50/70 p-3 text-left disabled:opacity-70" onClick={() => redeem(offer)}>
-                <OfferMark image={offer.imagepath} />
-                <div className="min-w-0 flex-1">
-                  <p className="font-semibold leading-snug text-stone-950">{offer.rewardname}</p>
-                  {offer.description && <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-stone-500">{offer.description}</p>}
-                  <p className="mt-1 text-xs font-semibold text-amber-700">{offer.coinsrequired} coins</p>
+        <div className="mt-3">
+          <div ref={scroller} onScroll={onScroll} className="flex snap-x snap-mandatory overflow-x-auto scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {offers.map((offer) => {
+              const status = statuses[offer.rewardid];
+              const closed = status === 'Pending' || status === 'Approved';
+              return (
+                <div key={offer.rewardid} className="w-full shrink-0 snap-start">
+                  <button type="button" disabled={closed} className="flex h-[6.5rem] w-full items-center gap-3 rounded-2xl border border-amber-100 bg-amber-50/70 p-3 text-left disabled:opacity-70" onClick={() => redeem(offer)}>
+                    <OfferMark image={offer.imagepath} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-semibold leading-snug text-stone-950">{offer.rewardname}</p>
+                      {offer.description && <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-stone-500">{offer.description}</p>}
+                      <p className="mt-1 text-xs font-semibold text-amber-700">{offer.coinsrequired} coins</p>
+                    </div>
+                    <span className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${closed ? 'bg-stone-200 text-stone-600' : 'bg-orange-600 text-white'}`}>{offerLabel(status)}</span>
+                  </button>
                 </div>
-                <span className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${closed ? 'bg-stone-200 text-stone-600' : 'bg-orange-600 text-white'}`}>{offerLabel(status)}</span>
-              </button>
-            );
-          })}
+              );
+            })}
+          </div>
+          {offers.length > 1 && (
+            <div className="mt-3 flex justify-center gap-1.5" aria-label="Offer slides">
+              {offers.map((offer, dot) => (
+                <button key={offer.rewardid} type="button" aria-label={`Show offer ${dot + 1}`} className={`h-1.5 rounded-full ${dot === index ? 'w-4 bg-orange-600' : 'w-1.5 bg-stone-300'}`} onClick={() => go(dot)} />
+              ))}
+            </div>
+          )}
         </div>
       )}
     </section>

@@ -380,7 +380,14 @@ export function Quick({ to, title, text }: { to: string; title: string; text: st
 }
 
 export function Brand({ light = false }: { light?: boolean }) {
-  return <Link to="/" className={`inline-flex items-center gap-2 text-sm font-semibold tracking-tight ${light ? 'text-white' : 'text-stone-950'}`}><span className="grid h-8 w-8 place-items-center rounded-xl bg-orange-600 text-[11px] font-bold text-white">RM</span>Repeat Mate</Link>;
+  return (
+    <Link to="/" aria-label="Repeatmate" className="inline-flex min-w-0 items-center gap-1.5 sm:gap-2">
+      <img src="/icons/logo%20.png" alt="" className={`h-8 w-8 shrink-0 object-contain sm:h-9 sm:w-9 ${light ? 'rounded-full bg-white' : ''}`} />
+      <span className={`truncate font-display text-lg font-extrabold leading-none tracking-[-0.05em] sm:text-xl ${light ? 'text-white' : 'text-stone-950'}`}>
+        Repeat<span className="text-[#FF5A1F]">mate</span>
+      </span>
+    </Link>
+  );
 }
 
 export function Modal({ title, text, onClose, children, wide = false }: { title: string; text?: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
