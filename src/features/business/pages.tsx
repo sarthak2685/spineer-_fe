@@ -207,8 +207,6 @@ const posterLayouts = [
   { id: 'night', label: 'Night' },
 ] as const;
 
-const posterSteps = ['Scan', 'Play', 'Earn'];
-
 function posterColor(value?: string) {
   return value && /^#[0-9a-fA-F]{6}$/.test(value) ? value : '#ea580c';
 }
@@ -245,22 +243,6 @@ function printPoster() {
   }, 300);
 }
 
-function PosterSteps({ color, light = false }: { color: string; light?: boolean }) {
-  return (
-    <ol className="mt-7 flex items-center justify-center gap-2">
-      {posterSteps.map((step, index) => (
-        <li key={step} className="flex items-center gap-2">
-            <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold ${light ? 'bg-white/10 text-white' : 'bg-white text-stone-800 shadow-sm'}`}>
-            <span className="grid h-4 w-4 place-items-center rounded-full text-[10px] text-white" style={{ background: color }}>{index + 1}</span>
-            {step}
-          </span>
-          {index < posterSteps.length - 1 && <span className={`h-px w-3 ${light ? 'bg-white/30' : 'bg-stone-300'}`} />}
-        </li>
-      ))}
-    </ol>
-  );
-}
-
 export function PosterPage() {
   const [data, setData] = useState<any>(null);
   const [layout, setLayout] = useState<(typeof posterLayouts)[number]['id']>('classic');
@@ -287,8 +269,6 @@ export function PosterPage() {
           <h2 className="mt-3 break-words font-display text-3xl font-semibold leading-none tracking-tight text-stone-950 sm:text-[2.4rem]">{name}</h2>
           <p className="mx-auto mt-2 max-w-[16rem] text-sm leading-relaxed text-stone-500">{line}</p>
           <div className="mt-7"><QrPlate src={qr} /></div>
-          <p className="mt-6 font-display text-xl font-semibold text-stone-950">Point your camera here</p>
-          <PosterSteps color={color} />
           {link && <p className="mt-5 text-[11px] tracking-wide text-stone-400">{link}</p>}
         </article>
       )}
@@ -301,8 +281,6 @@ export function PosterPage() {
           </div>
           <div className="mx-3 mb-3 rounded-[28px] bg-white px-4 pb-6 pt-6 text-stone-950 sm:mx-4 sm:px-6">
             <QrPlate src={qr} />
-            <p className="mt-5 font-display text-lg font-semibold">Play a game. Keep the coins.</p>
-            <PosterSteps color={color} />
             {link && <p className="mt-4 text-[11px] tracking-wide text-stone-400">{link}</p>}
           </div>
         </article>
@@ -313,8 +291,7 @@ export function PosterPage() {
           <h2 className="break-words font-display text-3xl font-semibold leading-none tracking-tight sm:text-[2.5rem]">{name}</h2>
           <p className="mx-auto mt-2 max-w-[16rem] text-sm text-stone-400">{line}</p>
           <div className="mt-7"><QrPlate src={qr} /></div>
-          <p className="mt-6 text-sm font-semibold uppercase tracking-[0.22em]" style={{ color }}>Scan · Play · Earn</p>
-          <PosterSteps color={color} light />
+          <p className="mt-6 text-sm font-semibold uppercase tracking-[0.22em]" style={{ color }}>Scan</p>
           {link && <p className="mt-5 text-[11px] tracking-wide text-stone-500">{link}</p>}
         </article>
       )}
