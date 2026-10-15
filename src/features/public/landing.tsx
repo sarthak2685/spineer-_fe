@@ -110,7 +110,7 @@ const demoPoints = [
 
 const businessTypes = ['Café', 'Restaurant', 'Salon', 'Spa', 'Hotel', 'Bakery', 'Gym', 'Retail Store', 'Beauty Business', 'Local Business', 'Other'];
 
-const headline = [
+const headline: { t: string; grad?: boolean }[][] = [
   [{ t: 'Get More Customers.' }],
   [{ t: 'Bring Them Back.' }],
   [{ t: 'Grow Your Business.', grad: true }],
