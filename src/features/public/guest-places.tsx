@@ -141,7 +141,7 @@ function ShopDock({ token, current, menuLabel }: { token?: string; current: Gues
   const item = (active: boolean) => `flex min-w-0 flex-1 flex-col items-center gap-1 px-0.5 py-1 text-[10px] font-semibold leading-none sm:text-[11px] ${active ? 'text-orange-600' : 'text-stone-400'}`;
   const bubble = (active: boolean) => `grid h-10 w-10 place-items-center rounded-full sm:h-11 sm:w-11 ${active ? 'bg-orange-600 text-white shadow-md shadow-orange-600/30' : ''}`;
   return createPortal(
-    <nav className="fixed inset-x-0 bottom-0 z-30 px-2 pt-2" style={{ paddingBottom: 'max(0.55rem, env(safe-area-inset-bottom))' }} aria-label="Shop">
+    <nav className={`fixed bottom-0 z-30 px-2 pt-2 ${signedIn ? 'inset-x-0 lg:left-[240px] lg:right-0' : 'inset-x-0'}`} style={{ paddingBottom: 'max(0.55rem, env(safe-area-inset-bottom))' }} aria-label="Shop">
       <div className="mx-auto flex w-full max-w-md items-end justify-between rounded-[1.75rem] bg-white px-1 py-2 shadow-[0_-8px_30px_rgba(28,25,23,0.12)] ring-1 ring-stone-200">
         <NavLink to={`/play/${token}`} className={item(current === 'play')}><span className={bubble(current === 'play')}><DockGlyph name="play" /></span><span className="max-w-full truncate">Play</span></NavLink>
         <NavLink to={`/menu/${token}`} className={item(current === 'menu')}><span className={bubble(current === 'menu')}><DockGlyph name={catalogGlyph(menuLabel)} /></span><span className="max-w-full truncate">{menuLabel}</span></NavLink>

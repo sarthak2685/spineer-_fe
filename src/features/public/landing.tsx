@@ -111,9 +111,9 @@ const demoPoints = [
 const businessTypes = ['Café', 'Restaurant', 'Salon', 'Spa', 'Hotel', 'Bakery', 'Gym', 'Retail Store', 'Beauty Business', 'Local Business', 'Other'];
 
 const headline = [
-  [{ t: 'Turn every customer' }],
-  [{ t: 'visit into a' }],
-  [{ t: 'repeat', grad: true }, { t: ' customer.' }],
+  [{ t: 'Get More Customers.' }],
+  [{ t: 'Bring Them Back.' }],
+  [{ t: 'Grow Your Business.', grad: true }],
 ];
 
 function scrollToId(id: string) {
@@ -168,7 +168,7 @@ function Hero() {
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-orange-500 opacity-75" />
               <span className="relative inline-flex h-2 w-2 rounded-full bg-orange-600" />
             </span>
-            <span className="font-mono text-[11px] uppercase tracking-[0.18em]">QR engagement & loyalty platform</span>
+            <span className="font-mono text-[11px] uppercase tracking-[0.18em]">AI-powered customer growth platform</span>
           </motion.p>
           <h1 className="font-display text-4xl font-semibold leading-[1.04] tracking-tight text-stone-950 sm:text-5xl lg:text-[4.4rem]" data-testid="hero-headline">
             {headline.map((line, index) => (
@@ -182,7 +182,7 @@ function Hero() {
             ))}
           </h1>
           <motion.p initial={reduce ? false : { opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.9, delay: 0.65, ease }} className="mt-7 max-w-xl text-base leading-relaxed text-stone-600 md:text-lg">
-            The menu, the game, the coins, and the next visit all open in the browser after one scan.
+            Turn every customer interaction into an opportunity to grow. From digital business pages and AI review assistance to interactive games, loyalty rewards, and customer engagement tools, Repeat Mate helps your business build lasting customer relationships.
           </motion.p>
           <motion.div initial={reduce ? false : { opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.9, delay: 0.8, ease }} className="mt-9 flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center">
             <button type="button" onClick={openDemo} className="group inline-flex items-center gap-2 rounded-full bg-orange-600 px-7 py-3.5 text-sm font-semibold text-white shadow-lg shadow-orange-600/30 transition hover:scale-[1.03] hover:bg-orange-700 active:scale-[0.98]">

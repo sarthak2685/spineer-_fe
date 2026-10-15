@@ -41,31 +41,42 @@ html, body, #root { @apply min-h-full bg-orange-50 text-stone-950; }
 }
 
 @media print {
-  @page { margin: 0; size: auto; }
+  @page { margin: 8mm; size: auto; }
+  html, body, #root, #root * {
+    transform: none !important;
+    animation: none !important;
+  }
   html, body, #root {
     margin: 0 !important;
     padding: 0 !important;
     height: auto !important;
     min-height: 0 !important;
-    overflow: hidden !important;
+    overflow: visible !important;
     background: #fff !important;
   }
   body * { visibility: hidden !important; }
+  header, aside, nav, footer, .print\:hidden { display: none !important; }
+  main { margin: 0 !important; max-width: none !important; padding: 0 !important; }
   .poster-print, .poster-print * { visibility: visible !important; }
   .poster-print {
-    position: fixed !important;
-    inset: 0 auto auto 0 !important;
-    width: 108mm !important;
-    max-width: 108mm !important;
-    height: auto !important;
-    margin: 0 !important;
-    transform: none !important;
+    position: static !important;
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
   .poster-print article {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    overflow: visible !important;
     border-radius: 0 !important;
     box-shadow: none !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 }
 

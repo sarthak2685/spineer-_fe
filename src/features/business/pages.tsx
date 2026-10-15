@@ -180,7 +180,7 @@ export function QrPage() {
     <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
       <Card className="mx-auto w-full max-w-sm text-center lg:max-w-none">
         {data?.code?.imagepath && (
-          <img alt="QR" src={asset(data.code.imagepath)} className="mx-auto h-72 w-72" />
+          <img alt="QR" src={asset(data.code.imagepath)} className="mx-auto block aspect-square w-[min(100%,16rem)] object-contain" />
         )}
         <p className="my-3 break-all text-sm text-stone-500">{data?.code?.qrcodetext}</p>
         <div className="flex flex-wrap justify-center gap-2">
@@ -215,8 +215,8 @@ function posterColor(value?: string) {
 
 function QrPlate({ src }: { src: string }) {
   return (
-    <div className="mx-auto grid h-[280px] w-[280px] place-items-center">
-      {src ? <img alt="QR code" src={src} className="h-full w-full object-contain" /> : <span className="text-sm text-stone-400">QR is loading</span>}
+    <div className="mx-auto aspect-square w-[min(100%,15rem)]">
+      {src ? <img alt="QR code" src={src} className="mx-auto block h-full w-full object-contain" /> : <span className="grid h-full place-items-center text-sm text-stone-400">QR is loading</span>}
     </div>
   );
 }
@@ -231,10 +231,10 @@ function printPoster() {
   }
   const styles = Array.from(document.querySelectorAll('link[rel="stylesheet"], style')).map((node) => node.outerHTML).join('');
   frame.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Poster</title>${styles}<style>
-    @page { margin: 0; size: 108mm 176mm; }
-    html, body { margin: 0; padding: 0; width: 108mm; height: 176mm; overflow: hidden; background: transparent; }
-    .poster-print { width: 108mm; max-width: none; margin: 0; }
-    .poster-print article { width: 108mm; min-height: 176mm; margin: 0; border-radius: 0; box-shadow: none; }
+    @page { margin: 8mm; size: auto; }
+    html, body { margin: 0; padding: 0; background: #fff; }
+    .poster-print { width: 100%; max-width: 100%; margin: 0 auto; }
+    .poster-print article { width: 100%; max-width: 100%; margin: 0 auto; border-radius: 0; box-shadow: none; overflow: visible; }
     * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   </style></head><body>${sheet.outerHTML}</body></html>`);
   frame.document.close();
@@ -282,9 +282,9 @@ export function PosterPage() {
     </div>
     <div className="poster-print mx-auto w-full max-w-[420px]">
       {layout === 'classic' && (
-        <article className="overflow-hidden rounded-[36px] bg-[#fffaf5] px-8 pb-8 pt-10 text-center shadow-xl shadow-stone-950/10 ring-1 ring-stone-200" style={{ backgroundImage: `radial-gradient(circle at top, ${color}18, transparent 42%)` }}>
+        <article className="overflow-hidden rounded-[36px] bg-[#fffaf5] px-5 pb-8 pt-8 text-center shadow-xl shadow-stone-950/10 ring-1 ring-stone-200 sm:px-8 sm:pt-10" style={{ backgroundImage: `radial-gradient(circle at top, ${color}18, transparent 42%)` }}>
           <p className="text-[11px] font-semibold uppercase tracking-[0.32em]" style={{ color }}>Welcome</p>
-          <h2 className="mt-3 font-display text-[2.4rem] font-semibold leading-none tracking-tight text-stone-950">{name}</h2>
+          <h2 className="mt-3 break-words font-display text-3xl font-semibold leading-none tracking-tight text-stone-950 sm:text-[2.4rem]">{name}</h2>
           <p className="mx-auto mt-2 max-w-[16rem] text-sm leading-relaxed text-stone-500">{line}</p>
           <div className="mt-7"><QrPlate src={qr} /></div>
           <p className="mt-6 font-display text-xl font-semibold text-stone-950">Point your camera here</p>
@@ -294,12 +294,12 @@ export function PosterPage() {
       )}
       {layout === 'bold' && (
         <article className="overflow-hidden rounded-[36px] text-center text-white shadow-xl shadow-stone-950/15" style={{ background: `linear-gradient(165deg, ${color} 0%, #1c1917 78%)` }}>
-          <div className="px-8 pb-6 pt-10">
+          <div className="px-5 pb-6 pt-8 sm:px-8 sm:pt-10">
             <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-white/70">Scan to start</p>
-            <h2 className="mt-2 font-display text-[2.5rem] font-semibold leading-none tracking-tight">{name}</h2>
+            <h2 className="mt-2 break-words font-display text-3xl font-semibold leading-none tracking-tight sm:text-[2.5rem]">{name}</h2>
             <p className="mx-auto mt-2 max-w-[16rem] text-sm text-white/75">{line}</p>
           </div>
-          <div className="mx-4 mb-4 rounded-[28px] bg-white px-6 pb-7 pt-7 text-stone-950">
+          <div className="mx-3 mb-3 rounded-[28px] bg-white px-4 pb-6 pt-6 text-stone-950 sm:mx-4 sm:px-6">
             <QrPlate src={qr} />
             <p className="mt-5 font-display text-lg font-semibold">Play a game. Keep the coins.</p>
             <PosterSteps color={color} />
@@ -308,9 +308,9 @@ export function PosterPage() {
         </article>
       )}
       {layout === 'night' && (
-        <article className="overflow-hidden rounded-[36px] bg-stone-950 px-8 pb-8 pt-10 text-center text-white shadow-xl shadow-stone-950/20">
+        <article className="overflow-hidden rounded-[36px] bg-stone-950 px-5 pb-8 pt-8 text-center text-white shadow-xl shadow-stone-950/20 sm:px-8 sm:pt-10">
           <div className="mx-auto mb-6 h-1.5 w-16 rounded-full" style={{ background: color }} />
-          <h2 className="font-display text-[2.5rem] font-semibold leading-none tracking-tight">{name}</h2>
+          <h2 className="break-words font-display text-3xl font-semibold leading-none tracking-tight sm:text-[2.5rem]">{name}</h2>
           <p className="mx-auto mt-2 max-w-[16rem] text-sm text-stone-400">{line}</p>
           <div className="mt-7"><QrPlate src={qr} /></div>
           <p className="mt-6 text-sm font-semibold uppercase tracking-[0.22em]" style={{ color }}>Scan · Play · Earn</p>
