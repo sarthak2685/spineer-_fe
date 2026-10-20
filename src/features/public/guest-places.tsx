@@ -984,7 +984,7 @@ export function MenuPanel() {
               {fulfillment === 'DineIn' && (
                 <label className="block text-sm">
                   <span className="mb-1.5 block font-medium">{hub?.settings?.stationlabel || 'Table / room'}</span>
-                  <input value={station} onChange={(event) => setStation(event.target.value)} placeholder={hub?.settings?.stationplaceholder || 'Table 4, or 0'} className="h-11 w-full rounded-xl border border-stone-200 px-3" />
+                  <input value={station} onChange={(event) => setStation(event.target.value)} placeholder={hub?.settings?.stationplaceholder || ''} className="h-11 w-full rounded-xl border border-stone-200 px-3" />
                   <span className="mt-1.5 block text-xs font-normal text-stone-400">{copy.stationNote}</span>
                 </label>
               )}

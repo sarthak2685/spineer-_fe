@@ -122,12 +122,12 @@ const loyaltyPoints = [
 function LoyaltyPanel() {
   return (
     <Rise className="flex flex-col justify-center rounded-[28px] border border-orange-200/80 bg-gradient-to-br from-orange-50 via-white to-amber-50 p-7 sm:p-9">
-      <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-orange-600">RepeatMate — Smart customer loyalty</p>
+      <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-orange-600">Repeat Mate — Smart customer loyalty</p>
       <h2 className="mt-3 font-display text-3xl font-semibold leading-tight tracking-tight text-stone-950 sm:text-4xl">
-        Turn every customer into a repeat customer.
+        Repeat Mate turns every customer into a repeat customer.
       </h2>
       <p className="mt-3 max-w-lg text-sm leading-relaxed text-stone-600 sm:text-base">
-        Attract new customers, reward loyal ones, and bring people back with one smart QR-powered platform. Perfect for restaurants, cafés, salons, bakeries, and local businesses.
+        Attract new customers, reward loyal ones, and bring people back with one smart QR-powered platform from Repeat Mate. Perfect for restaurants, cafés, salons, bakeries, and local businesses.
       </p>
       <ul className="mt-8 space-y-5">
         {loyaltyPoints.map((point, index) => (
@@ -208,11 +208,11 @@ export function ForgotPage() {
     const form = new FormData(event.currentTarget);
     try {
       const result = await client.forgot(String(form.get('identifier')));
-      setMessage(result.message); setPath(result.resetPath); setError('');
+      setMessage(result.message); setPath(result.resetPath || ''); setError('');
     } catch (err) { setError(err instanceof Error ? err.message : 'Request failed.'); }
   }
   if (hold) return null;
-  return <AuthShell kicker="Account recovery" title="Reset password" text="Enter the email or mobile on the account."><Form onSubmit={onSubmit} className="space-y-4">{error && <Alert text={error} />}{message && <Card><p>{message}</p>{path && <Link className="mt-3 inline-block text-sm font-semibold text-orange-600" to={path}>Open reset link</Link>}</Card>}<Field label="Email or mobile" name="identifier" /><Button type="submit" className="w-full">Send reset link</Button><p className="text-center text-sm text-stone-500"><Link className="font-semibold text-orange-600" to="/login">Back to sign in</Link></p><p className="text-center text-xs text-stone-500"><Link className="font-semibold text-orange-600" to="/privacy">Privacy Policy</Link> · <Link className="font-semibold text-orange-600" to="/terms">Terms</Link></p></Form></AuthShell>;
+  return <AuthShell kicker="Account recovery" title="Reset password" text="Enter the email or mobile on the account. We will email a reset link when mail is configured."><Form onSubmit={onSubmit} className="space-y-4">{error && <Alert text={error} />}{message && <Card><p>{message}</p>{path && <Link className="mt-3 inline-block text-sm font-semibold text-orange-600" to={path}>Open reset link</Link>}</Card>}<Field label="Email or mobile" name="identifier" /><Button type="submit" className="w-full">Send reset link</Button><p className="text-center text-sm text-stone-500"><Link className="font-semibold text-orange-600" to="/login">Back to sign in</Link></p><p className="text-center text-xs text-stone-500"><Link className="font-semibold text-orange-600" to="/privacy">Privacy Policy</Link> · <Link className="font-semibold text-orange-600" to="/terms">Terms</Link></p></Form></AuthShell>;
 }
 
 export function ResetPage() {

@@ -64,7 +64,7 @@ export const client = {
   login: (body: unknown) => api<{ user: User; redirect: string; accessToken: string }>('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
   logout: () => api('/auth/logout', { method: 'POST' }),
   me: () => api<{ user: User | null; redirect: string | null }>('/auth/me'),
-  forgot: (identifier: string) => api<{ message: string; resetPath: string }>('/auth/forgot', { method: 'POST', body: JSON.stringify({ identifier }) }),
+  forgot: (identifier: string) => api<{ message: string; resetPath?: string }>('/auth/forgot', { method: 'POST', body: JSON.stringify({ identifier }) }),
   reset: (body: unknown) => api<{ message: string }>('/auth/reset', { method: 'POST', body: JSON.stringify(body) }),
   countries: () => api<{ countryid: number; countryname: string }[]>('/locations/countries'),
   states: (countryId?: number) => api<{ stateid: number; statename: string }[]>(`/locations/states${countryId ? `?countryId=${countryId}` : ''}`),

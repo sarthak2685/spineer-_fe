@@ -191,7 +191,7 @@ function ItemModal({ copy, categories, editing, initialTab = 'one', onClose, onS
             {addons.map((row, index) => (
               <div key={index} className="grid grid-cols-[1fr_7rem_auto] gap-2">
                 <input value={row.name} onChange={(event) => setAddons((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item))} placeholder={copy.addonPlaceholder} className="h-11 rounded-xl border border-stone-200 bg-white px-3 text-sm" />
-                <input value={row.price} onChange={(event) => setAddons((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, price: event.target.value } : item))} placeholder="+20" inputMode="decimal" className="h-11 rounded-xl border border-stone-200 bg-white px-3 text-sm" />
+                <input value={row.price} onChange={(event) => setAddons((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, price: event.target.value } : item))} placeholder="" inputMode="decimal" className="h-11 rounded-xl border border-stone-200 bg-white px-3 text-sm" />
                 <button type="button" className="text-sm text-stone-400" onClick={() => setAddons((current) => current.filter((_, itemIndex) => itemIndex !== index))}>Remove</button>
               </div>
             ))}
