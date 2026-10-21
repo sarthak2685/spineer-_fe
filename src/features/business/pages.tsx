@@ -153,8 +153,39 @@ export function RedemptionsPage() {
 }
 export function BusinessClaimsPage() {
   const list = usePagedQuery<any>('/business/claims');
+  const [approveRow, setApproveRow] = useState<any>(null);
+  const [coins, setCoins] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  function openApprove(row: any) {
+    const suggested = Number(row.coins);
+    setCoins(Number.isFinite(suggested) && suggested >= 0 ? String(Math.floor(suggested)) : String(Math.floor(Number(row.purchaseamount) || 0)));
+    setApproveRow(row);
+  }
+
+  async function confirmApprove(event: FormEvent) {
+    event.preventDefault();
+    if (!approveRow) return;
+    const value = Math.floor(Number(coins));
+    if (!Number.isFinite(value) || value < 0) {
+      toastErr('Enter a valid coin amount (0 or more).');
+      return;
+    }
+    setSaving(true);
+    try {
+      await api(`/business/claims/${approveRow.purchaseclaimid}`, { method: 'POST', body: JSON.stringify({ action: 'approve', coins: value }) });
+      toastOk(value > 0 ? `Approved. ${value} coins added to the customer.` : 'Claim approved.');
+      setApproveRow(null);
+      list.reload();
+    } catch {
+      /* toast from api */
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return <Frame>
-    <PageTitle title="Purchase claims" text="Bill claims for the selected dates." />
+    <PageTitle title="Purchase claims" text="Bill claims for the selected dates. When you approve, choose how many coins to give." />
     <ListToolbar from={list.from} to={list.to} onApply={list.applyDates}>
       <CsvButton path="/business/claims" from={list.from} to={list.to} filename="claims.csv" />
     </ListToolbar>
@@ -164,11 +195,37 @@ export function BusinessClaimsPage() {
       { key: 'coins', label: 'Coins' },
       { key: 'status', label: 'Status', render: (row) => <Status value={row.status} /> },
       { key: 'actions', label: '', render: (row) => row.status === 'Pending' ? <RowMenu items={[
-        { label: 'Approve', onClick: () => api(`/business/claims/${row.purchaseclaimid}`, { method: 'POST', body: JSON.stringify({ action: 'approve' }) }).then(() => { toastOk('Claim approved.'); list.reload(); }) },
+        { label: 'Approve', onClick: () => openApprove(row) },
         { label: 'Reject', danger: true, onClick: () => api(`/business/claims/${row.purchaseclaimid}`, { method: 'POST', body: JSON.stringify({ action: 'reject', reason: 'Not accepted' }) }).then(() => { toastOk('Claim rejected.'); list.reload(); }) },
       ]} /> : null },
     ]} />
     <Pager page={list.page} pageSize={list.pageSize} total={list.total} onPage={list.setPage} />
+    {approveRow && (
+      <Modal
+        title="Approve claim"
+        text={`Bill ₹${approveRow.purchaseamount} from ${approveRow.customername || 'customer'}. Enter coins to add to their wallet.`}
+        onClose={() => !saving && setApproveRow(null)}
+      >
+        <form className="space-y-4" onSubmit={confirmApprove}>
+          <Field
+            label="Coins to give"
+            type="number"
+            min={0}
+            step={1}
+            inputMode="numeric"
+            value={coins}
+            onChange={(event) => setCoins(event.target.value.replace(/[^\d]/g, ''))}
+            autoFocus
+            required
+          />
+          <p className="text-xs text-stone-500">These coins are added to the customer wallet when you confirm.</p>
+          <div className="flex gap-2">
+            <Button type="button" kind="ghost" className="flex-1" disabled={saving} onClick={() => setApproveRow(null)}>Cancel</Button>
+            <Button type="submit" className="flex-1" busy={saving} disabled={saving}>{saving ? 'Approving…' : 'Approve & add coins'}</Button>
+          </div>
+        </form>
+      </Modal>
+    )}
   </Frame>;
 }
 export function QrPage() {
