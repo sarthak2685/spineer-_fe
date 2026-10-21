@@ -7,10 +7,8 @@ export function SiteInstall() {
   const { ready, installed, hint, install } = useInstallApp();
   const [hidden, setHidden] = useState(false);
   const onShop = /^\/(play|menu|bill|review)\//.test(location.pathname);
-  const onCustomer = location.pathname.startsWith('/customer');
-  const onPoster = location.pathname.startsWith('/business/poster') || location.pathname.startsWith('/business/qr');
 
-  if (installed || hidden || onShop || onCustomer || onPoster) return null;
+  if (installed || hidden || onShop) return null;
 
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-30 flex justify-center px-3 print:hidden">

@@ -115,6 +115,24 @@ export function PlaceFrame({ business, token, current, children }: { business: R
   const playTab = current === 'play';
   const frame = useRef(shopFrame(playTab));
   const { scrollY } = useScroll();
+  const scrollToContent = (forPlay = playTab) => {
+    const full = heroRef.current?.offsetHeight || window.innerHeight;
+    const next = shopFrame(forPlay, full, window.innerWidth);
+    frame.current = next;
+    window.scrollTo({ top: Math.max(0, full - next.bar), behavior: 'smooth' });
+  };
+  useEffect(() => {
+    const onScrollRequest = () => {
+      // Path updates sync on NavLink click; wait a frame so header bar matches the tab.
+      requestAnimationFrame(() => {
+        const path = window.location.pathname;
+        const forPlay = tabFromPath(path) === 'play';
+        scrollToContent(forPlay);
+      });
+    };
+    window.addEventListener('rs-scroll-shop-content', onScrollRequest);
+    return () => window.removeEventListener('rs-scroll-shop-content', onScrollRequest);
+  }, []);
   useLayoutEffect(() => {
     const measure = () => {
       const height = heroRef.current?.offsetHeight || window.innerHeight;
@@ -232,11 +250,17 @@ export function PlaceFrame({ business, token, current, children }: { business: R
             <h1 className="text-[1.7rem] font-bold leading-tight">{shopName}</h1>
             <p className="mt-2 text-sm leading-relaxed text-white/85">{business.tagline || business.description || 'Play, order, and review in one place.'}</p>
           </motion.div>
-          <motion.div style={{ opacity: hintOpacity }} className="absolute bottom-[5.75rem] left-1/2 -translate-x-1/2 text-white/90">
+          <motion.button
+            type="button"
+            style={{ opacity: hintOpacity }}
+            onClick={() => scrollToContent()}
+            className="absolute bottom-[5.75rem] left-1/2 -translate-x-1/2 text-white/90"
+            aria-label="Scroll to content"
+          >
             <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
               <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-          </motion.div>
+          </motion.button>
         </motion.header>,
         document.body,
       )}
@@ -279,15 +303,16 @@ function ShopDock({ token, current, menuLabel }: { token?: string; current: Gues
   const auth = useAuth();
   const signedIn = Boolean(auth.user && auth.user.role === 'Customer' && !auth.user.name.startsWith('Guest_'));
   const { install } = useInstallApp();
+  const scrollIntoShop = () => window.dispatchEvent(new Event('rs-scroll-shop-content'));
   const item = (active: boolean) => `flex min-w-0 flex-1 flex-col items-center gap-0.5 px-0.5 py-1 text-[9px] font-semibold leading-none sm:text-[11px] ${active ? 'text-orange-600' : 'text-stone-400'}`;
   const bubble = (active: boolean) => `grid h-8 w-8 place-items-center rounded-full sm:h-10 sm:w-10 ${active ? 'bg-orange-600 text-white shadow-md shadow-orange-600/30' : 'bg-stone-100 text-stone-500'}`;
   return createPortal(
     <nav className={`fixed bottom-0 z-30 px-2 pt-2 ${signedIn ? 'inset-x-0 lg:left-[240px] lg:right-0' : 'inset-x-0'}`} style={{ paddingBottom: 'max(0.55rem, env(safe-area-inset-bottom))' }} aria-label="Shop">
       <div className="mx-auto flex w-full max-w-md items-end justify-between rounded-[1.75rem] bg-white px-1 py-2 shadow-[0_-8px_30px_rgba(28,25,23,0.12)] ring-1 ring-stone-200">
-        <NavLink to={`/play/${token}`} className={item(current === 'play')}><span className={bubble(current === 'play')}><DockGlyph name="play" /></span><span className="max-w-full truncate">Play</span></NavLink>
-        <NavLink to={`/menu/${token}`} className={item(current === 'menu')}><span className={bubble(current === 'menu')}><DockGlyph name={catalogGlyph(menuLabel)} /></span><span className="max-w-full truncate">{menuLabel}</span></NavLink>
-        <NavLink to={`/bill/${token}`} className={item(current === 'bill')}><span className={bubble(current === 'bill')}><DockGlyph name="bill" /></span><span className="max-w-full truncate">Bill</span></NavLink>
-        <NavLink to={`/review/${token}`} className={item(current === 'review')}><span className={bubble(current === 'review')}><DockGlyph name="review" /></span><span className="max-w-full truncate">Review</span></NavLink>
+        <NavLink to={`/play/${token}`} onClick={scrollIntoShop} className={item(current === 'play')}><span className={bubble(current === 'play')}><DockGlyph name="play" /></span><span className="max-w-full truncate">Play</span></NavLink>
+        <NavLink to={`/menu/${token}`} onClick={scrollIntoShop} className={item(current === 'menu')}><span className={bubble(current === 'menu')}><DockGlyph name={catalogGlyph(menuLabel)} /></span><span className="max-w-full truncate">{menuLabel}</span></NavLink>
+        <NavLink to={`/bill/${token}`} onClick={scrollIntoShop} className={item(current === 'bill')}><span className={bubble(current === 'bill')}><DockGlyph name="bill" /></span><span className="max-w-full truncate">Bill</span></NavLink>
+        <NavLink to={`/review/${token}`} onClick={scrollIntoShop} className={item(current === 'review')}><span className={bubble(current === 'review')}><DockGlyph name="review" /></span><span className="max-w-full truncate">Review</span></NavLink>
         <button type="button" className={item(false)} onClick={() => { void install(); }}><span className={bubble(false)}><DockGlyph name="app" /></span><span className="max-w-full truncate">Get app</span></button>
         {signedIn ? (
           <NavLink to="/customer/dashboard" className={item(false)}><span className={bubble(false)}><DockGlyph name="user" /></span><span className="max-w-full truncate">Account</span></NavLink>
@@ -887,8 +912,8 @@ export function MenuPanel() {
                 const simple = cart.find((line) => line.key === simpleKey);
                 const from = options.length ? Math.min(...options.map((option) => Number(option.price))) : Number(item.price);
                 return (
-                  <article key={item.itemid} className="flex items-center gap-3 rounded-2xl border border-stone-100 bg-white p-3 shadow-sm">
-                    <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl">
+                  <article key={item.itemid} className="flex items-start gap-3 rounded-2xl border border-stone-100 bg-white p-3 shadow-sm">
+                    <div className="relative mt-0.5 h-16 w-16 shrink-0 overflow-hidden rounded-xl">
                       {item.imagepath ? (
                         <img alt="" src={asset(item.imagepath)} className="h-full w-full object-cover" />
                       ) : (
@@ -896,9 +921,9 @@ export function MenuPanel() {
                       )}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-stone-950">{item.itemname}</p>
-                      {item.description && <p className="line-clamp-2 text-sm text-stone-500">{item.description}</p>}
-                      <p className="mt-1 text-sm font-bold" style={{ color }}>{options.length ? `From ${rupee(from)}` : rupee(from)}</p>
+                      <p className="font-semibold leading-snug text-stone-950">{item.itemname}</p>
+                      {item.description && <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed text-stone-500">{item.description}</p>}
+                      <p className="mt-1.5 text-sm font-bold" style={{ color }}>{options.length ? `From ${rupee(from)}` : rupee(from)}</p>
                       {(options.length > 0 || addons.length > 0) && (
                         <p className="mt-1 flex flex-wrap gap-1 text-[11px] font-semibold">
                           {options.length > 0 && <span className="rounded-full bg-violet-50 px-2 py-0.5 text-violet-600">{copy.optionLabel}</span>}
@@ -906,14 +931,16 @@ export function MenuPanel() {
                         </p>
                       )}
                     </div>
-                    {configurable ? (
-                      <button type="button" className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-lg font-bold text-white shadow-md" style={{ background: color }} onClick={() => openItem(item)} aria-label={`Customize ${item.itemname}`}>+</button>
-                    ) : (
-                      <QtyControl color={color} qty={simple?.qty || 0} onChange={(qty) => {
-                        if (!simple && qty > 0) addLine({ key: simpleKey, itemId: item.itemid, name: item.itemname, unitPrice: Number(item.price), qty, addons: [] });
-                        else setQty(simpleKey, qty);
-                      }} />
-                    )}
+                    <div className="shrink-0 self-center">
+                      {configurable ? (
+                        <button type="button" className="grid h-10 w-10 place-items-center rounded-full text-lg font-bold text-white shadow-md" style={{ background: color }} onClick={() => openItem(item)} aria-label={`Customize ${item.itemname}`}>+</button>
+                      ) : (
+                        <QtyControl color={color} qty={simple?.qty || 0} onChange={(qty) => {
+                          if (!simple && qty > 0) addLine({ key: simpleKey, itemId: item.itemid, name: item.itemname, unitPrice: Number(item.price), qty, addons: [] });
+                          else setQty(simpleKey, qty);
+                        }} />
+                      )}
+                    </div>
                   </article>
                 );
               })}

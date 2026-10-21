@@ -5,6 +5,8 @@ import { homeFor, useAuth } from '../../app/auth';
 import { Lift, Rise } from '../../components/motion';
 import { Alert, Area, Button, Card, Field, Form, PageTitle, Select, Brand } from '../../components/ui';
 import { Marketing } from '../../components/layout/Shells';
+import { aboutContent, siteSeo, usePageSeo } from '../../lib/seo';
+import { openDemo } from './demo-request';
 export { HomePage } from './landing';
 
 function useSignedInHome() {
@@ -67,19 +69,85 @@ function AuthShell({ kicker, title, text, wide = false, asideTitle, asidePoints,
 }
 
 export function AboutPage() {
+  usePageSeo({
+    title: siteSeo.aboutTitle,
+    description: siteSeo.aboutDescription,
+    path: '/about',
+  });
   return (
     <Marketing>
-      <section className="px-5 py-12 lg:py-20">
-        <div className="mx-auto max-w-6xl">
-          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-orange-600">About</p>
-          <h1 className="mt-2 max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl">Loyalty that lives on the counter, not in an app store.</h1>
-          <p className="mt-4 max-w-3xl text-lg leading-relaxed text-stone-600">Repeat Mate is for restaurants, cafes, salons, gyms, clinics, garages, and shops. Guests scan a QR, play, order, and keep coins. Owners approve claims, print one flyer, and see who came back.</p>
-          <div className="mt-8 grid gap-4 sm:grid-cols-2">
-            <Lift className="public-card rounded-3xl border border-stone-200 bg-white p-6"><h2 className="font-semibold">For the shop</h2><p className="mt-2 text-sm leading-relaxed text-stone-500">Menu, games, orders, claims, and a poster that never needs a new URL.</p></Lift>
-            <Lift className="public-card rounded-3xl border border-stone-200 bg-white p-6"><h2 className="font-semibold">For the guest</h2><p className="mt-2 text-sm leading-relaxed text-stone-500">Play in the browser. Sign in on the same screen if they already have a wallet.</p></Lift>
+      <article className="px-5 py-12 lg:py-20">
+        <div className="mx-auto max-w-3xl">
+          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-orange-600">{aboutContent.eyebrow}</p>
+          <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight text-stone-950 sm:text-4xl lg:text-5xl">{aboutContent.headline}</h1>
+          <p className="mt-3 text-base font-semibold text-orange-600 sm:text-lg">{siteSeo.tagline}</p>
+          <div className="mt-6 space-y-4 text-base leading-relaxed text-stone-600 sm:text-lg">
+            {aboutContent.intro.map((paragraph) => <p key={paragraph.slice(0, 48)}>{paragraph}</p>)}
           </div>
+
+          <section className="mt-12">
+            <h2 className="font-display text-2xl font-semibold tracking-tight text-stone-950 sm:text-3xl">{aboutContent.whatTitle}</h2>
+            <p className="mt-3 text-base leading-relaxed text-stone-600">{aboutContent.whatLead}</p>
+            <ul className="mt-6 space-y-4">
+              {aboutContent.whatItems.map((item) => (
+                <li key={item.title} className="rounded-2xl border border-stone-200 bg-white px-4 py-3.5 shadow-sm">
+                  <p className="font-semibold text-stone-950">{item.title}</p>
+                  <p className="mt-1 text-sm leading-relaxed text-stone-600 sm:text-base">{item.text}</p>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-5 text-base leading-relaxed text-stone-600">{aboutContent.whatClose}</p>
+          </section>
+
+          <section className="mt-12">
+            <h2 className="font-display text-2xl font-semibold tracking-tight text-stone-950 sm:text-3xl">{aboutContent.whoTitle}</h2>
+            <p className="mt-3 text-base leading-relaxed text-stone-600">{aboutContent.whoLead}</p>
+            <ul className="mt-5 list-disc space-y-2 pl-5 text-base text-stone-700">
+              {aboutContent.whoItems.map((item) => <li key={item}>{item}</li>)}
+            </ul>
+            <p className="mt-5 text-base leading-relaxed text-stone-600">{aboutContent.whoClose}</p>
+          </section>
+
+          <section className="mt-12">
+            <h2 className="font-display text-2xl font-semibold tracking-tight text-stone-950 sm:text-3xl">{aboutContent.missionTitle}</h2>
+            <div className="mt-3 space-y-4 text-base leading-relaxed text-stone-600">
+              {aboutContent.mission.map((paragraph) => <p key={paragraph.slice(0, 48)}>{paragraph}</p>)}
+            </div>
+          </section>
+
+          <section className="mt-12">
+            <h2 className="font-display text-2xl font-semibold tracking-tight text-stone-950 sm:text-3xl">{aboutContent.whyTitle}</h2>
+            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+              {aboutContent.whyItems.map((item) => (
+                <Lift key={item.title} className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+                  <h3 className="font-semibold text-stone-950">{item.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-stone-600">{item.text}</p>
+                </Lift>
+              ))}
+            </div>
+          </section>
+
+          <section className="mt-12">
+            <h2 className="font-display text-2xl font-semibold tracking-tight text-stone-950 sm:text-3xl">{aboutContent.visionTitle}</h2>
+            <div className="mt-3 space-y-4 text-base leading-relaxed text-stone-600">
+              {aboutContent.vision.map((paragraph) => <p key={paragraph.slice(0, 48)}>{paragraph}</p>)}
+            </div>
+          </section>
+
+          <section className="mt-12 rounded-3xl border border-orange-200 bg-orange-50 px-5 py-8 sm:px-8">
+            <h2 className="font-display text-2xl font-semibold tracking-tight text-stone-950 sm:text-3xl">{aboutContent.growTitle}</h2>
+            <div className="mt-3 space-y-4 text-base leading-relaxed text-stone-700">
+              {aboutContent.grow.map((paragraph) => <p key={paragraph.slice(0, 48)}>{paragraph}</p>)}
+            </div>
+            <p className="mt-6 font-semibold text-orange-700">{aboutContent.closing}</p>
+            <p className="mt-3 text-base leading-relaxed text-stone-600">{aboutContent.cta}</p>
+            <button type="button" onClick={openDemo} className="group mt-8 inline-flex items-center justify-center gap-2 rounded-full bg-orange-600 px-7 py-3.5 text-sm font-semibold text-white shadow-lg shadow-orange-600/30 transition hover:bg-orange-700">
+              Book a Free Demo
+              <span aria-hidden="true" className="transition group-hover:translate-x-0.5">→</span>
+            </button>
+          </section>
         </div>
-      </section>
+      </article>
     </Marketing>
   );
 }
@@ -340,9 +408,9 @@ export function RegisterPage() {
               <span className="mb-1.5 block font-medium text-stone-600">Logo</span>
               <span className="flex min-h-24 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-stone-300 bg-stone-100 px-4 py-5 text-center transition hover:border-orange-600 hover:bg-orange-100">
                 <span className="text-sm font-semibold text-stone-950">{logo?.name || 'Choose a logo'}</span>
-                <span className="mt-1 text-xs text-stone-500">PNG or JPG, up to 2 MB</span>
+                <span className="mt-1 text-xs text-stone-500">PNG, JPG, or WebP · max 2 MB</span>
               </span>
-              <input name="file" type="file" accept="image/png,image/jpeg" className="sr-only" onChange={(event) => setLogo(event.target.files?.[0] || null)} />
+              <input name="file" type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" onChange={(event) => setLogo(event.target.files?.[0] || null)} />
             </label>
             <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-stone-400 sm:col-span-2">Location</p>
             <div className="sm:col-span-2"><Area label="Address" name="address" required defaultValue={draft.address} /></div>

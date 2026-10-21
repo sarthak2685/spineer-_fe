@@ -1,6 +1,7 @@
-import { ReactNode } from 'react';
-import { Link, NavLink, Navigate } from 'react-router-dom';
+import { ReactNode, useEffect, useRef } from 'react';
+import { Link, NavLink, Navigate, useLocation } from 'react-router-dom';
 import { Marketing } from '../../components/layout/Shells';
+import { siteSeo, usePageSeo } from '../../lib/seo';
 import { legalNav } from './legal-nav';
 
 const email = 'repeatmate@gmail.com';
@@ -361,20 +362,40 @@ const policies: Record<string, { title: string; body: ReactNode }> = {
 
 export function LegalPage({ slug }: { slug: string }) {
   const policy = policies[slug];
+  const location = useLocation();
+  const activeRef = useRef<HTMLAnchorElement | null>(null);
+  usePageSeo({
+    title: policy?.title || 'Policies',
+    description: policy
+      ? `${policy.title} for RepeatMate — ${siteSeo.tagline}.`
+      : siteSeo.description,
+    path: location.pathname,
+  });
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    activeRef.current?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+  }, [location.pathname]);
   if (!policy) return <Navigate to="/privacy" replace />;
   return (
     <Marketing>
       <section className="px-5 py-10 lg:py-14">
-        <div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-[16rem_minmax(0,1fr)]">
-          <nav aria-label="Policies" className="lg:sticky lg:top-24 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto">
+        <div className="mx-auto grid min-w-0 max-w-6xl gap-8 lg:grid-cols-[16rem_minmax(0,1fr)]">
+          <nav aria-label="Policies" className="min-w-0 lg:sticky lg:top-24 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto">
             <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-orange-600">Policies</p>
-            <div className="flex gap-2 overflow-x-auto pb-1 lg:block lg:space-y-1 lg:pb-0">
+            <div className="-mx-5 flex gap-2 overflow-x-auto overscroll-x-contain px-5 pb-2 [-ms-overflow-style:none] [scrollbar-width:thin] lg:mx-0 lg:block lg:space-y-1 lg:overflow-visible lg:px-0 lg:pb-0">
               {legalNav.map((link) => (
-                <NavLink key={link.to} to={link.to} className={({ isActive }) => `block shrink-0 rounded-xl px-3 py-2 text-sm ${isActive ? 'bg-orange-100 font-semibold text-orange-700' : 'text-stone-600 hover:bg-orange-50'}`}>{link.label}</NavLink>
+                <NavLink
+                  key={link.to}
+                  to={link.to}
+                  ref={link.to === location.pathname ? activeRef : undefined}
+                  className={({ isActive }) => `block shrink-0 rounded-xl px-3 py-2 text-sm whitespace-nowrap lg:whitespace-normal ${isActive ? 'bg-orange-100 font-semibold text-orange-700' : 'text-stone-600 hover:bg-orange-50'}`}
+                >
+                  {link.label}
+                </NavLink>
               ))}
             </div>
           </nav>
-          <article className="max-w-3xl space-y-3 text-sm leading-relaxed text-stone-600">
+          <article className="min-w-0 max-w-3xl space-y-3 break-words text-sm leading-relaxed text-stone-600">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-orange-600">Version 1.0 · Effective 10 October 2026</p>
             <h1 className="font-display text-3xl font-semibold tracking-tight text-stone-950">{policy.title}</h1>
             {policy.body}

@@ -1,12 +1,12 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, ReactNode, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, asset } from '../../api/client';
 import { useAuth } from '../../app/auth';
 import { CsvButton, ListToolbar, Pager, usePagedQuery } from '../../components/list';
 import { ActionIcon, Alert, Button, Card, Field, Form, IconButton, Modal, PageTitle, Quick, RowMenu, Select, Stat, Status, Area, Table } from '../../components/ui';
-import { toastOk } from '../../lib/toast';
+import { toastErr, toastOk } from '../../lib/toast';
 
-function Frame({ children }: { children: React.ReactNode }) {
+function Frame({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
@@ -298,62 +298,581 @@ export function PosterPage() {
     </div>
   </Frame>;
 }
+type ProfileDraft = {
+  businessName: string;
+  tagline: string;
+  phone: string;
+  email: string;
+  supportEmail: string;
+  whatsappNumber: string;
+  description: string;
+  address: string;
+  pincode: string;
+  website: string;
+  wifiName: string;
+  wifiPassword: string;
+  facebookUrl: string;
+  instagramUrl: string;
+  twitterUrl: string;
+  youtubeUrl: string;
+  latitude: string;
+  longitude: string;
+  googleMapUrl: string;
+  googleReviewUrl: string;
+};
+
+const PROFILE_SECTIONS = [
+  { id: 'images', label: 'Images' },
+  { id: 'identity', label: 'Contact' },
+  { id: 'address', label: 'Address' },
+  { id: 'branding', label: 'Website' },
+  { id: 'wifi', label: 'Wi‑Fi' },
+  { id: 'social', label: 'Social' },
+  { id: 'maps', label: 'Maps' },
+] as const;
+
+function draftFromProfile(row: any): ProfileDraft {
+  return {
+    businessName: String(row.businessname || ''),
+    tagline: String(row.tagline || ''),
+    phone: String(row.phone || ''),
+    email: String(row.email || ''),
+    supportEmail: String(row.supportemail || ''),
+    whatsappNumber: String(row.whatsappnumber || ''),
+    description: String(row.description || ''),
+    address: String(row.address || ''),
+    pincode: String(row.pincode || ''),
+    website: stripProtocol(String(row.website || '')),
+    wifiName: String(row.wifiname || ''),
+    wifiPassword: String(row.wifipassword || ''),
+    facebookUrl: stripProtocol(String(row.facebookurl || '')),
+    instagramUrl: stripProtocol(String(row.instagramurl || '')),
+    twitterUrl: stripProtocol(String(row.twitterurl || '')),
+    youtubeUrl: stripProtocol(String(row.youtubeurl || '')),
+    latitude: row.latitude != null && row.latitude !== '' ? String(row.latitude) : '',
+    longitude: row.longitude != null && row.longitude !== '' ? String(row.longitude) : '',
+    googleMapUrl: stripProtocol(String(row.googlemapurl || '')),
+    googleReviewUrl: stripProtocol(String(row.googlereviewurl || '')),
+  };
+}
+
+function stripProtocol(value: string) {
+  return value.trim().replace(/^https?:\/\//i, '');
+}
+
+function withHttps(value: string) {
+  const cleaned = stripProtocol(value);
+  return cleaned ? `https://${cleaned}` : '';
+}
+
+function isHttpUrl(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return true;
+  try {
+    const url = new URL(trimmed.includes('://') ? trimmed : `https://${trimmed}`);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function parseMapCoords(url: string): { lat: string; lng: string } | null {
+  const at = url.match(/@(-?\d+\.?\d*),\s*(-?\d+\.?\d*)/);
+  if (at) return { lat: at[1], lng: at[2] };
+  const q = url.match(/[?&]q=(-?\d+\.?\d*),\s*(-?\d+\.?\d*)/);
+  if (q) return { lat: q[1], lng: q[2] };
+  const d = url.match(/!3d(-?\d+\.?\d*)!4d(-?\d+\.?\d*)/);
+  if (d) return { lat: d[1], lng: d[2] };
+  return null;
+}
+
+function ProfileSection({ id, title, text, children }: { id: string; title: string; text?: string; children: ReactNode }) {
+  return (
+    <section id={id} className="scroll-mt-28 rounded-2xl border border-stone-200 bg-white p-5 shadow-sm sm:p-6">
+      <header className="mb-5 border-b border-stone-100 pb-4">
+        <h2 className="text-sm font-semibold text-stone-950">{title}</h2>
+        {text ? <p className="mt-1 text-sm text-stone-500">{text}</p> : null}
+      </header>
+      <div className="grid gap-4 sm:grid-cols-2">{children}</div>
+    </section>
+  );
+}
+
+function ImageUpload({ label, kind, preview, hint, onPick }: { label: string; kind: 'logo' | 'banner'; preview?: string | null; hint: string; onPick: (file: File | null) => void }) {
+  return (
+    <label className="block text-sm">
+      <span className="mb-1.5 block font-medium text-stone-500">{label}</span>
+      <span className="flex min-h-[7.5rem] cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-stone-300 bg-stone-50 px-4 py-4 text-center transition hover:border-orange-600 hover:bg-orange-50 sm:flex-row sm:justify-start sm:text-left">
+        {preview ? (
+          <img alt="" src={preview} className={kind === 'logo' ? 'h-16 w-16 rounded-2xl object-cover shadow-sm ring-2 ring-white' : 'h-16 w-28 rounded-xl object-cover shadow-sm ring-2 ring-white'} />
+        ) : (
+          <span className={`grid place-items-center rounded-2xl bg-white text-stone-400 ring-1 ring-stone-200 ${kind === 'logo' ? 'h-16 w-16' : 'h-16 w-28'}`}>
+            <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M4 16l4.5-4.5a2 2 0 0 1 2.8 0L16 16m-2-2l1.2-1.2a2 2 0 0 1 2.8 0L20 14M8 8h.01M6 20h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z" /></svg>
+          </span>
+        )}
+        <span className="min-w-0">
+          <span className="block text-sm font-semibold text-stone-950">{preview ? 'Replace image' : 'Choose file'}</span>
+          <span className="mt-0.5 block text-xs text-stone-500">{hint}</span>
+        </span>
+      </span>
+      <input
+        className="sr-only"
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        onChange={(event) => {
+          const file = event.target.files?.[0] || null;
+          if (file && file.size > 2 * 1024 * 1024) {
+            toastErr('Image must be 2 MB or smaller.');
+            event.target.value = '';
+            return;
+          }
+          onPick(file);
+        }}
+      />
+    </label>
+  );
+}
+
+/** Full URL length (including https://). Long Google Maps / review share links need room. */
+const URL_MAX = 2000;
+
+function UrlField({ label, value, hint, invalid, tip, onChange }: { label: string; value: string; hint?: string; invalid?: boolean; tip?: string; onChange: (value: string) => void }) {
+  const shown = stripProtocol(value);
+  return (
+    <label className="block text-sm">
+      <span className="mb-1.5 block font-medium text-stone-500">{label}</span>
+      <span className={`flex min-h-11 overflow-hidden rounded-xl border bg-white ring-orange-600/20 focus-within:ring-4 ${invalid ? 'border-rose-400' : 'border-stone-200 focus-within:border-orange-600'}`}>
+        <span className="grid shrink-0 place-items-center self-stretch border-r border-stone-200 bg-stone-50 px-3 text-xs font-semibold text-stone-400">https://</span>
+        <textarea
+          value={shown}
+          rows={shown.length > 80 ? 3 : 1}
+          onChange={(event) => onChange(stripProtocol(event.target.value).slice(0, URL_MAX - 'https://'.length))}
+          className="min-w-0 flex-1 resize-y bg-transparent px-3 py-2.5 text-sm outline-none"
+          placeholder={hint}
+          inputMode="url"
+          autoComplete="url"
+        />
+      </span>
+      {invalid ? <span className="mt-1 block text-xs text-rose-600">Enter a valid URL</span> : null}
+      {!invalid && tip ? <span className="mt-1 block text-xs text-stone-500">{tip}</span> : null}
+    </label>
+  );
+}
+
+function GuestPreview({ draft, logoSrc, bannerSrc }: { draft: ProfileDraft; logoSrc: string | null; bannerSrc: string | null }) {
+  const color = '#ea580c';
+  const mark = (draft.businessName || 'S').trim().charAt(0).toUpperCase() || 'S';
+  return (
+    <div className="mx-auto w-full max-w-[220px]">
+      <div className="overflow-hidden rounded-[1.6rem] border border-stone-200 bg-stone-950 shadow-xl shadow-stone-900/15 ring-4 ring-stone-100">
+        <div className="relative h-28" style={{ background: `linear-gradient(160deg, ${color}, #7c2d12 70%)` }}>
+          {bannerSrc ? <img alt="" src={bannerSrc} className="h-full w-full object-cover opacity-90" /> : null}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+          <div className="absolute bottom-3 left-3 right-3 text-white">
+            <p className="truncate text-sm font-bold">{draft.businessName || 'Your shop'}</p>
+            <p className="truncate text-[11px] text-white/80">{draft.tagline || 'Tagline appears here'}</p>
+          </div>
+          <div className="absolute -bottom-5 left-3 grid h-12 w-12 place-items-center overflow-hidden rounded-full bg-white shadow-md ring-2 ring-white">
+            {logoSrc ? <img alt="" src={logoSrc} className="h-full w-full object-cover" /> : <span className="text-lg font-semibold text-orange-600">{mark}</span>}
+          </div>
+        </div>
+        <div className="bg-white px-3 pb-3 pt-7">
+          <p className="text-[11px] leading-relaxed text-stone-500">Guest preview · updates as you type</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function BusinessProfilePage() {
   const auth = useAuth();
   const navigate = useNavigate();
-  const [profile, setProfile] = useState<any>({});
+  const [profile, setProfile] = useState<any>(null);
+  const [draft, setDraft] = useState<ProfileDraft | null>(null);
+  const [baseline, setBaseline] = useState('');
   const [countries, setCountries] = useState<any[]>([]);
   const [states, setStates] = useState<any[]>([]);
   const [districts, setDistricts] = useState<any[]>([]);
   const [cities, setCities] = useState<any[]>([]);
   const [loc, setLoc] = useState({ countryId: '', stateId: '', districtId: '', cityId: '' });
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [bannerFile, setBannerFile] = useState<File | null>(null);
+  const [logoLocal, setLogoLocal] = useState<string | null>(null);
+  const [bannerLocal, setBannerLocal] = useState<string | null>(null);
+  const [showAdvancedMap, setShowAdvancedMap] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState('');
+  const [activeSection, setActiveSection] = useState<string>('images');
+  const [loadError, setLoadError] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  function setField<K extends keyof ProfileDraft>(key: K, value: ProfileDraft[K]) {
+    setDraft((current) => (current ? { ...current, [key]: value } : current));
+  }
+
+  function loadProfile() {
+    setLoading(true);
+    setLoadError('');
+    return api<any>('/business/profile', { quiet: true })
+      .then((row) => {
+        const next = draftFromProfile(row);
+        setProfile(row);
+        setDraft(next);
+        setBaseline(JSON.stringify(next));
+        setLoc({
+          countryId: row.countryid ? String(row.countryid) : '',
+          stateId: row.stateid ? String(row.stateid) : '',
+          districtId: row.districtid ? String(row.districtid) : '',
+          cityId: row.cityid ? String(row.cityid) : '',
+        });
+        setShowAdvancedMap(Boolean(row.latitude || row.longitude));
+        setLogoFile(null);
+        setBannerFile(null);
+        setLogoLocal(null);
+        setBannerLocal(null);
+      })
+      .catch((error) => {
+        setLoadError(error instanceof Error ? error.message : 'Could not load profile.');
+      })
+      .finally(() => setLoading(false));
+  }
+
   useEffect(() => {
-    api<any>('/business/profile').then((row) => {
-      setProfile(row);
-      setLoc({ countryId: row.countryid ? String(row.countryid) : '', stateId: row.stateid ? String(row.stateid) : '', districtId: row.districtid ? String(row.districtid) : '', cityId: row.cityid ? String(row.cityid) : '' });
-    });
-    api<any[]>('/locations/countries').then(setCountries);
+    void loadProfile();
+    api<any[]>('/locations/countries', { quiet: true }).then(setCountries).catch(() => undefined);
   }, []);
+
   useEffect(() => {
-    if (profile.businessid && !profile.countryid && countries.length === 1 && !loc.countryId) setLoc((current) => ({ ...current, countryId: String(countries[0].countryid) }));
+    if (profile?.businessid && !profile.countryid && countries.length === 1 && !loc.countryId) {
+      setLoc((current) => ({ ...current, countryId: String(countries[0].countryid) }));
+    }
   }, [profile, countries, loc.countryId]);
   useEffect(() => { if (loc.countryId) api<any[]>(`/locations/states?countryId=${loc.countryId}`).then(setStates); else setStates([]); }, [loc.countryId]);
   useEffect(() => { if (loc.stateId) api<any[]>(`/locations/districts?stateId=${loc.stateId}`).then(setDistricts); else setDistricts([]); }, [loc.stateId]);
   useEffect(() => { if (loc.districtId) api<any[]>(`/locations/cities?districtId=${loc.districtId}`).then(setCities); else setCities([]); }, [loc.districtId]);
-  return <Frame>
-    <PageTitle title="Business profile" />
-    {profile.logoimagepath && <img alt="Logo" src={asset(profile.logoimagepath)} className="mb-4 h-16 w-16 rounded-2xl object-cover" />}
-    <Form key={profile.businessid || 'new'} className="grid gap-3 rounded-2xl border border-stone-200 bg-white p-5 shadow-sm md:grid-cols-2" onSubmit={(e) => { e.preventDefault(); const body = new FormData(e.currentTarget); return api('/business/profile', { method: 'POST', body }).then((next) => { setProfile(next); toastOk('Profile saved.'); }); }}>
-      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-stone-400 md:col-span-2">Name and contact</p>
-      <Field label="Name" name="businessName" defaultValue={profile.businessname} required /><Field label="Phone" name="phone" defaultValue={profile.phone} /><Field label="Email" name="email" defaultValue={profile.email} /><Field label="Tagline" name="tagline" defaultValue={profile.tagline} />
-      <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-stone-400 md:col-span-2">Address</p>
-      <div className="md:col-span-2"><Area label="Address" name="address" required defaultValue={profile.address} /></div>
-      <Select label="Country" name="countryId" required value={loc.countryId} onChange={(event) => setLoc({ countryId: event.target.value, stateId: '', districtId: '', cityId: '' })}><option value="">Select</option>{countries.map((row) => <option key={row.countryid} value={row.countryid}>{row.countryname}</option>)}</Select>
-      <Select label="State" name="stateId" required value={loc.stateId} onChange={(event) => setLoc((current) => ({ ...current, stateId: event.target.value, districtId: '', cityId: '' }))}><option value="">Select</option>{states.map((row) => <option key={row.stateid} value={row.stateid}>{row.statename}</option>)}</Select>
-      <Select label="District" name="districtId" value={loc.districtId} onChange={(event) => setLoc((current) => ({ ...current, districtId: event.target.value, cityId: '' }))}><option value="">Select</option>{districts.map((row) => <option key={row.districtid} value={row.districtid}>{row.districtname}</option>)}</Select>
-      <Select label="City" name="cityId" value={loc.cityId} onChange={(event) => setLoc((current) => ({ ...current, cityId: event.target.value }))}><option value="">Select</option>{cities.map((row) => <option key={row.cityid} value={row.cityid}>{row.cityname}</option>)}</Select>
-      <div className="md:col-span-2"><Area label="Description" name="description" defaultValue={profile.description} /></div>
-      <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-stone-400 md:col-span-2">Links</p>
-      <Field label="Theme color" name="themeColor" defaultValue={profile.themecolor} /><Field label="Website" name="website" defaultValue={profile.website} />
-      <Field label="Facebook" name="facebookUrl" defaultValue={profile.facebookurl} /><Field label="Instagram" name="instagramUrl" defaultValue={profile.instagramurl} />
-      <Field label="Wi‑Fi name" name="wifiName" defaultValue={profile.wifiname} placeholder="Network name" /><Field label="Wi‑Fi password" name="wifiPassword" defaultValue={profile.wifipassword} placeholder="Password guests can use" />
-      <Field label="X" name="twitterUrl" defaultValue={profile.twitterurl} /><Field label="YouTube" name="youtubeUrl" defaultValue={profile.youtubeurl} />
-      <Field label="WhatsApp for orders" name="whatsappNumber" defaultValue={profile.whatsappnumber} inputMode="numeric" maxLength={10} placeholder="10-digit mobile" />
-      <Field label="Support email" name="supportEmail" defaultValue={profile.supportemail} /><Field label="Pincode" name="pincode" defaultValue={profile.pincode} />
-      <Field label="Latitude" name="latitude" defaultValue={profile.latitude} /><Field label="Longitude" name="longitude" defaultValue={profile.longitude} />
-      <Field label="Google map URL" name="googleMapUrl" defaultValue={profile.googlemapurl} /><Field label="Google review URL" name="googleReviewUrl" defaultValue={profile.googlereviewurl} />
-      <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-stone-400 md:col-span-2">Images</p>
-      <label className="text-sm">Logo<input className="mt-1 block w-full" type="file" name="logo" accept="image/png,image/jpeg,image/webp" /></label>
-      <label className="text-sm">Banner<input className="mt-1 block w-full" type="file" name="banner" accept="image/png,image/jpeg,image/webp" /></label>
-      <div className="md:col-span-2"><Button type="submit" className="w-full sm:w-auto">Save profile</Button></div>
+
+  useEffect(() => {
+    if (!logoFile) { setLogoLocal(null); return undefined; }
+    const url = URL.createObjectURL(logoFile);
+    setLogoLocal(url);
+    return () => URL.revokeObjectURL(url);
+  }, [logoFile]);
+  useEffect(() => {
+    if (!bannerFile) { setBannerLocal(null); return undefined; }
+    const url = URL.createObjectURL(bannerFile);
+    setBannerLocal(url);
+    return () => URL.revokeObjectURL(url);
+  }, [bannerFile]);
+
+  useEffect(() => {
+    const nodes = PROFILE_SECTIONS.map((section) => document.getElementById(section.id)).filter((node): node is HTMLElement => Boolean(node));
+    if (!nodes.length) return undefined;
+    const observer = new IntersectionObserver((entries) => {
+      const seen = entries.filter((entry) => entry.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+      if (seen?.target.id) setActiveSection(seen.target.id);
+    }, { rootMargin: '-20% 0px -55% 0px', threshold: [0.15, 0.4] });
+    nodes.forEach((node) => observer.observe(node));
+    return () => observer.disconnect();
+  }, [draft]);
+
+  const logoSrc = logoLocal || (profile?.logoimagepath ? asset(profile.logoimagepath) : null);
+  const bannerSrc = bannerLocal || (profile?.bannerimagepath ? asset(profile.bannerimagepath) : null);
+  const dirty = Boolean(draft && (JSON.stringify(draft) !== baseline || logoFile || bannerFile || JSON.stringify(loc) !== JSON.stringify({
+    countryId: profile?.countryid ? String(profile.countryid) : '',
+    stateId: profile?.stateid ? String(profile.stateid) : '',
+    districtId: profile?.districtid ? String(profile.districtid) : '',
+    cityId: profile?.cityid ? String(profile.cityid) : '',
+  })));
+
+  const checklist = useMemo(() => {
+    if (!draft) return [];
+    return [
+      { label: 'Shop name', done: Boolean(draft.businessName.trim()) },
+      { label: 'Logo', done: Boolean(logoSrc) },
+      { label: 'Banner', done: Boolean(bannerSrc) },
+      { label: 'Phone or WhatsApp', done: Boolean(draft.phone.trim() || draft.whatsappNumber.trim()) },
+      { label: 'Address', done: Boolean(draft.address.trim()) },
+      { label: 'Google review link', done: Boolean(draft.googleReviewUrl.trim()) },
+      { label: 'Website or social', done: Boolean(draft.website.trim() || draft.facebookUrl.trim() || draft.instagramUrl.trim() || draft.twitterUrl.trim() || draft.youtubeUrl.trim()) },
+    ];
+  }, [draft, logoSrc, bannerSrc]);
+  const doneCount = checklist.filter((item) => item.done).length;
+
+  const urlErrors = draft ? {
+    website: !isHttpUrl(draft.website),
+    facebookUrl: !isHttpUrl(draft.facebookUrl),
+    instagramUrl: !isHttpUrl(draft.instagramUrl),
+    twitterUrl: !isHttpUrl(draft.twitterUrl),
+    youtubeUrl: !isHttpUrl(draft.youtubeUrl),
+    googleMapUrl: !isHttpUrl(draft.googleMapUrl),
+    googleReviewUrl: !isHttpUrl(draft.googleReviewUrl),
+  } : null;
+  const hasUrlError = Boolean(urlErrors && Object.values(urlErrors).some(Boolean));
+
+  async function save() {
+    if (!draft) return;
+    if (hasUrlError) {
+      toastErr('Fix invalid URLs before saving.');
+      return;
+    }
+    if (!draft.businessName.trim()) {
+      toastErr('Business name is required.');
+      return;
+    }
+    if (!draft.address.trim()) {
+      toastErr('Address is required.');
+      return;
+    }
+    if (!loc.countryId || !loc.stateId) {
+      toastErr('Country and state are required.');
+      return;
+    }
+    const body = new FormData();
+    body.set('businessName', draft.businessName.trim());
+    body.set('tagline', draft.tagline.trim());
+    body.set('phone', draft.phone.trim());
+    body.set('email', draft.email.trim());
+    body.set('supportEmail', draft.supportEmail.trim());
+    body.set('whatsappNumber', draft.whatsappNumber.trim());
+    body.set('description', draft.description.trim());
+    body.set('address', draft.address.trim());
+    body.set('pincode', draft.pincode.trim());
+    body.set('website', withHttps(draft.website));
+    body.set('wifiName', draft.wifiName.trim());
+    body.set('wifiPassword', draft.wifiPassword.trim());
+    body.set('facebookUrl', withHttps(draft.facebookUrl));
+    body.set('instagramUrl', withHttps(draft.instagramUrl));
+    body.set('twitterUrl', withHttps(draft.twitterUrl));
+    body.set('youtubeUrl', withHttps(draft.youtubeUrl));
+    body.set('latitude', draft.latitude.trim());
+    body.set('longitude', draft.longitude.trim());
+    body.set('googleMapUrl', withHttps(draft.googleMapUrl));
+    body.set('googleReviewUrl', withHttps(draft.googleReviewUrl));
+    body.set('countryId', loc.countryId);
+    body.set('stateId', loc.stateId);
+    body.set('districtId', loc.districtId);
+    body.set('cityId', loc.cityId);
+    if (logoFile) body.set('logo', logoFile);
+    if (bannerFile) body.set('banner', bannerFile);
+    const next = await api<any>('/business/profile', { method: 'POST', body });
+    const nextDraft = draftFromProfile(next);
+    setProfile(next);
+    setDraft(nextDraft);
+    setBaseline(JSON.stringify(nextDraft));
+    setLoc({
+      countryId: next.countryid ? String(next.countryid) : '',
+      stateId: next.stateid ? String(next.stateid) : '',
+      districtId: next.districtid ? String(next.districtid) : '',
+      cityId: next.cityid ? String(next.cityid) : '',
+    });
+    setLogoFile(null);
+    setBannerFile(null);
+    toastOk('Profile saved.');
+  }
+
+  if (loading) {
+    return (
+      <Frame>
+        <PageTitle title="Business profile" text="Keep shop details, links, and images up to date for guests and your QR page." />
+        <div className="grid gap-4 lg:grid-cols-[1fr_240px]">
+          <div className="space-y-4">
+            {[0, 1, 2].map((item) => <div key={item} className="h-40 animate-pulse rounded-2xl bg-stone-200/70" />)}
+          </div>
+          <div className="h-64 animate-pulse rounded-2xl bg-stone-200/70" />
+        </div>
+      </Frame>
+    );
+  }
+
+  if (loadError || !draft || !profile) {
+    return (
+      <Frame>
+        <PageTitle title="Business profile" text="Keep shop details, links, and images up to date for guests and your QR page." />
+        <Card className="max-w-xl">
+          <p className="text-sm font-semibold text-stone-950">Could not open profile</p>
+          <p className="mt-2 text-sm text-stone-600">{loadError || 'Profile data is unavailable.'}</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button type="button" onClick={() => void loadProfile()}>Try again</Button>
+            <Button kind="ghost" type="button" onClick={() => navigate('/business')}>Back to dashboard</Button>
+          </div>
+        </Card>
+      </Frame>
+    );
+  }
+
+  return (
+    <Frame>
+      <PageTitle title="Business profile" text="Keep shop details, links, and images up to date for guests and your QR page." />
+
+      <div className="mb-4 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {PROFILE_SECTIONS.map((section) => (
+          <button
+            key={section.id}
+            type="button"
+            className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-semibold transition ${activeSection === section.id ? 'bg-orange-600 text-white' : 'bg-white text-stone-500 ring-1 ring-stone-200 hover:bg-orange-50'}`}
+            onClick={() => document.getElementById(section.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+          >
+            {section.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_240px]">
+        <Form className="space-y-5" onSubmit={(event) => { event.preventDefault(); return save(); }}>
+          <ProfileSection id="images" title="Images" text="Shown first on your guest page and QR poster.">
+            <ImageUpload label="Logo" kind="logo" preview={logoSrc} hint="PNG, JPG, or WebP · max 2 MB · square works best" onPick={setLogoFile} />
+            <ImageUpload label="Banner" kind="banner" preview={bannerSrc} hint="PNG, JPG, or WebP · max 2 MB · wide image works best" onPick={setBannerFile} />
+          </ProfileSection>
+
+          <ProfileSection id="identity" title="Name and contact" text="How your shop appears on the guest page.">
+            <Field label="Name" value={draft.businessName} onChange={(event) => setField('businessName', event.target.value)} required />
+            <Field label="Tagline" value={draft.tagline} onChange={(event) => setField('tagline', event.target.value)} />
+            <Field label="Phone" value={draft.phone} onChange={(event) => setField('phone', event.target.value)} />
+            <Field label="Email" value={draft.email} onChange={(event) => setField('email', event.target.value)} />
+            <Field label="Support email" value={draft.supportEmail} onChange={(event) => setField('supportEmail', event.target.value)} />
+            <Field label="WhatsApp for orders" value={draft.whatsappNumber} onChange={(event) => setField('whatsappNumber', event.target.value.replace(/\D/g, '').slice(0, 10))} inputMode="numeric" maxLength={10} />
+            <div className="sm:col-span-2"><Area label="Description" value={draft.description} onChange={(event) => setField('description', event.target.value)} /></div>
+          </ProfileSection>
+
+          <ProfileSection id="address" title="Address" text="Where guests find you.">
+            <div className="sm:col-span-2"><Area label="Address" value={draft.address} onChange={(event) => setField('address', event.target.value)} required /></div>
+            <Select label="Country" value={loc.countryId} onChange={(event) => setLoc({ countryId: event.target.value, stateId: '', districtId: '', cityId: '' })} required>
+              <option value="">Select</option>
+              {countries.map((row) => <option key={row.countryid} value={row.countryid}>{row.countryname}</option>)}
+            </Select>
+            <Select label="State" value={loc.stateId} onChange={(event) => setLoc((current) => ({ ...current, stateId: event.target.value, districtId: '', cityId: '' }))} required>
+              <option value="">Select</option>
+              {states.map((row) => <option key={row.stateid} value={row.stateid}>{row.statename}</option>)}
+            </Select>
+            <Select label="District" value={loc.districtId} onChange={(event) => setLoc((current) => ({ ...current, districtId: event.target.value, cityId: '' }))}>
+              <option value="">Select</option>
+              {districts.map((row) => <option key={row.districtid} value={row.districtid}>{row.districtname}</option>)}
+            </Select>
+            <Select label="City" value={loc.cityId} onChange={(event) => setLoc((current) => ({ ...current, cityId: event.target.value }))}>
+              <option value="">Select</option>
+              {cities.map((row) => <option key={row.cityid} value={row.cityid}>{row.cityname}</option>)}
+            </Select>
+            <Field label="Pincode" value={draft.pincode} onChange={(event) => setField('pincode', event.target.value)} />
+          </ProfileSection>
+
+          <ProfileSection id="branding" title="Website" text="Optional link guests can open from your page.">
+            <div className="sm:col-span-2">
+              <UrlField label="Website" value={draft.website} hint="yourshop.com" invalid={urlErrors?.website} onChange={(value) => setField('website', value)} />
+            </div>
+          </ProfileSection>
+
+          <ProfileSection id="wifi" title="Guest Wi‑Fi" text="Optional. Not a link — this is the network name and password guests see on your page so they can connect at the shop.">
+            <Field label="Network name (SSID)" value={draft.wifiName} onChange={(event) => setField('wifiName', event.target.value)} placeholder="e.g. Cafe_Guest" />
+            <Field label="Wi‑Fi password" value={draft.wifiPassword} onChange={(event) => setField('wifiPassword', event.target.value)} placeholder="Password guests can use" />
+          </ProfileSection>
+
+          <ProfileSection id="social" title="Social links" text="Optional profiles guests can open from your page.">
+            <UrlField label="Facebook" value={draft.facebookUrl} hint="facebook.com/yourpage" invalid={urlErrors?.facebookUrl} onChange={(value) => setField('facebookUrl', value)} />
+            <UrlField label="Instagram" value={draft.instagramUrl} hint="instagram.com/yourpage" invalid={urlErrors?.instagramUrl} onChange={(value) => setField('instagramUrl', value)} />
+            <UrlField label="X" value={draft.twitterUrl} hint="x.com/yourpage" invalid={urlErrors?.twitterUrl} onChange={(value) => setField('twitterUrl', value)} />
+            <UrlField label="YouTube" value={draft.youtubeUrl} hint="youtube.com/@yourchannel" invalid={urlErrors?.youtubeUrl} onChange={(value) => setField('youtubeUrl', value)} />
+          </ProfileSection>
+
+          <ProfileSection id="maps" title="Maps and reviews" text="Paste a Google Maps link to fill coordinates automatically.">
+            <div className="sm:col-span-2">
+              <UrlField
+                label="Google map URL"
+                value={draft.googleMapUrl}
+                hint="Paste the full Google Maps share link"
+                tip="Long Google Maps links are supported."
+                invalid={urlErrors?.googleMapUrl}
+                onChange={(value) => {
+                  setField('googleMapUrl', value);
+                  const coords = parseMapCoords(withHttps(value));
+                  if (coords) {
+                    setDraft((current) => current ? { ...current, googleMapUrl: stripProtocol(value), latitude: coords.lat, longitude: coords.lng } : current);
+                    setShowAdvancedMap(true);
+                  }
+                }}
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <UrlField
+                label="Google review URL"
+                value={draft.googleReviewUrl}
+                hint="Paste the full Google review / g.page link"
+                tip="Long review links are supported."
+                invalid={urlErrors?.googleReviewUrl}
+                onChange={(value) => setField('googleReviewUrl', value)}
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <button type="button" className="text-sm font-semibold text-orange-600" onClick={() => setShowAdvancedMap((open) => !open)}>
+                {showAdvancedMap ? 'Hide coordinates' : 'Show latitude / longitude'}
+              </button>
+            </div>
+            {showAdvancedMap ? (
+              <>
+                <Field label="Latitude" value={draft.latitude} onChange={(event) => setField('latitude', event.target.value)} />
+                <Field label="Longitude" value={draft.longitude} onChange={(event) => setField('longitude', event.target.value)} />
+              </>
+            ) : null}
+          </ProfileSection>
+
+          <div className="sticky bottom-3 z-10 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-white/95 p-4 shadow-lg shadow-stone-900/5 backdrop-blur">
+            <p className="text-sm text-stone-500">{dirty ? 'You have unsaved changes.' : 'All changes saved.'}</p>
+            <Button type="submit" className="w-full sm:w-auto" disabled={!dirty || hasUrlError}>{dirty ? 'Save profile' : 'Saved'}</Button>
+          </div>
     </Form>
-    <Button kind="danger" className="mt-6" onClick={async () => {
-      if (!window.confirm('Delete this shop account? The shop is paused and you will not be able to sign in. Orders and plays stay.')) return;
+
+        <aside className="space-y-4 lg:sticky lg:top-24">
+          <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-stone-400">Guest preview</p>
+            <GuestPreview draft={draft} logoSrc={logoSrc} bannerSrc={bannerSrc} />
+          </section>
+          <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-stone-400">Profile strength</p>
+              <p className="text-sm font-semibold text-orange-600">{doneCount}/{checklist.length}</p>
+            </div>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-stone-100">
+              <div className="h-full rounded-full bg-orange-600 transition-all" style={{ width: `${(doneCount / checklist.length) * 100}%` }} />
+            </div>
+            <ul className="mt-4 space-y-2">
+              {checklist.map((item) => (
+                <li key={item.label} className="flex items-center gap-2 text-sm text-stone-600">
+                  <span className={`grid h-5 w-5 place-items-center rounded-full text-[10px] font-bold ${item.done ? 'bg-emerald-100 text-emerald-700' : 'bg-stone-100 text-stone-400'}`}>{item.done ? '✓' : ''}</span>
+                  {item.label}
+                </li>
+              ))}
+            </ul>
+          </section>
+        </aside>
+      </div>
+
+      <section className="mt-8 rounded-2xl border border-rose-200 bg-rose-50/60 p-5 sm:p-6">
+        <h2 className="text-sm font-semibold text-rose-800">Danger zone</h2>
+        <p className="mt-1 text-sm text-rose-700/80">Pauses the shop and signs you out. Orders and plays are kept.</p>
+        <Button kind="danger" className="mt-4" type="button" onClick={() => { setDeleteConfirm(''); setDeleteOpen(true); }}>Delete account</Button>
+      </section>
+
+      {deleteOpen && (
+        <Modal title="Delete this shop?" text={`Type ${profile.businessname || 'the shop name'} to confirm.`} onClose={() => setDeleteOpen(false)}>
+          <Field label="Shop name" value={deleteConfirm} onChange={(event) => setDeleteConfirm(event.target.value)} autoFocus />
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button kind="ghost" type="button" onClick={() => setDeleteOpen(false)}>Cancel</Button>
+            <Button
+              kind="danger"
+              type="button"
+              disabled={deleteConfirm.trim().toLowerCase() !== String(profile.businessname || '').trim().toLowerCase()}
+              onClick={async () => {
       await api('/business/account/delete', { method: 'POST' });
       await auth.clear();
       navigate('/login');
-    }}>Delete account</Button>
-  </Frame>;
+              }}
+            >
+              Delete account
+            </Button>
+          </div>
+        </Modal>
+      )}
+    </Frame>
+  );
 }
 export { CategoriesPage, ItemsPage, MenuStudio } from './menu-studio';
 

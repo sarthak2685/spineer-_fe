@@ -1,4 +1,4 @@
-import { FormEvent, ReactNode, useEffect, useState } from 'react';
+import { FormEvent, ReactNode, useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Link, useLocation } from 'react-router-dom';
 import { api, howVideoSrc } from '../../api/client';
@@ -6,6 +6,7 @@ import { HowVideoModal } from '../../components/how-player';
 import { Marketing } from '../../components/layout/Shells';
 import { openDemo } from './demo-request';
 import { digitsOnly, isTenDigitMobile } from '../../lib/mobile';
+import { siteSeo, usePageSeo } from '../../lib/seo';
 import { toastOk } from '../../lib/toast';
 
 const ease = [0.22, 1, 0.36, 1] as const;
@@ -85,20 +86,39 @@ const compare = [
 
 ];
 
-const faqs = [
-  { q: 'Do my customers need to download an app?', a: 'No. Customers scan your QR code with their phone camera and everything opens in the browser — menu, games, wallet and rewards. No download, no sign-up friction.' },
-  { q: 'How does the digital QR menu work?', a: 'You get a digital menu linked to your QR code. Update items, prices and offers from your desk anytime — changes go live on every table without reprinting the flyer.' },
-  { q: 'Can I control the games and prizes?', a: 'Yes. You decide the game the QR opens, the prizes, and the limits. The result is chosen before the wheel, scratch card, box, or slots finish.' },
-  { q: 'What are coins and how do customers earn them?', a: 'Coins are your loyalty currency. Customers earn them for playing, approved bill claims, and return visits. You set what a coin is worth at the counter.' },
-  { q: 'How do customers spend their rewards?', a: 'Coins sit in each customer’s wallet. They redeem them for the offers you publish, and you confirm the redemption at the counter.' },
-  { q: 'Can I target offers to specific customers?', a: 'The Business plan groups guests by how often they visit, so a quiet regular can get a different offer from a first-time scan.' },
-  { q: 'Will messages feel like spam?', a: 'Offers go to people who already scanned your QR and kept a wallet. You send birthday rewards, wallet balances, and festival coupons — not a blast to strangers.' },
-  { q: 'How do Google reviews work?', a: 'Right after a good visit, the guest can be asked for a Google review, often alongside a small coin reward. The ask lands while the visit is still fresh.' },
-  { q: 'What does Repeat Mate cost?', a: 'Starter is ₹499 a month and Business is ₹7,999 a year. Book a free demo for a number that matches your size.' },
-  { q: 'How long does setup take? Do I need hardware?', a: 'Most counters go live the same day. You print the QR we generate. The desk and the guest flow both run in the browser.' },
-  { q: 'Is customer data safe?', a: 'Guest name, mobile, and email are stored so the shop can recognise an order, a win, and a bill claim. Shop owners see their own guests, not another shop’s list.' },
-  { q: 'What support do I get?', a: 'Every plan includes email support. Business adds priority responses.' },
+type FaqItem = { q: string; a: string; cat: 'Overview' | 'Features' | 'Loyalty' | 'Growth' | 'Results' };
+
+const faqCategories = ['All', 'Overview', 'Features', 'Loyalty', 'Growth', 'Results'] as const;
+
+const faqs: FaqItem[] = [
+  { cat: 'Overview', q: 'What is RepeatMate?', a: 'RepeatMate is an AI-powered customer engagement and loyalty platform designed to help restaurants, cafés, hotels, salons, retail shops, and other local businesses attract customers, encourage repeat visits, and grow. It combines digital QR menus, AI-powered Google review assistance, Play & Earn games, digital rewards, coupons, and customer engagement tools in one platform.' },
+  { cat: 'Overview', q: 'What does RepeatMate do?', a: 'RepeatMate helps businesses build stronger customer relationships using digital technology. Customers scan a QR code to access a digital menu, explore offers, play games, earn reward coins, and open Google review links. Businesses use these features to improve engagement, encourage repeat purchases, and build loyalty.' },
+  { cat: 'Overview', q: 'How does RepeatMate work?', a: 'A business displays its QR code on tables, counters, bills, or promotional materials. Customers scan it on their phone and open the digital page. Depending on enabled features, they can explore the menu, play games, collect rewards, discover offers, and access review links — helping drive engagement and repeat visits.' },
+  { cat: 'Features', q: 'What is a digital QR menu in RepeatMate?', a: 'A digital QR menu lets customers view your menu by scanning a QR code — items, descriptions, and prices without a printed menu. You manage and update it from the platform. It makes menu access convenient and reduces dependence on reprints.' },
+  { cat: 'Features', q: 'How does RepeatMate help with AI-powered Google reviews?', a: 'RepeatMate offers AI-powered review-writing assistance so customers can prepare personalized Google review suggestions, then edit and submit their own feedback on Google. It simplifies writing genuine reviews and supports your online reputation. Higher Google rankings are not guaranteed.' },
+  { cat: 'Features', q: 'What is the Play & Earn games feature?', a: 'Play & Earn lets customers join interactive games on your digital page. Depending on configuration, they can earn digital coins or rewards through eligible activities — making the visit more engaging and giving another reason to return.' },
+  { cat: 'Loyalty', q: 'What is the digital coins and wallet feature?', a: 'Customers collect and track reward coins in a digital wallet when this feature is enabled. Businesses set reward rules and redemption options through their loyalty program so incentives encourage engagement and repeat visits.' },
+  { cat: 'Loyalty', q: 'How does the bill rewards feature work?', a: 'Bill rewards link loyalty benefits to eligible purchases — for example coins after a qualifying bill, or a discount after a reward threshold, depending on your program. Purchase-based rewards motivate returns and strengthen relationships.' },
+  { cat: 'Loyalty', q: 'What are coupons and special offers?', a: 'Coupons and special offers let you promote discounts, deals, and campaigns for occasions, seasons, launches, or loyalty. Relevant promotions attract attention, encourage purchases, and create extra sales opportunities.' },
+  { cat: 'Features', q: 'What is the push notification feature?', a: 'Push notifications let you send updates, promotions, and offers to customers who enabled notifications and meet technical requirements — so you can stay in touch beyond a single visit.' },
+  { cat: 'Growth', q: 'What is CRM in RepeatMate?', a: 'Customer Relationship Management helps organize customer information and interactions. Depending on available features, you can use records and engagement data to plan promotions and manage relationships more effectively.' },
+  { cat: 'Growth', q: 'What is customer segmentation?', a: 'Segmentation groups customers by characteristics or activity — such as purchase history, engagement, or loyalty status — where data is available, so campaigns can be more relevant instead of one message for everyone.' },
+  { cat: 'Growth', q: 'What are automated win-back campaigns?', a: 'Win-back campaigns reconnect with customers who have not visited or purchased recently, using reminders, offers, or targeted promotions where automation is available — creating chances to re-engage inactive guests.' },
+  { cat: 'Features', q: 'How does RepeatMate help generate Google reviews?', a: 'RepeatMate makes reviews easier with access to your Google review page and AI writing assistance where configured. Customers share honest feedback from real visits. Follow Google’s policies — do not incentivize reviews or solicit only positive ones.' },
+  { cat: 'Features', q: 'Does RepeatMate provide social media integration?', a: 'When enabled, your digital page can link to your social profiles so customers can discover your content and stay connected on supported platforms.' },
+  { cat: 'Features', q: 'Does RepeatMate help create a digital presence?', a: 'Depending on the product and plan, RepeatMate includes a business website / digital presence offering so you can share information, showcase products or services, and help customers discover you beyond the physical location.' },
+  { cat: 'Growth', q: 'What is customer and sales analytics?', a: 'Analytics help you understand engagement, purchase activity, reward usage, and campaign performance based on available reporting and data — so you can spot patterns and make better decisions.' },
+  { cat: 'Growth', q: 'What is campaign ROI tracking?', a: 'Campaign ROI tracking helps evaluate the performance and financial impact of promotions using available cost, revenue, and conversion data. Accurate ROI depends on reliable inputs.' },
+  { cat: 'Loyalty', q: 'How does RepeatMate help increase repeat customers?', a: 'Through loyalty rewards, digital engagement, games, relevant promotions, and re-engagement tools that create reasons to return. Results depend on how effectively the business uses the features.' },
+  { cat: 'Overview', q: 'Why should businesses choose RepeatMate?', a: 'RepeatMate brings digital engagement and loyalty tools together in one platform — QR menus, AI review assistance, rewards, games, offers, and more, depending on your plan — to simplify interactions and strengthen relationships.' },
+  { cat: 'Overview', q: 'What makes RepeatMate different from traditional loyalty programs?', a: 'Traditional programs often rely on physical cards, manual tracking, or separate tools. RepeatMate connects menus, rewards, review assistance, and promotions through a unified QR-based digital experience.' },
+  { cat: 'Results', q: 'Can RepeatMate improve a business’s Google ranking?', a: 'It can help collect genuine feedback and prepare review text, which may support your online reputation. Google rankings depend on many factors (relevance, distance, prominence). RepeatMate does not guarantee higher rankings or a specific position.' },
+  { cat: 'Results', q: 'Does RepeatMate guarantee more customers or sales?', a: 'No. RepeatMate provides tools that support growth, but it cannot guarantee customers, sales, or revenue. Results depend on product quality, experience, pricing, competition, location, and marketing.' },
+  { cat: 'Overview', q: 'How can businesses get started with RepeatMate?', a: 'Visit the RepeatMate website, explore features and pricing, choose a plan, configure included tools, introduce your QR to customers, and start using the engagement features. You can also book a free demo.' },
+  { cat: 'Overview', q: 'What is the main goal of RepeatMate?', a: 'To help businesses turn one-time visits into long-term relationships — combining digital menus, AI review assistance, games, loyalty rewards, and promotions so local businesses can encourage repeat visits and sustainable growth.' },
 ];
+
+const FAQ_PAGE_SIZE = 8;
 
 const demoPoints = [
   { title: 'A 30-minute walkthrough', text: 'Live on a real desk — menu, games, coins, coupons and the customer list, tuned to your business type.' },
@@ -109,9 +129,8 @@ const demoPoints = [
 const businessTypes = ['Café', 'Restaurant', 'Salon', 'Spa', 'Hotel', 'Bakery', 'Gym', 'Retail Store', 'Beauty Business', 'Local Business', 'Other'];
 
 const headline: { t: string; grad?: boolean }[][] = [
-  [{ t: 'Get More Customers.' }],
-  [{ t: 'Bring Them Back.' }],
-  [{ t: 'Grow Your Business', grad: true }, { t: ' with Repeat Mate.' }],
+  [{ t: 'Turn Every Customer into a' }],
+  [{ t: 'Repeat Customer with ' }, { t: 'RepeatMate.', grad: true }],
 ];
 
 function scrollToId(id: string) {
@@ -126,25 +145,14 @@ export function HomePage() {
     if (!id) return;
     scrollToId(id);
   }, [hash]);
-  useEffect(() => {
-    const previous = document.title;
-    document.title = 'Repeat Mate | Get More Customers. Bring Them Back. Grow Your Business.';
-    const description = 'Repeat Mate helps you get more customers, bring them back, and grow your business. Digital business pages, AI review assistance, interactive games, loyalty rewards, and customer engagement tools that build lasting relationships.';
-    let meta = document.querySelector('meta[name="description"]');
-    if (!meta) {
-      meta = document.createElement('meta');
-      meta.setAttribute('name', 'description');
-      document.head.appendChild(meta);
-    }
-    meta.setAttribute('content', description);
-    return () => { document.title = previous; };
-  }, []);
+  usePageSeo({ path: '/' });
   return (
     <Marketing>
       <Hero />
       <Categories />
       <BusinessTypes />
       <Names />
+      <About />
       <What />
       <Why />
       <Features />
@@ -180,7 +188,7 @@ function Hero() {
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-orange-500 opacity-75" />
               <span className="relative inline-flex h-2 w-2 rounded-full bg-orange-600" />
             </span>
-            <span className="font-mono text-[10px] uppercase tracking-[0.12em] sm:text-[11px] sm:tracking-[0.18em]">Repeat Mate — AI-powered customer growth</span>
+            <span className="font-mono text-[10px] uppercase tracking-[0.12em] sm:text-[11px] sm:tracking-[0.18em]">{siteSeo.tagline}</span>
           </motion.p>
           <h1 className="font-display text-[2.35rem] font-semibold leading-[1.04] tracking-tight text-stone-950 sm:text-5xl lg:text-[4.4rem]" data-testid="hero-headline">
             {headline.map((line, index) => (
@@ -194,7 +202,7 @@ function Hero() {
             ))}
           </h1>
           <motion.p initial={reduce ? false : { opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.9, delay: 0.65, ease }} className="mt-7 max-w-xl text-base leading-relaxed text-stone-600 md:text-lg">
-            Repeat Mate turns every customer interaction into an opportunity to grow. From digital business pages and AI review assistance to interactive games, loyalty rewards, and customer engagement tools, Repeat Mate helps your business build lasting customer relationships.
+            {siteSeo.description}
           </motion.p>
           <motion.div initial={reduce ? false : { opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.9, delay: 0.8, ease }} className="mt-9 flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center">
             <button type="button" onClick={openDemo} className="group inline-flex w-full items-center justify-center gap-2 rounded-full bg-orange-600 px-7 py-3.5 text-sm font-semibold text-white shadow-lg shadow-orange-600/30 transition hover:scale-[1.03] hover:bg-orange-700 active:scale-[0.98] sm:w-auto">
@@ -527,6 +535,32 @@ function What() {
             );
           })}
         </ul>
+      </div>
+    </section>
+  );
+}
+
+function About() {
+  return (
+    <section id="about" className="scroll-mt-24 bg-white px-5 py-16 sm:px-8 lg:py-24">
+      <div className="mx-auto max-w-6xl">
+        <Eyebrow>About Us</Eyebrow>
+        <h2 className="mt-3 max-w-3xl font-display text-3xl font-semibold tracking-tight text-stone-950 sm:text-5xl">
+          Helping Local Businesses Turn Customers into <span className="text-orange-600">Repeat Customers</span>
+        </h2>
+        <p className="mt-4 text-base font-semibold text-orange-600 sm:text-lg">{siteSeo.tagline}</p>
+        <p className="mt-4 max-w-3xl text-base leading-relaxed text-stone-600 md:text-lg">
+          RepeatMate is an all-in-one customer engagement and loyalty platform designed to help local businesses attract customers, build lasting relationships, and encourage repeat visits.
+        </p>
+        <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+          <button type="button" onClick={openDemo} className="group inline-flex w-full items-center justify-center gap-2 rounded-full bg-orange-600 px-7 py-3.5 text-sm font-semibold text-white shadow-lg shadow-orange-600/30 transition hover:bg-orange-700 sm:w-auto">
+            Book a Free Demo
+            <Arrow className="transition group-hover:translate-x-1" />
+          </button>
+          <Link to="/about" className="inline-flex w-full items-center justify-center rounded-full border border-stone-200 bg-white px-6 py-3.5 text-sm font-semibold text-stone-950 transition hover:border-orange-600 sm:w-auto">
+            Read full About Us
+          </Link>
+        </div>
       </div>
     </section>
   );
@@ -1053,28 +1087,126 @@ function Mark({ value }: { value: boolean | string }) {
   );
 }
 
+function faqSlug(question: string) {
+  return question.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 64);
+}
+
 function Faq() {
   const reduce = useReducedMotion();
-  const [open, setOpen] = useState(0);
+  const [openQ, setOpenQ] = useState<string | null>(null);
+  const [category, setCategory] = useState<(typeof faqCategories)[number]>('All');
+  const [search, setSearch] = useState('');
+  const [showAll, setShowAll] = useState(false);
+
+  const filtered = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    return faqs.filter((item) => {
+      if (category !== 'All' && item.cat !== category) return false;
+      if (!needle) return true;
+      return item.q.toLowerCase().includes(needle) || item.a.toLowerCase().includes(needle);
+    });
+  }, [category, search]);
+
+  const visible = showAll || search.trim() || category !== 'All' ? filtered : filtered.slice(0, FAQ_PAGE_SIZE);
+  const hiddenCount = filtered.length - visible.length;
+
+  useEffect(() => {
+    setOpenQ(null);
+    setShowAll(false);
+  }, [category, search]);
+
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.type = 'application/ld+json';
+    script.id = 'repeatmate-faq-jsonld';
+    script.text = JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'FAQPage',
+      mainEntity: faqs.map((item) => ({
+        '@type': 'Question',
+        name: item.q,
+        acceptedAnswer: { '@type': 'Answer', text: item.a },
+      })),
+    });
+    document.getElementById('repeatmate-faq-jsonld')?.remove();
+    document.head.appendChild(script);
+    return () => { document.getElementById('repeatmate-faq-jsonld')?.remove(); };
+  }, []);
+
   return (
     <section id="faq" className="scroll-mt-24 bg-orange-50/40 px-5 py-16 sm:px-8 lg:py-24">
       <div className="mx-auto max-w-3xl">
         <Eyebrow>FAQ</Eyebrow>
-        <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight sm:text-5xl">Questions from the counter.</h2>
-        <div className="mt-8 overflow-hidden rounded-[28px] border border-stone-200 bg-white shadow-sm">
-          {faqs.map((item, index) => {
-            const on = open === index;
+        <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight sm:text-5xl">Frequently asked questions about RepeatMate.</h2>
+        <p className="mt-3 text-base text-stone-600">A guide to RepeatMate’s customer engagement and loyalty features.</p>
+
+        <label className="relative mt-8 block">
+          <span className="sr-only">Search FAQs</span>
+          <svg viewBox="0 0 24 24" className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3-3" strokeLinecap="round" /></svg>
+          <input
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search questions…"
+            className="h-12 w-full rounded-2xl border border-stone-200 bg-white pl-10 pr-4 text-sm outline-none ring-orange-600/15 transition placeholder:text-stone-400 focus:border-orange-600 focus:ring-4"
+          />
+        </label>
+
+        <div className="mt-4 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist" aria-label="FAQ categories">
+          {faqCategories.map((item) => {
+            const on = category === item;
+            const count = item === 'All' ? faqs.length : faqs.filter((row) => row.cat === item).length;
             return (
-              <motion.div key={item.q} className={`relative border-b border-stone-200 last:border-b-0 ${on ? 'bg-white' : ''}`} initial={reduce ? false : { opacity: 0, y: 14 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.5 }} transition={{ delay: Math.min(index, 6) * 0.05, duration: 0.4, ease }}>
+              <button
+                key={item}
+                type="button"
+                role="tab"
+                aria-selected={on}
+                onClick={() => setCategory(item)}
+                className={`shrink-0 rounded-full px-3.5 py-2 text-sm font-semibold transition ${on ? 'bg-orange-600 text-white shadow-md shadow-orange-600/20' : 'bg-white text-stone-600 ring-1 ring-stone-200 hover:border-orange-600 hover:text-orange-600'}`}
+              >
+                {item}
+                <span className={`ml-1.5 text-[11px] ${on ? 'text-orange-100' : 'text-stone-400'}`}>{count}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <p className="mt-4 text-xs font-medium text-stone-500">
+          {filtered.length === 0 ? 'No matches' : `Showing ${visible.length} of ${filtered.length} questions`}
+        </p>
+
+        <div className="mt-3 overflow-hidden rounded-[28px] border border-stone-200 bg-white shadow-sm">
+          {visible.length === 0 ? (
+            <div className="px-5 py-10 text-center">
+              <p className="text-sm font-semibold text-stone-950">No questions match that search.</p>
+              <button type="button" className="mt-3 text-sm font-semibold text-orange-600" onClick={() => { setSearch(''); setCategory('All'); }}>Clear filters</button>
+            </div>
+          ) : visible.map((item, index) => {
+            const id = `faq-${faqSlug(item.q)}`;
+            const on = openQ === item.q;
+            return (
+              <motion.div
+                key={item.q}
+                id={id}
+                className={`relative scroll-mt-28 border-b border-stone-200 last:border-b-0 ${on ? 'bg-orange-50/40' : 'bg-white'}`}
+                initial={reduce ? false : { opacity: 0, y: 10 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, amount: 0.35 }}
+                transition={{ delay: Math.min(index, 5) * 0.04, duration: 0.35, ease }}
+              >
                 {on && !reduce && <motion.span layoutId="faq-mark" className="absolute bottom-3 left-0 top-3 w-0.5 rounded-full bg-orange-600" transition={{ type: 'spring', bounce: 0.18, duration: 0.4 }} />}
                 {on && reduce && <span className="absolute bottom-3 left-0 top-3 w-0.5 rounded-full bg-orange-600" />}
-                <button type="button" className="flex w-full items-center justify-between gap-3 px-4 py-4 text-left sm:gap-4 sm:px-5 sm:py-5" aria-expanded={on} onClick={() => setOpen(on ? -1 : index)}>
-                  <span className="font-semibold leading-snug text-stone-950">{item.q}</span>
-                  <motion.span aria-hidden className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-lg leading-none text-orange-600" animate={reduce ? undefined : { rotate: on ? 45 : 0 }} transition={{ duration: 0.25 }}>+</motion.span>
+                <button type="button" className="flex w-full items-start justify-between gap-3 px-4 py-4 text-left sm:gap-4 sm:px-5 sm:py-5" aria-expanded={on} aria-controls={`${id}-answer`} onClick={() => setOpenQ(on ? null : item.q)}>
+                  <span className="min-w-0">
+                    <span className="mb-1.5 inline-flex rounded-full bg-orange-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-orange-600">{item.cat}</span>
+                    <span className="block font-semibold leading-snug text-stone-950">{item.q}</span>
+                  </span>
+                  <motion.span aria-hidden className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full text-lg leading-none ${on ? 'bg-orange-600 text-white' : 'bg-orange-50 text-orange-600'}`} animate={reduce ? undefined : { rotate: on ? 45 : 0 }} transition={{ duration: 0.25 }}>+</motion.span>
                 </button>
-                <div className={`grid transition-[grid-template-rows] duration-300 ease-out ${on ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+                <div id={`${id}-answer`} role="region" className={`grid transition-[grid-template-rows] duration-300 ease-out ${on ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
                   <div className="overflow-hidden">
-                    <motion.p className="px-5 pb-4 text-sm leading-relaxed text-stone-600" initial={false} animate={reduce || on ? { opacity: 1, y: 0 } : { opacity: 0, y: -8 }} transition={{ duration: reduce ? 0 : 0.28, ease }}>
+                    <motion.p className="px-5 pb-5 text-sm leading-relaxed text-stone-600 sm:pr-14" initial={false} animate={reduce || on ? { opacity: 1, y: 0 } : { opacity: 0, y: -8 }} transition={{ duration: reduce ? 0 : 0.28, ease }}>
                       {item.a}
                     </motion.p>
                   </div>
@@ -1082,6 +1214,26 @@ function Faq() {
               </motion.div>
             );
           })}
+        </div>
+
+        {hiddenCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowAll(true)}
+            className="mt-4 inline-flex w-full items-center justify-center rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm font-semibold text-stone-800 shadow-sm transition hover:border-orange-600 hover:text-orange-600"
+          >
+            Show {hiddenCount} more questions
+          </button>
+        )}
+
+        <div className="mt-8 flex flex-col items-start gap-4 rounded-[28px] border border-orange-200 bg-gradient-to-br from-orange-50 to-white px-5 py-6 sm:flex-row sm:items-center sm:justify-between sm:px-7">
+          <div>
+            <p className="font-display text-lg font-semibold text-stone-950">Still have a question?</p>
+            <p className="mt-1 text-sm text-stone-600">Book a free demo and we’ll walk through RepeatMate for your business.</p>
+          </div>
+          <button type="button" onClick={openDemo} className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full bg-orange-600 px-6 text-sm font-semibold text-white shadow-lg shadow-orange-600/25 transition hover:bg-orange-700">
+            Book a Free Demo
+          </button>
         </div>
       </div>
     </section>

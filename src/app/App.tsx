@@ -9,6 +9,7 @@ import { BusinessClaimsPage, BusinessDashboard, BusinessProfilePage, BusinessRev
 import { SuperBusinesses, SuperDashboard, SuperDemos, SuperHowVideo, SuperTypes } from '../features/super-admin/pages';
 import { PlatformShell, StoreShell, WalletShell } from '../components/layout/Shells';
 import { SiteInstall } from '../components/install-app';
+import { ScrollToTop } from '../components/scroll-top';
 import { PushPrompt } from '../features/customer/push-prompt';
 
 function Guard({ role }: { role: string }) {
@@ -22,6 +23,7 @@ function Guard({ role }: { role: string }) {
 export function App() {
   return (
     <>
+    <ScrollToTop />
     <SiteInstall />
     <PushPrompt />
     <Routes>

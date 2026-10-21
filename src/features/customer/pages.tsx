@@ -116,13 +116,28 @@ export function ExplorePage() {
   const [query, setQuery] = useState({ search: '', category: 'All', game: 'All', place: '', stateId: '', lat: '', lng: '', near: '' });
   const [locating, setLocating] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const nearOn = query.near === '1';
+
   function load(next = query) {
+    // Near me is an optional filter: only send geo params when it is selected.
     const params = new URLSearchParams();
-    Object.entries(next).forEach(([key, value]) => { if (value) params.set(key, value); });
-    api(`/customer/explore?${params.toString()}`).then(setData);
+    Object.entries(next).forEach(([key, value]) => {
+      if ((key === 'near' || key === 'lat' || key === 'lng') && next.near !== '1') return;
+      if (value) params.set(key, value);
+    });
+    api(`/customer/explore?${params.toString()}`, { cache: 'no-store' } as RequestInit & { quiet?: boolean }).then(setData);
   }
+
   useEffect(() => { load(); api<{ stateid: number; statename: string }[]>('/locations/states').then(setStates); }, []);
+
   function nearMe() {
+    // Toggle off: search all businesses (name / city filters still apply).
+    if (nearOn) {
+      const next = { ...query, near: '', lat: '', lng: '' };
+      setQuery(next);
+      load(next);
+      return;
+    }
     if (!navigator.geolocation) { toastErr('This browser cannot read your location. Search by city or state instead.'); return; }
     setLocating(true);
     navigator.geolocation.getCurrentPosition((position) => {
@@ -132,26 +147,51 @@ export function ExplorePage() {
       load(next);
     }, () => { setLocating(false); toastErr('Location was blocked. Pick a state or type a city.'); }, { enableHighAccuracy: true, timeout: 8000 });
   }
+
+  function runSearch() {
+    load(query);
+  }
+
   const visited = data.scope !== 'directory';
   return <Frame>
-    <PageTitle title={visited ? 'Your shops' : 'Explore shops'} text={visited ? 'Places you have already opened by scanning, playing, or ordering. Search or use Near me to see any other shop.' : 'Results for the name or location you searched.'} />
+    <PageTitle
+      title={visited ? 'Your shops' : nearOn ? 'Nearby shops' : 'Explore shops'}
+      text={visited
+        ? 'Places you have already opened by scanning, playing, or ordering. Search or turn on Near me as a filter.'
+        : nearOn
+          ? 'Near me is on — name search only looks in nearby / same-city shops. Tap Near me again to search all shops.'
+          : 'Search any shop by name. Turn on Near me to limit results to shops near you.'}
+    />
     <div className="mb-4 space-y-3">
-      <Field label="Name" value={query.search} onChange={(e) => setQuery({ ...query, search: e.target.value })} placeholder="Cafe, salon, clinic" />
+      <Field
+        label="Name"
+        value={query.search}
+        onChange={(e) => setQuery({ ...query, search: e.target.value })}
+        placeholder="Cafe, salon, clinic"
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); runSearch(); } }}
+      />
       <div className="flex gap-2 overflow-x-auto pb-1">
-        <button type="button" className={`shrink-0 rounded-full px-3 py-1.5 text-sm font-semibold ${query.near ? 'bg-orange-600 text-white' : 'bg-white text-stone-600 ring-1 ring-stone-200'}`} onClick={nearMe}>{locating ? 'Finding you…' : 'Near me'}</button>
+        <button
+          type="button"
+          aria-pressed={nearOn}
+          className={`shrink-0 rounded-full px-3 py-1.5 text-sm font-semibold ${nearOn ? 'bg-orange-600 text-white' : 'bg-white text-stone-600 ring-1 ring-stone-200'}`}
+          onClick={nearMe}
+        >
+          {locating ? 'Finding you…' : nearOn ? 'Near me · On' : 'Near me'}
+        </button>
         {['All', ...(data.categories || []).map((c: any) => c.businesstype)].map((type: string) => (
           <button key={type} type="button" className={`shrink-0 rounded-full px-3 py-1.5 text-sm font-semibold ${query.category === type ? 'bg-orange-600 text-white' : 'bg-white text-stone-600 ring-1 ring-stone-200'}`} onClick={() => { const next = { ...query, category: type }; setQuery(next); load(next); }}>{type}</button>
         ))}
         <button type="button" className="shrink-0 rounded-full bg-white px-3 py-1.5 text-sm font-semibold text-stone-600 ring-1 ring-stone-200" onClick={() => setFiltersOpen(true)}>City and state</button>
       </div>
-      <Button onClick={() => load()}>Search</Button>
+      <Button onClick={runSearch}>Search</Button>
     </div>
     {filtersOpen && (
-      <Modal title="City and state" text="Narrow the list by place." onClose={() => setFiltersOpen(false)}>
+      <Modal title="City and state" text={nearOn ? 'Applied with Near me — results stay nearby / same city.' : 'Narrow the list by place across all shops.'} onClose={() => setFiltersOpen(false)}>
         <div className="grid gap-3">
-          <Field label="City or area" value={query.place} onChange={(e) => setQuery({ ...query, place: e.target.value, near: '' })} placeholder="Bandra, Patna, Delhi" />
-          <Select label="State" value={query.stateId} onChange={(e) => setQuery({ ...query, stateId: e.target.value, near: '' })}><option value="">Any state</option>{states.map((state) => <option key={state.stateid} value={state.stateid}>{state.statename}</option>)}</Select>
-          <Button onClick={() => { setFiltersOpen(false); load(); }}>Apply</Button>
+          <Field label="City or area" value={query.place} onChange={(e) => setQuery({ ...query, place: e.target.value })} placeholder="Bandra, Patna, Delhi" />
+          <Select label="State" value={query.stateId} onChange={(e) => setQuery({ ...query, stateId: e.target.value })}><option value="">Any state</option>{states.map((state) => <option key={state.stateid} value={state.stateid}>{state.statename}</option>)}</Select>
+          <Button onClick={() => { setFiltersOpen(false); load(query); }}>Apply</Button>
         </div>
       </Modal>
     )}
@@ -160,7 +200,12 @@ export function ExplorePage() {
         <Link to={`/customer/business/${b.businessid}`} className="block transition hover:text-orange-600">
           <p className="text-xs font-semibold uppercase tracking-wider text-stone-400">{b.businesstype || 'Shop'}</p>
           <p className="mt-1 font-display text-2xl font-semibold">{b.businessname}</p>
-          <p className="mt-2 text-sm text-stone-500">{[b.cityname && b.cityname !== 'Unknown' ? b.cityname : '', b.statename && b.statename !== 'Unknown' ? b.statename : '', b.distancekm != null ? `${Number(b.distancekm).toFixed(1)} km` : '', b.active_offers ? `${b.active_offers} offers` : ''].filter(Boolean).join(' · ') || b.address || 'Open the shop'}</p>
+          <p className="mt-2 text-sm text-stone-500">{[
+            b.cityname && b.cityname !== 'Unknown' ? b.cityname : '',
+            b.statename && b.statename !== 'Unknown' ? b.statename : '',
+            b.distancekm != null ? `${Number(b.distancekm).toFixed(1)} km` : (nearOn && (b.samecity || b.cityname) ? 'Same city' : ''),
+            b.active_offers ? `${b.active_offers} offers` : '',
+          ].filter(Boolean).join(' · ') || b.address || 'Open the shop'}</p>
         </Link>
         {(b.publicslug || b.businesstoken) && (
           <div className="mt-4 flex flex-wrap gap-2">
@@ -169,7 +214,16 @@ export function ExplorePage() {
           </div>
         )}
       </div>
-    ))}{!data.businesses.length && <Empty text={visited ? 'No shops yet. Scan a QR, or search by name, city, or Near me.' : 'No businesses match these filters.'} />}</div>
+    ))}{!data.businesses.length && (
+      <Empty text={visited
+        ? 'No shops yet. Scan a QR, or search by name, city, or Near me.'
+        : nearOn
+          ? (query.search
+            ? `No nearby shop matches “${query.search}”. Turn Near me off to search all shops.`
+            : 'No nearby shops yet. Shops in your city show up here once they are active — ask them to set city (and map pin if possible) on their profile.')
+          : 'No businesses match these filters.'}
+      />
+    )}</div>
   </Frame>;
 }
 
