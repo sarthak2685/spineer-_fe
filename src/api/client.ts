@@ -1,3 +1,5 @@
+import { friendlyError } from '../lib/errors';
+
 const HOSTED_API = 'https://spinner-be.onrender.com/api';
 
 function apiBase() {
@@ -22,6 +24,15 @@ export interface User {
 
 function token() { return localStorage.getItem('rs_token') || ''; }
 
+function apiMessage(data: { message?: unknown }, status: number) {
+  const raw = data?.message;
+  if (status >= 500) return friendlyError(raw, 'Something went wrong on our side. Please try again.');
+  if (status === 404) return friendlyError(raw, 'We could not find what you were looking for.');
+  if (status === 403) return friendlyError(raw, 'You do not have permission to do that.');
+  if (status === 401) return friendlyError(raw, 'Please sign in again.');
+  return friendlyError(raw, 'Something went wrong. Please try again.');
+}
+
 export async function api<T = any>(path: string, options: RequestInit & { quiet?: boolean; timeout?: number } = {}): Promise<T> {
   const headers = new Headers(options.headers);
   if (!(options.body instanceof FormData) && options.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
@@ -34,7 +45,7 @@ export async function api<T = any>(path: string, options: RequestInit & { quiet?
     const response = await fetch(`${BASE}${path}`, { ...request, headers, credentials: 'include', signal: options.signal || controller?.signal });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      const message = data.message || 'Request failed.';
+      const message = apiMessage(data, response.status);
       if (!quiet) {
         const { toastErr } = await import('../lib/toast');
         toastErr(message);
@@ -44,15 +55,20 @@ export async function api<T = any>(path: string, options: RequestInit & { quiet?
     return data as T;
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
+      const message = 'The request took too long. Please try again.';
       if (!options.quiet) {
         const { toastErr } = await import('../lib/toast');
-        toastErr('Request timed out. Check that the API is running.');
+        toastErr(message);
       }
-      throw new Error('Request timed out.');
+      throw new Error(message);
     }
-    if (error instanceof TypeError && !options.quiet) {
-      const { toastErr } = await import('../lib/toast');
-      toastErr('Cannot reach the API. If this is the first open, the server may still be waking up.');
+    if (error instanceof TypeError) {
+      const message = 'Unable to connect. Please check your internet and try again.';
+      if (!options.quiet) {
+        const { toastErr } = await import('../lib/toast');
+        toastErr(message);
+      }
+      throw new Error(message);
     }
     throw error;
   } finally {

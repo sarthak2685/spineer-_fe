@@ -12,7 +12,7 @@ export function Toaster() {
   return (
     <ToastContainer
       position={phone ? 'top-center' : 'top-right'}
-      autoClose={3600}
+      autoClose={3000}
       newestOnTop
       closeOnClick
       pauseOnHover

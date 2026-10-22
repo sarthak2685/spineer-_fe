@@ -1,6 +1,7 @@
 import { createElement, ReactNode } from 'react';
 import { toast } from 'react-toastify';
 import { Link } from 'react-router-dom';
+import { friendlyError } from './errors';
 
 type ToastExtra = { id?: string; title?: string; detail?: string; href?: string };
 
@@ -15,14 +16,16 @@ function note(message: string, extra?: ToastExtra): ReactNode {
   return createElement('span', { className: 'block min-w-0' }, children);
 }
 
+const AUTO_CLOSE_MS = 3000;
+
 export function toastOk(message: string, extra?: ToastExtra) {
-  toast.success(note(message, extra), { autoClose: 3600, toastId: extra?.id });
+  toast.success(note(message, extra), { autoClose: AUTO_CLOSE_MS, toastId: extra?.id });
 }
 
 export function toastErr(message: string, toastId?: string) {
-  toast.error(message || 'Something went wrong.', { autoClose: false, toastId });
+  toast.error(friendlyError(message), { autoClose: AUTO_CLOSE_MS, toastId });
 }
 
 export function toastInfo(message: string, toastId?: string, extra?: ToastExtra) {
-  toast.info(note(message, extra), { autoClose: 3600, toastId: toastId || extra?.id });
+  toast.info(note(message, extra), { autoClose: AUTO_CLOSE_MS, toastId: toastId || extra?.id });
 }
