@@ -5,7 +5,6 @@ import { AnimatePresence, motion, useReducedMotion, useScroll, useTransform } fr
 import { api, asset, client } from '../../api/client';
 import { useAuth } from '../../app/auth';
 import { ActionIcon, Alert, Button, Field, Form, IconButton, Modal } from '../../components/ui';
-import { customerGroups, Workspace } from '../../components/layout/Shells';
 import { catalogCopy } from '../../lib/catalog';
 import { digitsOnly, isTenDigitMobile } from '../../lib/mobile';
 import { useInstallApp } from '../../lib/use-install';
@@ -115,24 +114,31 @@ export function PlaceFrame({ business, token, current, children }: { business: R
   const playTab = current === 'play';
   const frame = useRef(shopFrame(playTab));
   const { scrollY } = useScroll();
-  const scrollToContent = (forPlay = playTab) => {
+  const scrollToContent = (forPlay = playTab, smooth = true) => {
     const full = heroRef.current?.offsetHeight || window.innerHeight;
     const next = shopFrame(forPlay, full, window.innerWidth);
     frame.current = next;
-    window.scrollTo({ top: Math.max(0, full - next.bar), behavior: 'smooth' });
+    window.scrollTo({ top: Math.max(0, full - next.bar), behavior: smooth ? 'smooth' : 'auto' });
   };
   useEffect(() => {
+    const run = () => {
+      const path = window.location.pathname;
+      const forPlay = tabFromPath(path) === 'play';
+      scrollToContent(forPlay, true);
+    };
     const onScrollRequest = () => {
-      // Path updates sync on NavLink click; wait a frame so header bar matches the tab.
-      requestAnimationFrame(() => {
-        const path = window.location.pathname;
-        const forPlay = tabFromPath(path) === 'play';
-        scrollToContent(forPlay);
-      });
+      // Wait for route + layout (header bar height differs on play vs menu).
+      requestAnimationFrame(() => requestAnimationFrame(run));
     };
     window.addEventListener('rs-scroll-shop-content', onScrollRequest);
     return () => window.removeEventListener('rs-scroll-shop-content', onScrollRequest);
   }, []);
+  useEffect(() => {
+    // Land on content for menu/bill/review; play stays on the hero.
+    if (playTab) return;
+    const id = window.setTimeout(() => scrollToContent(false, true), 50);
+    return () => window.clearTimeout(id);
+  }, [current]);
   useLayoutEffect(() => {
     const measure = () => {
       const height = heroRef.current?.offsetHeight || window.innerHeight;
@@ -307,7 +313,7 @@ function ShopDock({ token, current, menuLabel }: { token?: string; current: Gues
   const item = (active: boolean) => `flex min-w-0 flex-1 flex-col items-center gap-0.5 px-0.5 py-1 text-[9px] font-semibold leading-none sm:text-[11px] ${active ? 'text-orange-600' : 'text-stone-400'}`;
   const bubble = (active: boolean) => `grid h-8 w-8 place-items-center rounded-full sm:h-10 sm:w-10 ${active ? 'bg-orange-600 text-white shadow-md shadow-orange-600/30' : 'bg-stone-100 text-stone-500'}`;
   return createPortal(
-    <nav className={`fixed bottom-0 z-30 px-2 pt-2 ${signedIn ? 'inset-x-0 lg:left-[240px] lg:right-0' : 'inset-x-0'}`} style={{ paddingBottom: 'max(0.55rem, env(safe-area-inset-bottom))' }} aria-label="Shop">
+    <nav className="fixed inset-x-0 bottom-0 z-30 px-2 pt-2" style={{ paddingBottom: 'max(0.55rem, env(safe-area-inset-bottom))' }} aria-label="Shop">
       <div className="mx-auto flex w-full max-w-md items-end justify-between rounded-[1.75rem] bg-white px-1 py-2 shadow-[0_-8px_30px_rgba(28,25,23,0.12)] ring-1 ring-stone-200">
         <NavLink to={`/play/${token}`} onClick={scrollIntoShop} className={item(current === 'play')}><span className={bubble(current === 'play')}><DockGlyph name="play" /></span><span className="max-w-full truncate">Play</span></NavLink>
         <NavLink to={`/menu/${token}`} onClick={scrollIntoShop} className={item(current === 'menu')}><span className={bubble(current === 'menu')}><DockGlyph name={catalogGlyph(menuLabel)} /></span><span className="max-w-full truncate">{menuLabel}</span></NavLink>
@@ -327,8 +333,6 @@ function ShopDock({ token, current, menuLabel }: { token?: string; current: Gues
 
 /** Shared shell: banner/logo stay mounted; only the inner panel slides. */
 export function GuestPlaceShell() {
-  const auth = useAuth();
-  const signedIn = Boolean(auth.user && auth.user.role === 'Customer' && !auth.user.name.startsWith('Guest_'));
   const { token = '' } = useParams();
   const location = useLocation();
   const reduce = useReducedMotion();
@@ -360,7 +364,10 @@ export function GuestPlaceShell() {
   const business = hub.business || {};
   const color = brandColor(business.themecolor);
   const ctx: GuestPlaceContext = { token, hub, setHub, color, business };
-  const shop = (
+
+  // Always full-bleed shop UI (no wallet sidebar) so the hero/dock layout stays correct.
+  return (
+    <GuestCtx.Provider value={ctx}>
       <PlaceFrame business={business} token={token} current={tab}>
         <AnimatePresence mode="wait" custom={direction} initial={false}>
           <motion.div
@@ -378,15 +385,6 @@ export function GuestPlaceShell() {
           </motion.div>
         </AnimatePresence>
       </PlaceFrame>
-  );
-
-  return (
-    <GuestCtx.Provider value={ctx}>
-      {signedIn ? (
-        <Workspace groups={customerGroups} title="Wallet" bleed>
-          {shop}
-        </Workspace>
-      ) : shop}
     </GuestCtx.Provider>
   );
 }
@@ -787,6 +785,11 @@ export function MenuPanel() {
   useEffect(() => {
     if (!copy.modes.some(([value]) => value === fulfillment)) setFulfillment(copy.modes[0][0]);
   }, [copy.kind]);
+  useEffect(() => {
+    const preset = String(hub?.settings?.stationplaceholder || '').trim();
+    if (!preset) return;
+    setStation((current) => (current.trim() ? current : preset));
+  }, [hub?.settings?.stationplaceholder]);
   const categories = (hub?.categories || []) as any[];
   const items = (hub?.items || []) as any[];
   const visible = filter === 'all' ? items : items.filter((item) => item.categoryid === filter);
@@ -1011,7 +1014,7 @@ export function MenuPanel() {
               {fulfillment === 'DineIn' && (
                 <label className="block text-sm">
                   <span className="mb-1.5 block font-medium">{hub?.settings?.stationlabel || 'Table / room'}</span>
-                  <input value={station} onChange={(event) => setStation(event.target.value)} placeholder={hub?.settings?.stationplaceholder || ''} className="h-11 w-full rounded-xl border border-stone-200 px-3" />
+                  <input value={station} onChange={(event) => setStation(event.target.value)} placeholder="e.g. 12" className="h-11 w-full rounded-xl border border-stone-200 px-3" />
                   <span className="mt-1.5 block text-xs font-normal text-stone-400">{copy.stationNote}</span>
                 </label>
               )}
