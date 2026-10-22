@@ -11,7 +11,10 @@ export type Notice = {
   notificationtype: string;
   isread: boolean;
   createddate?: string;
+  businessid?: number | null;
   businessname?: string | null;
+  publicslug?: string | null;
+  businesstoken?: string | null;
 };
 
 export const noticeFilters = [
@@ -38,7 +41,22 @@ export function useInboxCount() {
   return useContext(InboxCountContext);
 }
 
-export function noticePath(type?: string) {
+/** Prefer the shop that sent the notice; fall back to generic customer pages. */
+export function noticePath(row: Pick<Notice, 'notificationtype' | 'businessid' | 'publicslug' | 'businesstoken'> | string | undefined) {
+  const type = typeof row === 'string' || row === undefined ? row : row.notificationtype;
+  const token = typeof row === 'object' && row
+    ? String(row.publicslug || row.businesstoken || '').trim()
+    : '';
+  const businessId = typeof row === 'object' && row ? Number(row.businessid) : NaN;
+
+  if (token) {
+    if (type === 'Offer' || type === 'RewardUpdate') return `/play/${token}#offers`;
+    if (type === 'OrderUpdate') return `/menu/${token}`;
+    if (type === 'PurchaseApproval' || type === 'CoinExpiry') return `/play/${token}`;
+    return `/play/${token}`;
+  }
+  if (Number.isFinite(businessId) && businessId > 0) return `/customer/business/${businessId}`;
+
   if (type === 'Offer') return '/customer/offers';
   if (type === 'OrderUpdate') return '/customer/my-orders';
   if (type === 'RewardUpdate') return '/customer/rewards';
@@ -104,7 +122,7 @@ export function NoticeRow({ row, onRead, compact = false }: { row: Notice; onRea
   function open() {
     if (moved.current) return;
     if (unread && !compact) onRead?.(row.customernotificationid);
-    navigate(compact ? '/customer/notifications' : noticePath(row.notificationtype));
+    navigate(compact ? '/customer/notifications' : noticePath(row));
   }
 
   return (

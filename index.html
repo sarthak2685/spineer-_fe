@@ -42,6 +42,8 @@
     />
     <meta property="og:url" content="https://repeatmate.com/" />
     <meta property="og:image" content="https://repeatmate.com/icons/icon-512.png" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
     <meta property="og:image:alt" content="RepeatMate — Get More Customers. Bring Them Back. Grow Your Business." />
 
     <meta name="twitter:card" content="summary_large_image" />
@@ -53,9 +55,13 @@
     <meta name="twitter:image" content="https://repeatmate.com/icons/icon-512.png" />
 
     <link rel="canonical" href="https://repeatmate.com/" />
+    <!-- Favicons: root /favicon.ico is what Google crawls for SERP logos -->
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" href="/favicon.png" type="image/png" sizes="192x192" />
     <link rel="icon" href="/icons/icon-192.png" type="image/png" sizes="192x192" />
     <link rel="icon" href="/icons/icon-512.png" type="image/png" sizes="512x512" />
-    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" sizes="180x180" />
+    <link rel="shortcut icon" href="https://repeatmate.com/favicon.ico" />
     <link rel="manifest" href="/manifest.json" />
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -73,7 +79,13 @@
             "@id": "https://repeatmate.com/#organization",
             "name": "RepeatMate",
             "url": "https://repeatmate.com/",
-            "logo": "https://repeatmate.com/icons/icon-512.png",
+            "logo": {
+              "@type": "ImageObject",
+              "url": "https://repeatmate.com/icons/icon-512.png",
+              "width": 512,
+              "height": 512
+            },
+            "image": "https://repeatmate.com/icons/icon-512.png",
             "email": "repeatmate@gmail.com",
             "telephone": "+91-92967-56289",
             "address": {
