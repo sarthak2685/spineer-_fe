@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useLayoutEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { client } from '../../api/client';
 import { homeFor, useAuth } from '../../app/auth';
@@ -314,8 +314,24 @@ export function RegisterPage() {
   const [cities, setCities] = useState<{ cityid: number; cityname: string }[]>([]);
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [logo, setLogo] = useState<File | null>(null);
-  useEffect(() => {
-    scrollPageTop(true);
+  useLayoutEffect(() => {
+    scrollPageTop(false);
+    let cancelled = false;
+    let timeoutId = 0;
+    const frame = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (cancelled) return;
+        scrollPageTop(false);
+        timeoutId = window.setTimeout(() => {
+          if (!cancelled) scrollPageTop(false);
+        }, 100);
+      });
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+      window.clearTimeout(timeoutId);
+    };
   }, [step]);
   useEffect(() => {
     client.types().then(setTypes);
@@ -406,7 +422,7 @@ export function RegisterPage() {
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-stone-400 sm:col-span-2">Shop</p>
             <div className="sm:col-span-2"><Field label="Business name" name="businessName" required defaultValue={draft.businessName} /></div>
             <Select label="Type" name="businessTypeId" defaultValue={draft.businessTypeId}><option value="">Select</option>{types.map((type) => <option key={type.businesstypeid} value={type.businesstypeid}>{type.typename}</option>)}</Select>
-            <Field label="Phone" name="phone" required defaultValue={draft.phone} />
+            <Field label="Phone" name="phone" inputMode="numeric" maxLength={10} pattern="[6-9][0-9]{9}" required defaultValue={draft.phone} />
             <Field label="Email" name="email" type="email" required defaultValue={draft.email} />
             <label className="block text-sm sm:col-span-2">
               <span className="mb-1.5 block font-medium text-stone-600">Logo</span>

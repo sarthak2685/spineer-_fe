@@ -1,6 +1,12 @@
 /** Scroll the window to the top of the page. */
 export function scrollPageTop(smooth = true) {
-  window.scrollTo({ top: 0, left: 0, behavior: smooth ? 'smooth' : 'auto' });
+  const behavior = smooth ? 'smooth' : 'auto';
+  window.scrollTo({ top: 0, left: 0, behavior });
+  // WebKit / some mobile browsers ignore window.scrollTo alone when layout just changed.
+  if (!smooth) {
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }
 }
 
 /**

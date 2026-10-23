@@ -784,7 +784,7 @@ export function BusinessProfilePage() {
           <ProfileSection id="identity" title="Name and contact" text="How your shop appears on the guest page.">
             <Field label="Name" value={draft.businessName} onChange={(event) => setField('businessName', event.target.value)} required />
             <Field label="Tagline" value={draft.tagline} onChange={(event) => setField('tagline', event.target.value)} />
-            <Field label="Phone" value={draft.phone} onChange={(event) => setField('phone', event.target.value)} />
+            <Field label="Phone" value={draft.phone} onChange={(event) => setField('phone', event.target.value)} inputMode="numeric" maxLength={10} pattern="[6-9][0-9]{9}" />
             <Field label="Email" value={draft.email} onChange={(event) => setField('email', event.target.value)} />
             <Field label="Support email" value={draft.supportEmail} onChange={(event) => setField('supportEmail', event.target.value)} />
             <Field label="WhatsApp for orders" value={draft.whatsappNumber} onChange={(event) => setField('whatsappNumber', event.target.value.replace(/\D/g, '').slice(0, 10))} inputMode="numeric" maxLength={10} />

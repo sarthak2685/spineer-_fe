@@ -1,6 +1,7 @@
 import { createContext, ReactNode, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
+import { digitsOnly } from '../lib/mobile';
 
 export type PageMeta = { title: string; text?: string; gold?: boolean; kicker?: string; actions?: ReactNode };
 export const PageMetaContext = createContext<((meta: PageMeta | null) => void) | null>(null);
@@ -151,14 +152,19 @@ export function IconLink({ to, label, kind = 'primary', children }: { to: string
   return <Link to={to} aria-label={label} title={label} className={`inline-flex !h-8 !w-8 items-center justify-center !rounded-full !px-0 ${styles}`}>{children}</Link>;
 }
 
-export function Field({ label, className = '', type, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { label: string }) {
+export function Field({ label, className = '', type, inputMode, onChange, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { label: string }) {
   const [visible, setVisible] = useState(false);
   const password = type === 'password';
+  const digits = inputMode === 'numeric' || inputMode === 'tel' || type === 'tel';
+  function handleChange(event: React.ChangeEvent<HTMLInputElement>) {
+    if (digits) event.target.value = digitsOnly(event.target.value);
+    onChange?.(event);
+  }
   return (
     <label className="block text-sm">
       <span className="mb-1.5 block font-medium text-stone-500">{label}</span>
       <span className="relative block">
-        <input {...props} type={password && visible ? 'text' : type} className={`h-11 w-full rounded-xl border border-stone-200 bg-white px-3.5 text-sm outline-none ring-orange-600/20 transition focus:border-orange-600 focus:ring-4 ${password ? 'pr-11' : ''} ${className}`} />
+        <input {...props} type={password && visible ? 'text' : type} inputMode={inputMode} onChange={handleChange} className={`h-11 w-full rounded-xl border border-stone-200 bg-white px-3.5 text-sm outline-none ring-orange-600/20 transition focus:border-orange-600 focus:ring-4 ${password ? 'pr-11' : ''} ${className}`} />
         {password && (
           <button type="button" className="!absolute !right-2 !top-1/2 z-20 grid h-8 w-8 !-translate-y-1/2 place-items-center text-stone-400 hover:text-stone-700" aria-label={visible ? 'Hide password' : 'Show password'} onClick={() => setVisible((current) => !current)}>
             {visible ? (
