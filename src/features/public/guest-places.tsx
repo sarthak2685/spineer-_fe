@@ -7,6 +7,7 @@ import { useAuth } from '../../app/auth';
 import { ActionIcon, Alert, Button, Field, Form, IconButton, Modal } from '../../components/ui';
 import { catalogCopy } from '../../lib/catalog';
 import { digitsOnly, isTenDigitMobile } from '../../lib/mobile';
+import { scrollToShopContent, scrollToShopContentLater } from '../../lib/scroll';
 import { useInstallApp } from '../../lib/use-install';
 import { toastErr, toastInfo, toastOk } from '../../lib/toast';
 import { GameStage, PrizeSlice, PlayResult } from './Games';
@@ -111,32 +112,26 @@ export function PlaceFrame({ business, token, current, children }: { business: R
   const shopName = business.businessname || 'Repeat Mate';
   const shopMark = String(shopName).trim().slice(0, 1).toUpperCase() || 'R';
   const heroRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const playTab = current === 'play';
   const frame = useRef(shopFrame(playTab));
   const { scrollY } = useScroll();
-  const scrollToContent = (forPlay = playTab, smooth = true) => {
+  const scrollToContent = (smooth = true) => {
     const full = heroRef.current?.offsetHeight || window.innerHeight;
-    const next = shopFrame(forPlay, full, window.innerWidth);
-    frame.current = next;
-    window.scrollTo({ top: Math.max(0, full - next.bar), behavior: smooth ? 'smooth' : 'auto' });
+    frame.current = shopFrame(playTab, full, window.innerWidth);
+    scrollToShopContent(panelRef.current, smooth);
   };
   useEffect(() => {
-    const run = () => {
-      const path = window.location.pathname;
-      const forPlay = tabFromPath(path) === 'play';
-      scrollToContent(forPlay, true);
-    };
     const onScrollRequest = () => {
       // Wait for route + layout (header bar height differs on play vs menu).
-      requestAnimationFrame(() => requestAnimationFrame(run));
+      scrollToShopContentLater(panelRef.current, true, 80);
     };
     window.addEventListener('rs-scroll-shop-content', onScrollRequest);
     return () => window.removeEventListener('rs-scroll-shop-content', onScrollRequest);
   }, []);
   useEffect(() => {
-    // Land on content for menu/bill/review; play stays on the hero.
-    if (playTab) return;
-    const id = window.setTimeout(() => scrollToContent(false, true), 50);
+    // Land on the shop panel for every tab, including play (collapsed header + content).
+    const id = window.setTimeout(() => scrollToContent(true), 120);
     return () => window.clearTimeout(id);
   }, [current]);
   useLayoutEffect(() => {
@@ -271,7 +266,11 @@ export function PlaceFrame({ business, token, current, children }: { business: R
         document.body,
       )}
       <div className="relative z-10 mx-auto max-w-xl pb-52 sm:px-4">
-        <div className="relative bg-white px-5 pb-8 pt-3 shadow-xl shadow-stone-950/10 sm:rounded-b-[28px]">
+        <div
+          id="shop-panel"
+          ref={panelRef}
+          className="relative scroll-mt-28 bg-white px-5 pb-8 pt-3 shadow-xl shadow-stone-950/10 sm:rounded-b-[28px]"
+        >
           {business.address && <p className="mb-3 text-center text-sm text-stone-500">{business.address}</p>}
           {wifiOpen && (wifiName || wifiPassword) && (
             <div className="mx-auto mb-3 max-w-xs rounded-2xl bg-orange-50 px-4 py-3 text-left text-sm text-stone-700">

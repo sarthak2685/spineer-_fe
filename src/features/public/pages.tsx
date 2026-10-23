@@ -5,6 +5,7 @@ import { homeFor, useAuth } from '../../app/auth';
 import { Lift, Rise } from '../../components/motion';
 import { Alert, Area, Button, Card, Field, Form, PageTitle, Select, Brand } from '../../components/ui';
 import { Marketing } from '../../components/layout/Shells';
+import { scrollPageTop } from '../../lib/scroll';
 import { aboutContent, siteSeo, usePageSeo } from '../../lib/seo';
 import { openDemo } from './demo-request';
 export { HomePage } from './landing';
@@ -313,6 +314,9 @@ export function RegisterPage() {
   const [cities, setCities] = useState<{ cityid: number; cityname: string }[]>([]);
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [logo, setLogo] = useState<File | null>(null);
+  useEffect(() => {
+    scrollPageTop(true);
+  }, [step]);
   useEffect(() => {
     client.types().then(setTypes);
     client.countries().then((rows) => {
