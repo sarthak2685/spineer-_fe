@@ -140,7 +140,7 @@ function ItemModal({ copy, categories, editing, initialTab = 'one', onClose, onS
   }
 
   return (
-    <Modal wide title={editing ? copy.editItem : copy.addItem} text={tab === 'bulk' ? 'Upload a CSV. Columns: Category, Item, Price, Description. New categories are created from the file.' : copy.itemHelp} onClose={onClose}>
+    <Modal wide title={editing ? copy.editItem : copy.addItem} text={tab === 'bulk' ? 'Upload a CSV. Columns: Category, Item, Price, HalfPrice, FullPrice, Description. Fill HalfPrice and FullPrice for portion items; leave them blank for one price. New categories are created from the file.' : copy.itemHelp} onClose={onClose}>
       {!editing && (
         <div className="mb-4 grid grid-cols-2 rounded-xl bg-stone-100 p-1">
           <button type="button" className={`h-10 rounded-lg text-sm font-semibold ${tab === 'one' ? 'bg-white text-stone-950 shadow-sm' : 'text-stone-500'}`} onClick={() => setTab('one')}>Add one</button>
@@ -208,15 +208,15 @@ function ItemModal({ copy, categories, editing, initialTab = 'one', onClose, onS
 function BulkUpload({ onSaved }: { onSaved: () => void }) {
   function sampleCsv() {
     const csv = [
-      'Category,Item,Price,Description',
-      'Starters,Paneer Tikka,220,Char-grilled cottage cheese',
-      'Starters,"Paneer, Tikka",220,Spicy grilled paneer',
-      'Mains,Butter Chicken,320,Creamy tomato gravy',
-      'Mains,Dal Makhani,180,Slow-cooked black lentils',
-      'Drinks,Masala Chai,40,',
-      'Drinks,Fresh Lime Soda,60,Sweet or salted',
-      'Desserts,Gulab Jamun,90,2 pieces',
-      'Desserts,Rasmalai,120,Soft cheese dumplings',
+      'Category,Item,Price,HalfPrice,FullPrice,Description',
+      'Starters,Paneer Tikka,220,,,Char-grilled cottage cheese',
+      'Starters,"Paneer, Tikka",220,,,Spicy grilled paneer',
+      'Mains,Butter Chicken,180,180,320,Creamy tomato gravy',
+      'Mains,Dal Makhani,100,100,180,Slow-cooked black lentils',
+      'Drinks,Masala Chai,40,,,',
+      'Drinks,Fresh Lime Soda,60,,,Sweet or salted',
+      'Desserts,Gulab Jamun,90,,,2 pieces',
+      'Desserts,Rasmalai,120,,,Soft cheese dumplings',
       '',
     ].join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
