@@ -12,6 +12,7 @@ import { playNotify, unlockSound } from '../../lib/sounds';
 import { toastInfo } from '../../lib/toast';
 import { InboxCountProvider, useInboxCount } from '../../features/customer/inbox';
 import { CustomerDock } from '../../features/customer/dock';
+import { OwnerPushPrompt } from '../../features/business/owner-push-prompt';
 
 export type NavItem = { to: string; label: string; match?: string };
 export type NavGroup = { heading: string; items: NavItem[] };
@@ -382,20 +383,34 @@ function OrderChime() {
   useEffect(() => {
     const unlock = () => unlockSound();
     window.addEventListener('pointerdown', unlock, { once: true });
+    function announce(title: string, body: string) {
+      playNotify();
+      toastInfo(body || title, 'new-order', { title: title || 'New order', href: '/business/menu/orders' });
+    }
+    function onPush(event: MessageEvent) {
+      if (event.data?.type !== 'push') return;
+      const tag = String(event.data.tag || '');
+      if (!tag.startsWith('owner-order-')) return;
+      announce(String(event.data.title || 'New order'), String(event.data.body || 'A new order just arrived.'));
+    }
+    navigator.serviceWorker?.addEventListener('message', onPush);
     async function tick() {
       try {
         const data = await api<{ total: number }>('/business/menu/orders?status=Pending&pageSize=1', { quiet: true });
         const total = Number(data.total || 0);
         if (seen.current !== null && total > seen.current) {
-          playNotify();
-          toastInfo('A new order just arrived.', 'new-order', { title: 'New order', href: '/business/menu/orders' });
+          announce('New order', 'A new order just arrived.');
         }
         seen.current = total;
       } catch { /* a missed poll should not interrupt the desk */ }
     }
     tick();
     const timer = window.setInterval(tick, 12000);
-    return () => { window.clearInterval(timer); window.removeEventListener('pointerdown', unlock); };
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('pointerdown', unlock);
+      navigator.serviceWorker?.removeEventListener('message', onPush);
+    };
   }, []);
   return null;
 }
@@ -405,12 +420,19 @@ export function StoreShell() {
   useEffect(() => {
     api<any>('/business/profile').then((profile) => setKind(profile?.typename || profile?.businesstype || '')).catch(() => undefined);
   }, []);
+  useEffect(() => {
+    import('../../lib/push').then(({ getPushPermission, enableBrowserPush }) => {
+      getPushPermission().then((permission) => {
+        if (permission === 'granted') enableBrowserPush({ role: 'business' }).catch(() => undefined);
+      });
+    });
+  }, []);
   const label = catalogCopy(kind).nav;
   const groups = businessGroups.map((group) => ({
     ...group,
     items: group.items.map((item) => (item.to === '/business/menu' ? { ...item, label } : item)),
   }));
-  return <><OrderChime /><Workspace groups={groups} title="Store" /></>;
+  return <><OrderChime /><OwnerPushPrompt /><Workspace groups={groups} title="Store" /></>;
 }
 
 function CustomerAlerts() {

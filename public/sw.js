@@ -21,6 +21,8 @@ self.addEventListener('push', (event) => {
   const title = data.title || 'Repeat Mate';
   const body = data.body || '';
   const url = data.url || '/customer/notifications';
+  const tag = data.tag || title;
+  const ownerOrder = String(tag).startsWith('owner-order-');
   event.waitUntil((async () => {
     const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     const visible = windows.some((client) => {
@@ -32,14 +34,17 @@ self.addEventListener('push', (event) => {
         return false;
       }
     });
-    windows.forEach((client) => client.postMessage({ type: 'push', title, body, url }));
-    if (visible) return;
+    windows.forEach((client) => client.postMessage({ type: 'push', title, body, url, tag }));
+    if (visible && !ownerOrder) return;
     await self.registration.showNotification(title, {
       body,
       icon: '/icons/icon-192.png',
       badge: '/icons/badge-72.png',
-      tag: data.tag || title,
+      tag,
       renotify: true,
+      requireInteraction: ownerOrder,
+      silent: false,
+      vibrate: ownerOrder ? [200, 100, 200, 100, 400] : [120, 80, 120],
       data: { url },
     });
   })());

@@ -22,8 +22,24 @@ function publish() {
   listeners.forEach((listener) => listener(current));
 }
 
+export function isIosDevice() {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  const iOS = /iPad|iPhone|iPod/.test(ua);
+  const iPadOs = navigator.platform === 'MacIntel' && Number(navigator.maxTouchPoints || 0) > 1;
+  return iOS || iPadOs;
+}
+
+export function runningAsApp() {
+  const standaloneNav = Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
+  return standaloneNav
+    || window.matchMedia('(display-mode: standalone)').matches
+    || window.matchMedia('(display-mode: fullscreen)').matches;
+}
+
 export function captureInstallPrompt() {
   window.addEventListener('beforeinstallprompt', (event) => {
+    event.preventDefault();
     setStashed(event as InstallPromptEvent);
     publish();
   });
@@ -40,18 +56,24 @@ export function watchInstallPrompt(listener: (event: InstallPromptEvent | null) 
   return () => listeners.delete(listener);
 }
 
-export function runningAsApp() {
-  return window.matchMedia('(display-mode: standalone)').matches || window.matchMedia('(display-mode: fullscreen)').matches;
+export function openInstallGuide() {
+  window.dispatchEvent(new CustomEvent('rs-install-guide'));
 }
 
 export function requestInstall() {
   const current = stashed();
-  if (!current) return Promise.resolve('unavailable' as const);
+  if (!current) {
+    openInstallGuide();
+    return Promise.resolve('unavailable' as const);
+  }
   const pending = current.prompt();
   setStashed(null);
   listeners.forEach((listener) => listener(null));
   return pending
     .then(() => current.userChoice)
     .then((choice) => choice.outcome)
-    .catch(() => 'unavailable' as const);
+    .catch(() => {
+      openInstallGuide();
+      return 'unavailable' as const;
+    });
 }

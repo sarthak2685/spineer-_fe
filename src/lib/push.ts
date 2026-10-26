@@ -1,5 +1,7 @@
 import { api } from '../api/client';
 
+export type PushRole = 'customer' | 'business';
+
 function urlBase64ToUint8Array(base64String: string) {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -16,7 +18,8 @@ export async function getPushPermission() {
   return Notification.permission;
 }
 
-export async function enableBrowserPush() {
+export async function enableBrowserPush(options?: { role?: PushRole }) {
+  const role = options?.role || 'customer';
   if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
     throw new Error('This browser does not support push notifications.');
   }
@@ -43,19 +46,22 @@ export async function enableBrowserPush() {
     throw new Error('This browser did not finish turning alerts on. Try again.');
   }
 
-  await api('/customer/push/subscribe', {
+  const path = role === 'business' ? '/business/push/subscribe' : '/customer/push/subscribe';
+  await api(path, {
     method: 'POST',
     body: JSON.stringify({ token: JSON.stringify(next), action: 'subscribe' }),
   });
   return subscription;
 }
 
-export async function disableBrowserPush() {
+export async function disableBrowserPush(options?: { role?: PushRole }) {
+  const role = options?.role || 'customer';
   if (!('serviceWorker' in navigator)) return;
   const registration = await navigator.serviceWorker.ready;
   const subscription = await registration.pushManager.getSubscription();
   if (!subscription) return;
-  await api('/customer/push/subscribe', {
+  const path = role === 'business' ? '/business/push/subscribe' : '/customer/push/subscribe';
+  await api(path, {
     method: 'POST',
     body: JSON.stringify({ token: JSON.stringify(subscription.toJSON()), action: 'unsubscribe' }),
   }).catch(() => undefined);

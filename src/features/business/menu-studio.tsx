@@ -207,7 +207,18 @@ function ItemModal({ copy, categories, editing, initialTab = 'one', onClose, onS
 
 function BulkUpload({ onSaved }: { onSaved: () => void }) {
   function sampleCsv() {
-    const csv = 'Category,Item,Price,Description\nStarters,Paneer Tikka,220,Char-grilled cottage cheese\n';
+    const csv = [
+      'Category,Item,Price,Description',
+      'Starters,Paneer Tikka,220,Char-grilled cottage cheese',
+      'Starters,"Paneer, Tikka",220,Spicy grilled paneer',
+      'Mains,Butter Chicken,320,Creamy tomato gravy',
+      'Mains,Dal Makhani,180,Slow-cooked black lentils',
+      'Drinks,Masala Chai,40,',
+      'Drinks,Fresh Lime Soda,60,Sweet or salted',
+      'Desserts,Gulab Jamun,90,2 pieces',
+      'Desserts,Rasmalai,120,Soft cheese dumplings',
+      '',
+    ].join('\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
     const link = document.createElement('a');
     link.href = url;

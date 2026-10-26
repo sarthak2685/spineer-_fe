@@ -1154,7 +1154,7 @@ export function ReviewPanel() {
       if (result.googleReviewUrl) {
         setHub((current) => current ? ({ ...current, business: { ...business, googlereviewurl: result.googleReviewUrl } }) : current);
       }
-      toastOk('Pick a draft to copy and post.');
+      toastOk('Pick a draft to copy and post.', { id: 'review-drafts' });
     } catch {
       /* api toasts */
     } finally { setBusy(false); }
