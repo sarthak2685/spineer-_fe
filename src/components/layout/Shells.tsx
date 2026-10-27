@@ -8,8 +8,8 @@ import { api } from '../../api/client';
 import { catalogCopy } from '../../lib/catalog';
 import { DemoModalHost, openDemo } from '../../features/public/demo-request';
 import { legalNav } from '../../features/public/legal-nav';
-import { playNotify, unlockSound } from '../../lib/sounds';
-import { toastInfo } from '../../lib/toast';
+import { bindSoundUnlock, getOrderSoundPrefs, playNotify, playOrderAlert, setOrderSoundPrefs, stopOrderAlert, unlockSound } from '../../lib/sounds';
+import { dismissToast, toastInfo } from '../../lib/toast';
 import { InboxCountProvider, useInboxCount } from '../../features/customer/inbox';
 import { CustomerDock } from '../../features/customer/dock';
 import { OwnerPushPrompt } from '../../features/business/owner-push-prompt';
@@ -317,7 +317,8 @@ export function Workspace({ groups, children, title, variant = 'default', bleed 
                 {meta?.gold && meta.text && <p className="hidden min-w-0 truncate text-sm font-semibold text-amber-500 sm:block">{meta.text}</p>}
               </div>
               {meta?.actions && <div className="order-last flex w-full min-w-0 flex-wrap items-center gap-2 [&>*]:flex [&>*]:w-full [&>*]:min-w-0 [&>*]:flex-wrap [&>*]:items-center [&>*]:gap-2 md:order-none md:w-auto md:[&>*]:w-auto">{meta.actions}</div>}
-              <div className="flex shrink-0 items-center gap-1">
+              <div className="flex shrink-0 items-center gap-1.5">
+                {title === 'Store' && <OrderSoundControls />}
                 {inboxTo && (
                   <Link to={inboxTo} aria-label={inbox.count ? `Inbox, ${inbox.count} unread` : 'Inbox'} title="Inbox" className={`relative grid h-10 w-10 place-items-center rounded-full ${location.pathname.startsWith(inboxTo) ? 'bg-orange-50 text-orange-700' : 'text-stone-600 hover:bg-orange-50'}`}>
                     <RailIcon to={inboxTo} />
@@ -378,15 +379,108 @@ export const businessNav = businessGroups.flatMap((group) => group.items);
 export const customerNav = customerGroups.flatMap((group) => group.items);
 export const superNav = superGroups.flatMap((group) => group.items);
 
-function OrderChime() {
-  const seen = useRef<number | null>(null);
+function OrderSoundControls() {
+  const [prefs, setPrefs] = useState(getOrderSoundPrefs);
   useEffect(() => {
-    const unlock = () => unlockSound();
-    window.addEventListener('pointerdown', unlock, { once: true });
-    function announce(title: string, body: string) {
-      playNotify();
-      toastInfo(body || title, 'new-order', { title: title || 'New order', href: '/business/menu/orders' });
+    const sync = () => setPrefs(getOrderSoundPrefs());
+    window.addEventListener('rs-order-sound-prefs', sync);
+    return () => window.removeEventListener('rs-order-sound-prefs', sync);
+  }, []);
+  return (
+    <div className="flex items-center gap-1.5 rounded-full border border-stone-200 bg-white px-2 py-1" title="Order alert sound">
+      <button
+        type="button"
+        aria-label={prefs.muted ? 'Unmute order sound' : 'Mute order sound'}
+        className={`grid h-8 w-8 place-items-center rounded-full text-sm ${prefs.muted ? 'bg-stone-100 text-stone-400' : 'bg-orange-50 text-orange-700'}`}
+        onClick={() => {
+          unlockSound();
+          const next = setOrderSoundPrefs({ muted: !prefs.muted });
+          setPrefs(next);
+          if (next.muted) stopOrderAlert();
+        }}
+      >
+        {prefs.muted ? (
+          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M11 5 6 9H3v6h3l5 4V5z" /><path d="m22 9-6 6M16 9l6 6" /></svg>
+        ) : (
+          <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M11 5 6 9H3v6h3l5 4V5z" /><path d="M15.5 8.5a5 5 0 0 1 0 7M18 6a8 8 0 0 1 0 12" /></svg>
+        )}
+      </button>
+      <input
+        type="range"
+        min={0}
+        max={100}
+        value={Math.round(prefs.volume * 100)}
+        aria-label="Order sound volume"
+        disabled={prefs.muted}
+        className="h-1.5 w-16 cursor-pointer accent-orange-600 disabled:opacity-40"
+        onChange={(event) => {
+          unlockSound();
+          const next = setOrderSoundPrefs({ volume: Number(event.target.value) / 100, muted: false });
+          setPrefs(next);
+        }}
+        onPointerUp={() => {
+          if (!getOrderSoundPrefs().muted) playNotify();
+        }}
+      />
+    </div>
+  );
+}
+
+function OrderChime() {
+  const location = useLocation();
+  const seen = useRef<number | null>(null);
+  const nagTimer = useRef(0);
+  const pathRef = useRef(location.pathname);
+  pathRef.current = location.pathname;
+
+  useEffect(() => {
+    bindSoundUnlock();
+
+    function stopNag() {
+      stopOrderAlert();
+      window.clearInterval(nagTimer.current);
+      nagTimer.current = 0;
     }
+
+    function silence() {
+      stopNag();
+      dismissToast('new-order');
+    }
+
+    function onOrdersScreen() {
+      return pathRef.current.startsWith('/business/menu/orders');
+    }
+
+    function announce(title: string, body: string) {
+      // Ensure AudioContext is warm after backgrounding (esp. iOS).
+      unlockSound();
+      if (getOrderSoundPrefs().muted) {
+        toastInfo(body || title, 'new-order', {
+          title: title || 'New order',
+          href: '/business/menu/orders',
+          autoClose: 8000,
+        });
+        return;
+      }
+      playOrderAlert();
+      window.clearInterval(nagTimer.current);
+      nagTimer.current = window.setInterval(() => {
+        if (onOrdersScreen()) {
+          silence();
+          return;
+        }
+        unlockSound();
+        playOrderAlert();
+      }, 15000);
+      toastInfo(body || title, 'new-order', {
+        title: title || 'New order',
+        href: '/business/menu/orders',
+        onOpen: stopNag,
+        onSilence: silence,
+        autoClose: false,
+      });
+    }
+
     function onPush(event: MessageEvent) {
       if (event.data?.type !== 'push') return;
       const tag = String(event.data.tag || '');
@@ -394,6 +488,7 @@ function OrderChime() {
       announce(String(event.data.title || 'New order'), String(event.data.body || 'A new order just arrived.'));
     }
     navigator.serviceWorker?.addEventListener('message', onPush);
+
     async function tick() {
       try {
         const data = await api<{ total: number }>('/business/menu/orders?status=Pending&pageSize=1', { quiet: true });
@@ -405,13 +500,24 @@ function OrderChime() {
       } catch { /* a missed poll should not interrupt the desk */ }
     }
     tick();
-    const timer = window.setInterval(tick, 12000);
+    const timer = window.setInterval(tick, 7000);
     return () => {
       window.clearInterval(timer);
-      window.removeEventListener('pointerdown', unlock);
+      window.clearInterval(nagTimer.current);
+      stopOrderAlert();
       navigator.serviceWorker?.removeEventListener('message', onPush);
     };
   }, []);
+
+  useEffect(() => {
+    if (location.pathname.startsWith('/business/menu/orders')) {
+      stopOrderAlert();
+      window.clearInterval(nagTimer.current);
+      nagTimer.current = 0;
+      dismissToast('new-order');
+    }
+  }, [location.pathname]);
+
   return null;
 }
 
