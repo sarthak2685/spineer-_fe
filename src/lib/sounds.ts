@@ -10,12 +10,12 @@ export type OrderSoundPrefs = { muted: boolean; volume: number };
 export function getOrderSoundPrefs(): OrderSoundPrefs {
   try {
     const raw = localStorage.getItem(PREFS_KEY);
-    if (!raw) return { muted: false, volume: 0.85 };
+    if (!raw) return { muted: false, volume: 1 };
     const parsed = JSON.parse(raw) as Partial<OrderSoundPrefs>;
-    const volume = Math.min(1, Math.max(0, Number(parsed.volume ?? 0.85)));
-    return { muted: Boolean(parsed.muted), volume: Number.isFinite(volume) ? volume : 0.85 };
+    const volume = Math.min(1, Math.max(0, Number(parsed.volume ?? 1)));
+    return { muted: Boolean(parsed.muted), volume: Number.isFinite(volume) ? volume : 1 };
   } catch {
-    return { muted: false, volume: 0.85 };
+    return { muted: false, volume: 1 };
   }
 }
 
@@ -167,24 +167,56 @@ export function buzzOrderAlert() {
 }
 
 /**
- * Counter order alert — ~5s kitchen-bell style, respects mute/volume.
- * Works on Android Chrome + iOS Safari after a prior user gesture (bindSoundUnlock).
+ * Counter order alert — ~5s at max Web Audio level (browser cannot raise OS device volume).
+ * Mute still works; volume slider is forced to 100% when playing.
  */
 export function playOrderAlert() {
   const prefs = getOrderSoundPrefs();
   if (prefs.muted) return;
+  // Always blast at max digital level when an order lands.
+  if (prefs.volume < 1) setOrderSoundPrefs({ volume: 1, muted: false });
   stopOrderAlert();
   const gen = orderGen;
-  const scale = 0.35 + prefs.volume * 0.65;
   buzzOrderAlert();
   void ready().then((ac) => {
     if (!ac || gen !== orderGen) return;
+    // Master gain near 1.0 = as loud as the page can go; device volume must also be up.
+    const master = ac.createGain();
+    master.gain.value = 1;
+    master.connect(ac.destination);
     for (let i = 0; i < 5; i += 1) {
       const t = i * 1.0;
-      beep(ac, 830, 0.22, 'triangle', 0.22 * scale, t, activeOrderOsc);
-      beep(ac, 1660, 0.16, 'sine', 0.1 * scale, t + 0.02, activeOrderOsc);
-      beep(ac, 1108, 0.3, 'triangle', 0.2 * scale, t + 0.22, activeOrderOsc);
-      beep(ac, 2216, 0.18, 'sine', 0.08 * scale, t + 0.24, activeOrderOsc);
+      loudBeep(ac, master, 880, 0.32, 'square', 0.95, t, activeOrderOsc);
+      loudBeep(ac, master, 1175, 0.4, 'square', 0.9, t + 0.28, activeOrderOsc);
     }
   });
+}
+
+function loudBeep(
+  ac: AudioContext,
+  dest: AudioNode,
+  freq: number,
+  duration: number,
+  type: OscillatorType,
+  gain: number,
+  delay: number,
+  track: OscillatorNode[],
+) {
+  const osc = ac.createOscillator();
+  const amp = ac.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  const start = ac.currentTime + delay;
+  amp.gain.setValueAtTime(0, start);
+  amp.gain.linearRampToValueAtTime(gain, start + 0.01);
+  amp.gain.linearRampToValueAtTime(0, start + duration);
+  osc.connect(amp);
+  amp.connect(dest);
+  osc.start(start);
+  osc.stop(start + duration + 0.02);
+  track.push(osc);
+  osc.onended = () => {
+    const index = track.indexOf(osc);
+    if (index >= 0) track.splice(index, 1);
+  };
 }

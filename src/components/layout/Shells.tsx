@@ -422,6 +422,18 @@ function OrderSoundControls() {
           if (!getOrderSoundPrefs().muted) playNotify();
         }}
       />
+      <button
+        type="button"
+        className="rounded-full px-2 py-1 text-[11px] font-semibold text-orange-700 hover:bg-orange-50"
+        onClick={() => {
+          unlockSound();
+          setOrderSoundPrefs({ muted: false, volume: 1 });
+          setPrefs(getOrderSoundPrefs());
+          playOrderAlert();
+        }}
+      >
+        Test
+      </button>
     </div>
   );
 }

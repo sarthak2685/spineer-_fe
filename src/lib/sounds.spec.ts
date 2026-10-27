@@ -12,7 +12,7 @@ describe('order sound prefs', () => {
   });
 
   it('defaults to unmuted with volume', () => {
-    expect(getOrderSoundPrefs()).toEqual({ muted: false, volume: 0.85 });
+    expect(getOrderSoundPrefs()).toEqual({ muted: false, volume: 1 });
   });
 
   it('persists mute and volume', () => {
