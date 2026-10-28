@@ -915,13 +915,11 @@ export function MenuPanel() {
                 const from = options.length ? Math.min(...options.map((option) => Number(option.price))) : Number(item.price);
                 return (
                   <article key={item.itemid} className="flex items-start gap-3 rounded-2xl border border-stone-100 bg-white p-3 shadow-sm">
-                    <div className="relative mt-0.5 h-16 w-16 shrink-0 overflow-hidden rounded-xl">
-                      {item.imagepath ? (
+                    {item.imagepath ? (
+                      <div className="relative mt-0.5 h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-stone-100">
                         <img alt="" src={asset(item.imagepath)} className="h-full w-full object-cover" />
-                      ) : (
-                        <div className="grid h-full w-full place-items-center text-lg font-semibold text-white" style={{ background: color }}>{String(item.itemname || '?').slice(0, 1)}</div>
-                      )}
-                    </div>
+                      </div>
+                    ) : null}
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold leading-snug text-stone-950">{item.itemname}</p>
                       {item.description && <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed text-stone-500">{item.description}</p>}
@@ -1173,6 +1171,16 @@ export function ReviewPanel() {
     toastOk(msg);
   }
 
+  function reviewWithoutAi() {
+    const url = business.googlereviewurl;
+    if (!url) {
+      toastInfo('Ask the shop to add their Google review link on the profile.');
+      return;
+    }
+    window.open(url, '_blank');
+    setDone('Opened Google — write your review there.');
+  }
+
   async function sendFeedback() {
     if (!name.trim()) { toastErr('Add your name first.'); return; }
     if (!note.trim()) { toastErr('Tell the shop what could be better.'); return; }
@@ -1221,6 +1229,10 @@ export function ReviewPanel() {
           </div>
           <p className="mt-2 text-xs text-stone-400">{picked.length ? `${picked.length}/3 selected` : 'Or skip — we will use a few defaults.'}</p>
           <Button className="mt-4 w-full" busy={busy} onClick={generate}>{busy ? 'Writing with AI…' : 'Write my review with AI'}</Button>
+          <Button className="mt-2 w-full" kind="ghost" type="button" onClick={reviewWithoutAi}>Review without AI</Button>
+          {!!reviews.length && (
+            <p className="mt-3 text-xs text-stone-400">You can edit the text on Google before posting — avoid adding dish or service names.</p>
+          )}
           <div className="mt-4 space-y-3">
             {reviews.map((text) => (
               <button key={text} type="button" className="w-full rounded-2xl border border-stone-200 p-4 text-left text-sm leading-relaxed transition hover:border-orange-400 hover:bg-orange-50/50" onClick={() => useReview(text)}>
