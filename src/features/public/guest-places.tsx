@@ -1141,7 +1141,7 @@ export function ReviewPanel() {
       const words = picked.length ? picked : keywords.slice(0, 3);
       const result = await api<{ reviews: string[]; googleReviewUrl?: string; keywords?: string[] }>('/public/reviews/generate', {
         method: 'POST',
-        body: JSON.stringify({ token, customerName: name, keywords: words, rating }),
+        body: JSON.stringify({ token, customerName: name, keywords: words, rating, variety: Date.now() }),
       });
       const drafts = (result.reviews || []).filter(Boolean);
       if (!drafts.length) {
