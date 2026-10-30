@@ -30,7 +30,6 @@ type GuestPlaceContext = {
 };
 
 const GuestCtx = createContext<GuestPlaceContext | null>(null);
-const GameDockCtx = createContext<HTMLDivElement | null>(null);
 
 function useGuestPlace() {
   const ctx = useContext(GuestCtx);
@@ -74,12 +73,13 @@ export function GuestError({ message }: { message: string }) {
 }
 
 function shopFrame(play: boolean, height = typeof window === 'undefined' ? 720 : window.innerHeight, width = typeof window === 'undefined' ? 1200 : window.innerWidth) {
-  const bar = play ? Math.round(height * 0.33) : 136;
+  // Compact sticky bar for every tab — game picker lives in the play panel, not the header.
+  const bar = play ? 168 : 136;
   return {
     height,
     width,
     bar,
-    banner: play ? Math.round(bar * 0.16) : 40,
+    banner: 40,
     logoEnd: 44,
   };
 }
@@ -101,7 +101,6 @@ export function PlaceFrame({ business, token, current, children }: { business: R
   const [loginOpen, setLoginOpen] = useState(false);
   const [wifiOpen, setWifiOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [gameDock, setGameDock] = useState<HTMLDivElement | null>(null);
   const signedIn = Boolean(auth.user && !auth.user.name.startsWith('Guest_'));
   useEffect(() => {
     const open = () => setLoginOpen(true);
@@ -193,10 +192,11 @@ export function PlaceFrame({ business, token, current, children }: { business: R
   });
   const coverOpacity = useTransform(scrollY, (value) => Math.max(0, 1 - collapse(value) / 0.42));
   const hintOpacity = useTransform(scrollY, (value) => Math.max(0, 1 - collapse(value) / 0.18));
+  const hintPointer = useTransform(hintOpacity, (value) => (value > 0.25 ? 'auto' : 'none'));
   const whatsapp = String(business.whatsappnumber || '').replace(/\D/g, '');
   const wa = whatsapp.length === 10 ? `91${whatsapp}` : whatsapp;
   const link = (href: string, label: string, icon: ReactNode) => (
-    <a href={href} target={href.startsWith('http') ? '_blank' : undefined} rel="noreferrer" aria-label={label} title={label} className="shrink-0">
+    <a href={href} target={href.startsWith('http') ? '_blank' : undefined} rel="noreferrer" aria-label={label} title={label} className="relative z-20 shrink-0 pointer-events-auto">
       {icon}
     </a>
   );
@@ -210,7 +210,6 @@ export function PlaceFrame({ business, token, current, children }: { business: R
   const menuLabel = catalogCopy(business.businesstype).tab;
   const compactIcon = 'h-8 w-8 [&_svg]:h-4 [&_svg]:w-4';
   return (
-    <GameDockCtx.Provider value={gameDock}>
     <div className="public-enter min-h-screen bg-orange-50 text-stone-900">
       <div ref={heroRef} className="h-[100dvh]" aria-hidden="true" />
       {createPortal(
@@ -219,16 +218,16 @@ export function PlaceFrame({ business, token, current, children }: { business: R
             {business.bannerimagepath && <img alt="" src={asset(business.bannerimagepath)} className="h-full w-full object-cover" />}
             <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/20 to-black/25" />
           </div>
-          <motion.div style={{ height: identityHeight }} className="absolute inset-x-0 bottom-0 overflow-hidden bg-orange-50">
-            <div className="mx-auto flex h-full max-w-xl flex-col bg-white px-3 pb-2 pt-1.5 sm:rounded-t-[28px]">
-              <div className="flex min-h-11 items-center pl-14">
+          <motion.div style={{ height: identityHeight }} className="pointer-events-none absolute inset-x-0 bottom-0 z-20 overflow-hidden bg-orange-50">
+            <div className="pointer-events-auto mx-auto flex h-full max-w-xl flex-col bg-white px-3 pb-2 pt-1.5 sm:rounded-t-[28px]">
+              <div className="flex min-h-11 shrink-0 items-center pl-14">
                 <div className="min-w-0 text-left">
                   <h1 className="truncate text-base font-bold leading-tight text-stone-950">{shopName}</h1>
                   <p className="truncate text-xs leading-tight text-stone-500">{business.tagline || business.description || 'Play, order, and review in one place.'}</p>
                 </div>
               </div>
-              <div className="mt-2 flex flex-nowrap justify-center gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {business.phone && link(`tel:${business.phone}`, 'Call', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-stone-700"><path d="M6.6 10.8a15 15 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11 11 0 0 0 3.5.55 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 7a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11 11 0 0 0 .55 3.5 1 1 0 0 1-.25 1L6.6 10.8z" /></svg></Icon>)}
+              <div className="relative z-20 mt-2 flex shrink-0 flex-nowrap justify-center gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {business.phone && link(`tel:${String(business.phone).replace(/\D/g, '')}`, 'Call', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-stone-700"><path d="M6.6 10.8a15 15 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11 11 0 0 0 3.5.55 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 7a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11 11 0 0 0 .55 3.5 1 1 0 0 1-.25 1L6.6 10.8z" /></svg></Icon>)}
                 {wa && link(`https://wa.me/${wa}`, 'WhatsApp', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-emerald-600"><path d="M12 3a9 9 0 0 0-7.8 13.5L3 21l4.7-1.2A9 9 0 1 0 12 3zm5 12.4c-.2.6-1.2 1.1-1.7 1.1-.4.1-.9.2-3-.8-2.5-1.2-4.1-3.6-4.2-3.8-.2-.2-1.2-1.6-1.2-3s.7-2.1 1-2.4c.2-.2.5-.3.8-.3h.6c.2 0 .4 0 .6.5.2.6.8 2 .8 2.1.1.1 0 .3-.1.5l-.4.5c-.1.2-.3.3-.1.6.2.3.7 1.2 1.5 1.9 1 .9 1.8 1.2 2.1 1.3.3.1.4.1.6-.1l.7-.8c.2-.2.4-.2.6-.1l2 .9c.2.1.4.2.4.4.1.2 0 .8-.2 1.3z" /></svg></Icon>)}
                 {business.instagramurl && link(web(business.instagramurl), 'Instagram', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-pink-600"><path d="M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4zm5 5a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm6.2-.9a1 1 0 1 0 0 2 1 1 0 0 0 0-2zM12 10a2 2 0 1 1 0 4 2 2 0 0 1 0-4z" /></svg></Icon>)}
                 {business.facebookurl && link(web(business.facebookurl), 'Facebook', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-blue-600"><path d="M14 9h3V6h-3c-2.2 0-4 1.8-4 4v2H8v3h2v7h3v-7h2.6l.4-3H13v-2c0-.6.4-1 1-1z" /></svg></Icon>)}
@@ -236,24 +235,23 @@ export function PlaceFrame({ business, token, current, children }: { business: R
                 {business.youtubeurl && link(web(business.youtubeurl), 'YouTube', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-red-600"><path d="M23 12.2s0-3.2-.4-4.6c-.2-.9-.9-1.6-1.8-1.8C19.2 5.4 12 5.4 12 5.4s-7.2 0-8.8.4c-.9.2-1.6.9-1.8 1.8C1 9 1 12.2 1 12.2s0 3.2.4 4.6c.2.9.9 1.6 1.8 1.8 1.6.4 8.8.4 8.8.4s7.2 0 8.8-.4c.9-.2 1.6-.9 1.8-1.8.4-1.4.4-4.6.4-4.6zM9.8 15.5v-6.6l6.2 3.3-6.2 3.3z" /></svg></Icon>)}
                 {business.website && link(web(business.website), 'Website', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-orange-600" strokeWidth="1.8"><circle cx="12" cy="12" r="8" /><path d="M4 12h16M12 4c2.5 2.8 2.5 13.2 0 16M12 4c-2.5 2.8-2.5 13.2 0 16" /></svg></Icon>)}
                 {(wifiName || wifiPassword) && (
-                  <button type="button" onClick={() => setWifiOpen((open) => !open)} className="shrink-0" aria-label="Wi-Fi" title="Wi-Fi" aria-expanded={wifiOpen}>
+                  <button type="button" onClick={() => setWifiOpen((open) => !open)} className="relative z-20 shrink-0 pointer-events-auto" aria-label="Wi-Fi" title="Wi-Fi" aria-expanded={wifiOpen}>
                     <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-orange-600" strokeWidth="1.8" strokeLinecap="round"><path d="M5 12.5a10 10 0 0 1 14 0M8 15.2a6 6 0 0 1 8 0" /><circle cx="12" cy="18" r="1" fill="currentColor" stroke="none" /></svg></Icon>
                   </button>
                 )}
               </div>
-              {playTab && <div ref={setGameDock} className="mt-2 min-h-0 flex-1" />}
             </div>
           </motion.div>
-          <motion.div style={{ width: logoSize, height: logoSize, left: logoLeft, top: logoTop }} className="absolute z-10 grid place-items-center overflow-hidden rounded-full bg-white shadow-lg ring-4 ring-white">
+          <motion.div style={{ width: logoSize, height: logoSize, left: logoLeft, top: logoTop }} className="pointer-events-none absolute z-10 grid place-items-center overflow-hidden rounded-full bg-white shadow-lg ring-4 ring-white">
             {business.logoimagepath ? <img alt="" src={asset(business.logoimagepath)} className="h-full w-full object-cover" /> : <span className="font-display text-[1.6rem] font-semibold text-orange-600">{shopMark}</span>}
           </motion.div>
-          <motion.div style={{ top: coverTop, opacity: coverOpacity }} className="absolute inset-x-6 text-center text-white">
+          <motion.div style={{ top: coverTop, opacity: coverOpacity }} className="pointer-events-none absolute inset-x-6 text-center text-white">
             <h1 className="text-[1.7rem] font-bold leading-tight">{shopName}</h1>
             <p className="mt-2 text-sm leading-relaxed text-white/85">{business.tagline || business.description || 'Play, order, and review in one place.'}</p>
           </motion.div>
           <motion.button
             type="button"
-            style={{ opacity: hintOpacity }}
+            style={{ opacity: hintOpacity, pointerEvents: hintPointer }}
             onClick={() => scrollToContent()}
             className="absolute bottom-[5.75rem] left-1/2 -translate-x-1/2 text-white/90"
             aria-label="Scroll to content"
@@ -285,7 +283,6 @@ export function PlaceFrame({ business, token, current, children }: { business: R
       <ShopDock token={token} current={current} menuLabel={menuLabel} />
       {loginOpen && !signedIn && token && <SaveCoinsModal token={token} onClose={() => setLoginOpen(false)} />}
     </div>
-    </GameDockCtx.Provider>
   );
 }
 
@@ -575,34 +572,30 @@ export function PlayPanel() {
   }
 
   const signedIn = auth.user && !auth.user.name.startsWith('Guest_');
-  const gameDock = useContext(GameDockCtx);
   const gameOrder = ['SpinWheel', 'ScratchCard', 'MysteryGiftBox', 'SlotMachine'];
   const available = new Set(((hub?.games || []) as { gamecode: string }[]).map((item) => item.gamecode));
   const games = (available.size ? gameOrder.filter((code) => available.has(code)) : gameOrder).map((gamecode) => ({ gamecode }));
-  const chooser = (
-    <div className="grid h-full grid-cols-2 content-center gap-1.5">
-      {games.map((item) => {
-        const active = game === item.gamecode;
-        return (
-          <button key={item.gamecode} type="button" className={`relative w-full rounded-full px-2 py-1.5 text-xs font-semibold leading-none shadow-sm transition-colors duration-200 ${active ? 'text-white delay-100' : 'bg-white text-stone-600 ring-1 ring-stone-200'}`} onClick={() => { setGame(item.gamecode); setResult(null); setSaveOpen(false); setWinOpen(false); }}>
-            {active && (
-              <motion.span
-                layoutId={reduce ? undefined : 'play-game-choice'}
-                className="absolute inset-0 rounded-full"
-                style={{ background: color }}
-                transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-              />
-            )}
-            <span className="relative">{gameNames[item.gamecode] || item.gamecode}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
 
   return (
     <>
-      {gameDock ? createPortal(chooser, gameDock) : chooser}
+      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {games.map((item) => {
+          const active = game === item.gamecode;
+          return (
+            <button key={item.gamecode} type="button" className={`relative w-full rounded-full px-3 py-2.5 text-xs font-semibold leading-none shadow-sm transition-colors duration-200 ${active ? 'text-white delay-100' : 'bg-white text-stone-600 ring-1 ring-stone-200'}`} onClick={() => { setGame(item.gamecode); setResult(null); setSaveOpen(false); setWinOpen(false); }}>
+              {active && (
+                <motion.span
+                  layoutId={reduce ? undefined : 'play-game-choice'}
+                  className="absolute inset-0 rounded-full"
+                  style={{ background: color }}
+                  transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                />
+              )}
+              <span className="relative">{gameNames[item.gamecode] || item.gamecode}</span>
+            </button>
+          );
+        })}
+      </div>
       <section className="mb-4 overflow-visible rounded-[28px] bg-[radial-gradient(ellipse_at_top,#fff,#fafaf9_46%,#e7e5e4)] px-3 py-6 shadow-[inset_0_1px_0_rgba(255,255,255,.9)] sm:px-6 sm:py-8">
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
