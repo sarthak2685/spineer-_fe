@@ -107,7 +107,11 @@ export async function downloadCsv(path: string, fallbackName: string) {
 export function asset(path?: string | null) {
   if (!path) return '';
   if (path.startsWith('http')) return path;
-  return `${API_ORIGIN}${path.startsWith('/') ? path : `/${path}`}`;
+  const clean = path.startsWith('/') ? path : `/${path}`;
+  // Prod nginx typically proxies /api only; static files live under /uploads on disk.
+  // Serve them via /api/uploads so QR, logos, and menu images resolve on api.repeatmate.com.
+  if (clean.startsWith('/uploads/')) return `${API_ORIGIN}/api${clean}`;
+  return `${API_ORIGIN}${clean}`;
 }
 
 export function howVideoSrc(admin = false, id = '') {
