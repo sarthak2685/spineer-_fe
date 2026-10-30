@@ -54,8 +54,8 @@ export function GuestSkeleton() {
         <div className="mt-3 h-3 w-56 max-w-full rounded-full bg-white/50" />
       </div>
       <div className="fixed inset-x-0 bottom-0 z-30 px-2 pt-2" style={{ paddingBottom: 'max(0.55rem, env(safe-area-inset-bottom))' }}>
-        <div className="mx-auto flex max-w-md items-end justify-between rounded-[1.75rem] bg-white px-2 py-3 shadow-[0_-8px_30px_rgba(28,25,23,0.12)] ring-1 ring-stone-200">
-          {Array.from({ length: 6 }, (_, index) => (
+        <div className="mx-auto flex max-w-xl items-end justify-between rounded-[1.75rem] bg-white px-2 py-3 shadow-[0_-8px_30px_rgba(28,25,23,0.12)] ring-1 ring-stone-200">
+          {Array.from({ length: 5 }, (_, index) => (
             <div key={index} className="flex flex-1 flex-col items-center gap-1">
               <div className={`h-8 w-8 rounded-full ${index === 0 ? 'bg-orange-200' : 'bg-stone-100'} ${pulse}`} />
               <div className={`h-2 w-8 rounded-full bg-stone-100 ${pulse}`} />
@@ -79,16 +79,25 @@ export function GuestError({ message }: { message: string }) {
   );
 }
 
-function shopFrame(tab: GuestTab, height = typeof window === 'undefined' ? 720 : window.innerHeight, width = typeof window === 'undefined' ? 1200 : window.innerWidth) {
+function shopFrame(tab: GuestTab, height = typeof window === 'undefined' ? 720 : window.innerHeight, width = typeof window === 'undefined' ? 1200 : window.innerWidth, barOverride?: number) {
   // Sticky includes address + play/menu chips when those tabs are active.
   const withChips = tab === 'play' || tab === 'menu';
   return {
     height,
     width,
-    bar: withChips ? 220 : 168,
+    bar: barOverride ?? (withChips ? 220 : 140),
     banner: 40,
     logoEnd: 44,
   };
+}
+
+function publishStickyBar(px: number) {
+  document.documentElement.style.setProperty('--shop-sticky-bar', `${Math.round(px)}px`);
+}
+
+/** Layout width (excludes scrollbar) so parked logo matches the max-w-xl card. */
+function shopViewportWidth() {
+  return document.documentElement.clientWidth || window.innerWidth;
 }
 function Icon({ children, className = 'h-9 w-9' }: { children: ReactNode; className?: string }) {
   return <span className={`grid place-items-center rounded-full bg-stone-100 ring-1 ring-stone-100 ${className}`}>{children}</span>;
@@ -108,10 +117,16 @@ export function PlaceFrame({ business, token, current, children }: { business: R
   const auth = useAuth();
   const [loginOpen, setLoginOpen] = useState(false);
   const [wifiOpen, setWifiOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [hintVisible, setHintVisible] = useState(true);
   const [wifiPos, setWifiPos] = useState<{ top: number; left: number } | null>(null);
+  const [morePos, setMorePos] = useState<{ top: number; left: number } | null>(null);
   const wifiBtnRef = useRef<HTMLButtonElement>(null);
+  const moreBtnRef = useRef<HTMLButtonElement>(null);
+  const stickyInnerRef = useRef<HTMLDivElement>(null);
+  const identityTextRef = useRef<HTMLDivElement>(null);
+  const logoParkY = useRef(46);
   const signedIn = isGuestCustomer(auth.user);
   useEffect(() => {
     const open = () => setLoginOpen(true);
@@ -121,6 +136,7 @@ export function PlaceFrame({ business, token, current, children }: { business: R
   useEffect(() => {
     if (!wifiOpen) {
       setWifiPos(null);
+      setCopied(false);
       return;
     }
     const place = () => {
@@ -141,17 +157,61 @@ export function PlaceFrame({ business, token, current, children }: { business: R
       if (pop?.contains(target)) return;
       setWifiOpen(false);
     };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setWifiOpen(false);
+    };
     window.addEventListener('scroll', place, true);
     window.addEventListener('resize', place);
     window.addEventListener('mousedown', onPointer);
     window.addEventListener('touchstart', onPointer);
+    window.addEventListener('keydown', onKey);
     return () => {
       window.removeEventListener('scroll', place, true);
       window.removeEventListener('resize', place);
       window.removeEventListener('mousedown', onPointer);
       window.removeEventListener('touchstart', onPointer);
+      window.removeEventListener('keydown', onKey);
     };
   }, [wifiOpen]);
+  useEffect(() => {
+    if (!moreOpen) {
+      setMorePos(null);
+      return;
+    }
+    const place = () => {
+      const node = moreBtnRef.current;
+      if (!node) return;
+      const box = node.getBoundingClientRect();
+      const width = 200;
+      setMorePos({
+        top: box.bottom + 8,
+        left: Math.max(8, Math.min(box.right - width, window.innerWidth - width - 8)),
+      });
+    };
+    place();
+    const onPointer = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node | null;
+      if (moreBtnRef.current?.contains(target)) return;
+      const pop = document.getElementById('shop-more-pop');
+      if (pop?.contains(target)) return;
+      setMoreOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMoreOpen(false);
+    };
+    window.addEventListener('scroll', place, true);
+    window.addEventListener('resize', place);
+    window.addEventListener('mousedown', onPointer);
+    window.addEventListener('touchstart', onPointer);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('resize', place);
+      window.removeEventListener('mousedown', onPointer);
+      window.removeEventListener('touchstart', onPointer);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [moreOpen]);
   const color = brandColor(business.themecolor);
   const shopName = business.businessname || 'Repeat Mate';
   const shopMark = String(shopName).trim().slice(0, 1).toUpperCase() || 'R';
@@ -160,20 +220,20 @@ export function PlaceFrame({ business, token, current, children }: { business: R
   const { hub, playGame, setPlayGame, menuFilter, setMenuFilter } = useGuestPlace();
   const frame = useRef(shopFrame(current));
   const { scrollY } = useScroll();
-  const stickyOffset = () => frame.current.bar || (current === 'play' || current === 'menu' ? 220 : 168);
+  const stickyOffset = () => frame.current.bar || (current === 'play' || current === 'menu' ? 220 : 140);
   const scrollToContent = (smooth = true) => {
     const full = heroRef.current?.offsetHeight || window.innerHeight;
-    frame.current = shopFrame(current, full, window.innerWidth);
+    frame.current = shopFrame(current, full, shopViewportWidth(), frame.current.bar);
     scrollToShopContent(panelRef.current, smooth, stickyOffset() + 12);
   };
   useEffect(() => {
     const onScrollRequest = () => {
       // Wait for AnimatePresence exit/enter (~280ms) so scroll lands on the new panel.
-      scrollToShopContentLater(panelRef.current, true, 320);
+      scrollToShopContentLater(panelRef.current, true, 320, stickyOffset() + 12);
     };
     window.addEventListener('rs-scroll-shop-content', onScrollRequest);
     return () => window.removeEventListener('rs-scroll-shop-content', onScrollRequest);
-  }, []);
+  }, [current]);
   useEffect(() => {
     // Land on the shop panel after the tab panel transition settles.
     const id = window.setTimeout(() => scrollToContent(true), 320);
@@ -182,23 +242,48 @@ export function PlaceFrame({ business, token, current, children }: { business: R
   useLayoutEffect(() => {
     const measure = () => {
       const height = heroRef.current?.offsetHeight || window.innerHeight;
-      frame.current = shopFrame(current, height, window.innerWidth);
+      const banner = frame.current.banner || 40;
+      const contentH = stickyInnerRef.current?.scrollHeight || 0;
+      const withChips = current === 'play' || current === 'menu';
+      const minBar = withChips ? 200 : 128;
+      const maxBar = withChips ? 280 : 168;
+      const nextBar = Math.min(maxBar, Math.max(minBar, banner + contentH));
+      frame.current = shopFrame(current, height, shopViewportWidth(), nextBar);
+      publishStickyBar(nextBar);
+      // Vertically center parked logo against name + tagline + address.
+      const textH = identityTextRef.current?.offsetHeight || 44;
+      const logoEnd = frame.current.logoEnd || 44;
+      logoParkY.current = banner + 6 + Math.max(0, (textH - logoEnd) / 2);
       const currentY = scrollY.get();
       scrollY.set(currentY + 0.01);
       scrollY.set(currentY);
     };
     measure();
+    const observer = new ResizeObserver(measure);
+    if (stickyInnerRef.current) observer.observe(stickyInnerRef.current);
+    if (identityTextRef.current) observer.observe(identityTextRef.current);
     window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
-  }, [scrollY, current]);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [scrollY, current, playGame, menuFilter, hub?.categories, business.address]);
+  const syncFrameSize = () => {
+    const height = heroRef.current?.offsetHeight || window.innerHeight;
+    const width = shopViewportWidth();
+    frame.current.height = height;
+    frame.current.width = width;
+    return frame.current;
+  };
   const collapse = (value: number) => {
-    const full = frame.current.height || window.innerHeight;
-    const bar = frame.current.bar || Math.round(full * 0.33);
-    return Math.min(1, Math.max(0, value / Math.max(full - bar, 1)));
+    const { height: full = window.innerHeight, bar = Math.round(full * 0.33) } = frame.current;
+    // Header is already at sticky bar height — treat as fully collapsed for logo park.
+    if (full - value <= bar + 2) return 1;
+    const raw = Math.min(1, Math.max(0, value / Math.max(full - bar, 1)));
+    return raw >= 0.96 ? 1 : raw;
   };
   const headerHeight = useTransform(scrollY, (value) => {
-    const full = frame.current.height || window.innerHeight;
-    const bar = frame.current.bar || Math.round(full * 0.33);
+    const { height: full = window.innerHeight, bar = Math.round(full * 0.33) } = syncFrameSize();
     return Math.max(bar, full - value);
   });
   const logoSize = useTransform(scrollY, (value) => {
@@ -207,29 +292,29 @@ export function PlaceFrame({ business, token, current, children }: { business: R
   });
   const logoLeft = useTransform(scrollY, (value) => {
     const end = frame.current.logoEnd || 44;
-    const size = 96 - collapse(value) * (96 - end);
-    const width = frame.current.width || window.innerWidth;
+    const t = collapse(value);
+    const size = 96 - t * (96 - end);
+    // Live clientWidth so parked logo tracks the card (not scrollbar-inflated innerWidth).
+    const width = shopViewportWidth();
     const centered = width / 2 - size / 2;
     const sheet = Math.min(width, 576);
-    // Match sticky identity + shop-panel inset (sm:px-4 = 16px on desktop).
+    // Match sticky identity + shop-panel inset (sm:px-4 = 16px on desktop, px-3 = 12px on card).
     const sidePad = width >= 640 ? 16 : 0;
     const parked = (width - sheet) / 2 + sidePad + 12;
-    const t = collapse(value);
     return centered * (1 - t) + parked * t;
   });
   const logoTop = useTransform(scrollY, (value) => {
-    const full = frame.current.height || window.innerHeight;
+    const { height: full = window.innerHeight } = frame.current;
     const t = collapse(value);
-    const banner = frame.current.banner || 44;
-    return full * 0.32 * (1 - t) + (banner + 6) * t;
+    const parkedTop = logoParkY.current;
+    return full * 0.32 * (1 - t) + parkedTop * t;
   });
   const coverTop = useTransform(scrollY, (value) => {
     const t = collapse(value);
-    const full = frame.current.height || window.innerHeight;
+    const { height: full = window.innerHeight } = frame.current;
     const end = frame.current.logoEnd || 44;
     const size = 96 - t * (96 - end);
-    const banner = frame.current.banner || 44;
-    const top = full * 0.32 * (1 - t) + (banner + 6) * t;
+    const top = full * 0.32 * (1 - t) + logoParkY.current * t;
     return top + size + 14;
   });
   const identityHeight = useTransform(scrollY, (value) => {
@@ -251,7 +336,7 @@ export function PlaceFrame({ business, token, current, children }: { business: R
   const site = websiteHref(business.website);
   const mapHref = websiteHref(business.googlemapurl);
   const link = (href: string, label: string, icon: ReactNode) => (
-    <a href={href} target={href.startsWith('http') ? '_blank' : undefined} rel="noreferrer" aria-label={label} title={label} className="relative z-20 shrink-0 pointer-events-auto">
+    <a href={href} target={href.startsWith('http') ? '_blank' : undefined} rel="noreferrer" aria-label={label} title={label} className="relative z-20 grid h-11 w-11 shrink-0 place-items-center pointer-events-auto">
       {icon}
     </a>
   );
@@ -259,15 +344,24 @@ export function PlaceFrame({ business, token, current, children }: { business: R
   const wifiPassword = String(business.wifipassword || '').trim();
   const menuLabel = catalogCopy(business.businesstype).tab;
   const menuCopy = catalogCopy(hub?.type?.typename || hub?.type?.typecode || business.businesstype);
-  const compactIcon = 'h-8 w-8 [&_svg]:h-4 [&_svg]:w-4';
+  const compactIcon = 'h-9 w-9 [&_svg]:h-4 [&_svg]:w-4';
   const reduce = useReducedMotion();
   const gameOrder = ['SpinWheel', 'ScratchCard', 'MysteryGiftBox', 'SlotMachine'];
   const availableGames = new Set(((hub?.games || []) as { gamecode: string }[]).map((item) => item.gamecode));
   const playGames = (availableGames.size ? gameOrder.filter((code) => availableGames.has(code)) : gameOrder).map((gamecode) => ({ gamecode }));
   const menuCategories = (hub?.categories || []) as { categoryid: number; categoryname: string }[];
   const menuChip = (active: boolean) => (active ? { background: color, color: '#fff' } : { background: '#f1f5f9', color: '#475569' });
+  const moreLinks = [
+    ig && { href: ig, label: 'Instagram' },
+    fb && { href: fb, label: 'Facebook' },
+    tw && { href: tw, label: 'X' },
+    yt && { href: yt, label: 'YouTube' },
+    site && { href: site, label: 'Website' },
+  ].filter(Boolean) as { href: string; label: string }[];
+  const addressText = String(business.address || '').trim();
+  const addressHref = mapHref || (addressText ? `https://maps.google.com/?q=${encodeURIComponent(addressText)}` : '');
   return (
-    <div className="public-enter min-h-screen bg-orange-50 text-stone-900" style={{ scrollPaddingBottom: '8.5rem' }}>
+    <div className="public-enter min-h-screen bg-orange-50 text-stone-900" style={{ scrollPaddingBottom: '8.5rem', scrollPaddingTop: 'var(--shop-sticky-bar, 14rem)' }}>
       <div ref={heroRef} className="h-[100dvh]" aria-hidden="true" />
       {createPortal(
         <motion.header style={{ height: headerHeight }} className="fixed inset-x-0 top-0 z-20">
@@ -278,28 +372,30 @@ export function PlaceFrame({ business, token, current, children }: { business: R
           <motion.div style={{ height: identityHeight }} className="pointer-events-none absolute inset-x-0 bottom-0 z-20 overflow-hidden bg-orange-50">
             {/* Same max-w-xl + sm:px-4 as the shop panel so the two white cards share one edge. */}
             <div className="pointer-events-auto mx-auto flex h-full max-w-xl sm:px-4">
-              <div className="flex h-full w-full flex-col bg-white px-3 pb-2 pt-1.5 sm:rounded-t-[28px]">
-                <div className="flex min-h-11 shrink-0 items-center pl-14">
-                  <div className="min-w-0 text-left">
-                    <h1 className="truncate text-base font-bold leading-tight text-stone-950">{shopName}</h1>
-                    <p className="truncate text-xs leading-tight text-stone-500">{business.tagline || business.description || 'Play, order, and review in one place.'}</p>
-                  </div>
+              <div ref={stickyInnerRef} className="flex w-full flex-col justify-start bg-white px-3 pb-2 pt-1.5 sm:rounded-t-[28px]">
+                {/* pl-14 clears the 44px parked logo + gap; logo is vertically centered to this whole text block. */}
+                <div ref={identityTextRef} className="flex min-h-11 shrink-0 flex-col justify-center pl-14 text-left">
+                  <h1 className="truncate text-base font-bold leading-tight text-stone-950">{shopName}</h1>
+                  <p className="truncate text-xs leading-tight text-stone-500">{business.tagline || business.description || 'Play, order, and review in one place.'}</p>
+                  {addressText && (
+                    addressHref ? (
+                      <a href={addressHref} target="_blank" rel="noreferrer" title={addressText} className="mt-0.5 block truncate text-[11px] leading-tight text-stone-500 underline-offset-2 hover:underline">
+                        {addressText}
+                      </a>
+                    ) : (
+                      <p title={addressText} className="mt-0.5 truncate text-[11px] leading-tight text-stone-500">{addressText}</p>
+                    )
+                  )}
                 </div>
-                <div className="relative z-20 mt-1.5 flex shrink-0 flex-nowrap justify-center gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <div className="relative z-20 mt-1 flex shrink-0 flex-nowrap items-center justify-center gap-1">
                   {callHref && link(callHref, 'Call', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-stone-700"><path d="M6.6 10.8a15 15 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11 11 0 0 0 3.5.55 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 7a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11 11 0 0 0 .55 3.5 1 1 0 0 1-.25 1L6.6 10.8z" /></svg></Icon>)}
                   {wa && link(wa, 'WhatsApp', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-emerald-600"><path d="M12 3a9 9 0 0 0-7.8 13.5L3 21l4.7-1.2A9 9 0 1 0 12 3zm5 12.4c-.2.6-1.2 1.1-1.7 1.1-.4.1-.9.2-3-.8-2.5-1.2-4.1-3.6-4.2-3.8-.2-.2-1.2-1.6-1.2-3s.7-2.1 1-2.4c.2-.2.5-.3.8-.3h.6c.2 0 .4 0 .6.5.2.6.8 2 .8 2.1.1.1 0 .3-.1.5l-.4.5c-.1.2-.3.3-.1.6.2.3.7 1.2 1.5 1.9 1 .9 1.8 1.2 2.1 1.3.3.1.4.1.6-.1l.7-.8c.2-.2.4-.2.6-.1l2 .9c.2.1.4.2.4.4.1.2 0 .8-.2 1.3z" /></svg></Icon>)}
-                  {ig && link(ig, 'Instagram', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-pink-600"><path d="M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4zm5 5a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm6.2-.9a1 1 0 1 0 0 2 1 1 0 0 0 0-2zM12 10a2 2 0 1 1 0 4 2 2 0 0 1 0-4z" /></svg></Icon>)}
-                  {fb && link(fb, 'Facebook', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-blue-600"><path d="M14 9h3V6h-3c-2.2 0-4 1.8-4 4v2H8v3h2v7h3v-7h2.6l.4-3H13v-2c0-.6.4-1 1-1z" /></svg></Icon>)}
-                  {tw && link(tw, 'X', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-stone-950"><path d="M14.7 4h2.4l-5.2 6 6.1 8h-4.8l-3.8-5-4.3 5H2.7l5.6-6.4L2.5 4h4.9l3.4 4.5L14.7 4zm-.8 12.6h1.3L7.2 5.3H5.8l8.1 11.3z" /></svg></Icon>)}
-                  {yt && link(yt, 'YouTube', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-red-600"><path d="M23 12.2s0-3.2-.4-4.6c-.2-.9-.9-1.6-1.8-1.8C19.2 5.4 12 5.4 12 5.4s-7.2 0-8.8.4c-.9.2-1.6.9-1.8 1.8C1 9 1 12.2 1 12.2s0 3.2.4 4.6c.2.9.9 1.6 1.8 1.8 1.6.4 8.8.4 8.8.4s7.2 0 8.8-.4c.9-.2 1.6-.9 1.8-1.8.4-1.4.4-4.6.4-4.6zM9.8 15.5v-6.6l6.2 3.3-6.2 3.3z" /></svg></Icon>)}
-                  {site && link(site, 'Website', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-orange-600" strokeWidth="1.8"><circle cx="12" cy="12" r="8" /><path d="M4 12h16M12 4c2.5 2.8 2.5 13.2 0 16M12 4c-2.5 2.8-2.5 13.2 0 16" /></svg></Icon>)}
-                  {mapHref && link(mapHref, 'Directions', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-sky-600" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 21s7-5.2 7-11a7 7 0 1 0-14 0c0 5.8 7 11 7 11z" /><circle cx="12" cy="10" r="2.2" /></svg></Icon>)}
                   {(wifiName || wifiPassword) && (
                     <button
                       ref={wifiBtnRef}
                       type="button"
-                      onClick={() => setWifiOpen((open) => !open)}
-                      className="relative z-20 shrink-0 pointer-events-auto"
+                      onClick={() => { setMoreOpen(false); setWifiOpen((open) => !open); }}
+                      className="relative z-20 grid h-11 w-11 shrink-0 place-items-center pointer-events-auto"
                       aria-label="Wi-Fi"
                       title="Wi-Fi"
                       aria-expanded={wifiOpen}
@@ -307,8 +403,21 @@ export function PlaceFrame({ business, token, current, children }: { business: R
                       <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-orange-600" strokeWidth="1.8" strokeLinecap="round"><path d="M5 12.5a10 10 0 0 1 14 0M8 15.2a6 6 0 0 1 8 0" /><circle cx="12" cy="18" r="1" fill="currentColor" stroke="none" /></svg></Icon>
                     </button>
                   )}
+                  {mapHref && link(mapHref, 'Directions', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-sky-600" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 21s7-5.2 7-11a7 7 0 1 0-14 0c0 5.8 7 11 7 11z" /><circle cx="12" cy="10" r="2.2" /></svg></Icon>)}
+                  {moreLinks.length > 0 && (
+                    <button
+                      ref={moreBtnRef}
+                      type="button"
+                      onClick={() => { setWifiOpen(false); setMoreOpen((open) => !open); }}
+                      className="relative z-20 grid h-11 w-11 shrink-0 place-items-center pointer-events-auto"
+                      aria-label="More links"
+                      title="More"
+                      aria-expanded={moreOpen}
+                    >
+                      <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-stone-600"><circle cx="6" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="18" cy="12" r="1.6" /></svg></Icon>
+                    </button>
+                  )}
                 </div>
-                {business.address && <p className="mt-1.5 shrink-0 truncate text-center text-[11px] leading-tight text-stone-500">{business.address}</p>}
                 {current === 'play' && (
                   <div className="mt-2 grid shrink-0 grid-cols-2 gap-1.5 sm:grid-cols-4">
                     {playGames.map((item) => {
@@ -317,7 +426,7 @@ export function PlaceFrame({ business, token, current, children }: { business: R
                         <button
                           key={item.gamecode}
                           type="button"
-                          className={`relative flex h-9 w-full items-center justify-center rounded-full px-2 text-[11px] font-semibold leading-none shadow-sm ring-1 transition-colors duration-200 ${active ? 'text-white delay-100 ring-transparent' : 'bg-white text-stone-600 ring-stone-200'}`}
+                          className={`relative flex min-h-10 w-full items-center justify-center rounded-full px-2 text-[11px] font-semibold leading-none shadow-sm ring-1 transition-colors duration-200 ${active ? 'text-white delay-100 ring-transparent' : 'bg-white text-stone-600 ring-stone-200'}`}
                           onClick={() => setPlayGame(item.gamecode)}
                         >
                           {active && (
@@ -336,9 +445,9 @@ export function PlaceFrame({ business, token, current, children }: { business: R
                 )}
                 {current === 'menu' && (
                   <div className="mt-2 flex shrink-0 gap-1.5 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                    <button type="button" className="whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold" style={menuChip(menuFilter === 'all')} onClick={() => setMenuFilter('all')}>{menuCopy.guestAll}</button>
+                    <button type="button" className="min-h-9 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold" style={menuChip(menuFilter === 'all')} onClick={() => setMenuFilter('all')}>{menuCopy.guestAll}</button>
                     {menuCategories.map((category) => (
-                      <button key={category.categoryid} type="button" className="whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold" style={menuChip(menuFilter === category.categoryid)} onClick={() => setMenuFilter(category.categoryid)}>{category.categoryname}</button>
+                      <button key={category.categoryid} type="button" className="min-h-9 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold" style={menuChip(menuFilter === category.categoryid)} onClick={() => setMenuFilter(category.categoryid)}>{category.categoryname}</button>
                     ))}
                   </div>
                 )}
@@ -378,7 +487,31 @@ export function PlaceFrame({ business, token, current, children }: { business: R
         >
           {wifiName && <p>Network <span className="font-semibold text-stone-950">{wifiName}</span></p>}
           {wifiPassword && <p className="mt-0.5">Password <span className="font-semibold text-stone-950">{wifiPassword}</span></p>}
-          <button type="button" className="mt-1 text-[11px] font-semibold text-orange-600" onClick={() => { void navigator.clipboard?.writeText([wifiName, wifiPassword].filter(Boolean).join('\n')).then(() => setCopied(true)); }}>{copied ? 'Copied' : 'Copy details'}</button>
+          <button type="button" className="mt-1 min-h-9 text-[11px] font-semibold text-orange-600" onClick={() => { void navigator.clipboard?.writeText([wifiName, wifiPassword].filter(Boolean).join('\n')).then(() => setCopied(true)); }}>{copied ? 'Copied' : 'Copy details'}</button>
+        </div>,
+        document.body,
+      )}
+      {moreOpen && morePos && moreLinks.length > 0 && createPortal(
+        <div
+          id="shop-more-pop"
+          role="menu"
+          aria-label="More shop links"
+          className="fixed z-[60] w-[12.5rem] rounded-2xl bg-white py-1.5 text-left shadow-lg ring-1 ring-stone-200"
+          style={{ top: morePos.top, left: morePos.left }}
+        >
+          {moreLinks.map((item) => (
+            <a
+              key={item.label}
+              href={item.href}
+              target="_blank"
+              rel="noreferrer"
+              role="menuitem"
+              className="block px-3 py-2.5 text-sm font-semibold text-stone-700 hover:bg-orange-50 hover:text-orange-700"
+              onClick={() => setMoreOpen(false)}
+            >
+              {item.label}
+            </a>
+          ))}
         </div>,
         document.body,
       )}
@@ -386,7 +519,8 @@ export function PlaceFrame({ business, token, current, children }: { business: R
         <div
           id="shop-panel"
           ref={panelRef}
-          className="relative scroll-mt-56 bg-white px-5 pb-10 pt-2 shadow-xl shadow-stone-950/10 sm:rounded-b-[28px]"
+          className="relative bg-white px-5 pb-10 pt-2 shadow-xl shadow-stone-950/10 sm:rounded-b-[28px]"
+          style={{ scrollMarginTop: 'calc(var(--shop-sticky-bar, 14rem) + 0.75rem)' }}
         >
           {children}
         </div>
@@ -415,18 +549,20 @@ function catalogGlyph(label: string): 'calendar' | 'list' {
 function ShopDock({ token, current, menuLabel }: { token?: string; current: GuestTab; menuLabel: string }) {
   const auth = useAuth();
   const signedIn = isGuestCustomer(auth.user);
-  const { install } = useInstallApp();
+  const { install, installed } = useInstallApp();
   const scrollIntoShop = () => window.dispatchEvent(new Event('rs-scroll-shop-content'));
-  const item = (active: boolean) => `flex min-w-0 flex-1 flex-col items-center gap-0.5 px-0.5 py-1 text-[9px] font-semibold leading-none sm:text-[11px] ${active ? 'text-orange-600' : 'text-stone-400'}`;
-  const bubble = (active: boolean) => `grid h-8 w-8 place-items-center rounded-full sm:h-10 sm:w-10 ${active ? 'bg-orange-600 text-white shadow-md shadow-orange-600/30' : 'bg-stone-100 text-stone-500'}`;
+  const item = (active: boolean) => `flex min-w-0 flex-1 flex-col items-center gap-0.5 px-0.5 py-1.5 text-[10px] font-semibold leading-none sm:text-[11px] ${active ? 'text-orange-600' : 'text-stone-400'}`;
+  const bubble = (active: boolean) => `grid h-9 w-9 place-items-center rounded-full sm:h-10 sm:w-10 ${active ? 'bg-orange-600 text-white shadow-md shadow-orange-600/30' : 'bg-stone-100 text-stone-500'}`;
   return createPortal(
-    <nav className="fixed inset-x-0 bottom-0 z-30 px-2 pt-2" style={{ paddingBottom: 'max(0.55rem, env(safe-area-inset-bottom))' }} aria-label="Shop">
-      <div className="mx-auto flex w-full max-w-md items-end justify-between rounded-[1.75rem] bg-white px-1 py-2 shadow-[0_-8px_30px_rgba(28,25,23,0.12)] ring-1 ring-stone-200">
+    <nav className="fixed inset-x-0 bottom-0 z-30 px-2 pt-2 sm:px-4" style={{ paddingBottom: 'max(0.55rem, env(safe-area-inset-bottom))' }} aria-label="Shop">
+      <div className="mx-auto flex w-full max-w-xl items-end justify-between rounded-[1.75rem] bg-white px-1.5 py-2 shadow-[0_-8px_30px_rgba(28,25,23,0.12)] ring-1 ring-stone-200">
         <NavLink to={`/play/${token}`} onClick={scrollIntoShop} className={item(current === 'play')}><span className={bubble(current === 'play')}><DockGlyph name="play" /></span><span className="max-w-full truncate">Play</span></NavLink>
         <NavLink to={`/menu/${token}`} onClick={scrollIntoShop} className={item(current === 'menu')}><span className={bubble(current === 'menu')}><DockGlyph name={catalogGlyph(menuLabel)} /></span><span className="max-w-full truncate">{menuLabel}</span></NavLink>
         <NavLink to={`/bill/${token}`} onClick={scrollIntoShop} className={item(current === 'bill')}><span className={bubble(current === 'bill')}><DockGlyph name="bill" /></span><span className="max-w-full truncate">Bill</span></NavLink>
         <NavLink to={`/review/${token}`} onClick={scrollIntoShop} className={item(current === 'review')}><span className={bubble(current === 'review')}><DockGlyph name="review" /></span><span className="max-w-full truncate">Review</span></NavLink>
-        <button type="button" className={item(false)} onClick={() => { void install(); }}><span className={bubble(false)}><DockGlyph name="app" /></span><span className="max-w-full truncate">Get app</span></button>
+        {!installed && (
+          <button type="button" className={item(false)} onClick={() => { void install(); }}><span className={bubble(false)}><DockGlyph name="app" /></span><span className="max-w-full truncate">Get app</span></button>
+        )}
         {signedIn ? (
           <NavLink to="/customer/dashboard" className={item(false)}><span className={bubble(false)}><DockGlyph name="user" /></span><span className="max-w-full truncate">Account</span></NavLink>
         ) : (
@@ -582,7 +718,7 @@ function QtyControl({ color, qty, onChange }: { color: string; qty: number; onCh
     return (
       <button
         type="button"
-        className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full px-4 text-sm font-semibold text-white shadow-md transition hover:brightness-110 active:scale-[0.98]"
+        className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-full px-4 text-sm font-semibold text-white shadow-md transition hover:brightness-110 active:scale-[0.98]"
         style={{ background: color }}
         onClick={() => onChange(1)}
       >
@@ -592,10 +728,10 @@ function QtyControl({ color, qty, onChange }: { color: string; qty: number; onCh
     );
   }
   return (
-    <div className="inline-flex h-10 items-center gap-1 rounded-full border border-stone-200 bg-white p-1 shadow-sm">
-      <button type="button" className="grid h-8 w-8 place-items-center rounded-full bg-stone-100 text-base font-bold text-stone-700" onClick={() => onChange(Math.max(0, qty - 1))} aria-label="Decrease">−</button>
+    <div className="inline-flex h-11 items-center gap-1 rounded-full border border-stone-200 bg-white p-1 shadow-sm">
+      <button type="button" className="grid h-9 w-9 place-items-center rounded-full bg-stone-100 text-base font-bold text-stone-700" onClick={() => onChange(Math.max(0, qty - 1))} aria-label="Decrease">−</button>
       <span className="min-w-6 text-center text-sm font-bold text-stone-950">{qty}</span>
-      <button type="button" className="grid h-8 w-8 place-items-center rounded-full text-base font-bold text-white" style={{ background: color }} onClick={() => onChange(qty + 1)} aria-label="Increase">+</button>
+      <button type="button" className="grid h-9 w-9 place-items-center rounded-full text-base font-bold text-white" style={{ background: color }} onClick={() => onChange(qty + 1)} aria-label="Increase">+</button>
     </div>
   );
 }
@@ -639,7 +775,7 @@ function SaveCoinsModal({ onClose, token, coins = 0, prizeName = '' }: { onClose
     <Modal title={coins > 0 ? `Save ${coins} coins` : 'Save these coins'} text={prizeName ? `${prizeName}. Keep it in a wallet, or sign in if you already have one.` : 'Keep the prize in a wallet, or sign in if you already have one.'} onClose={onClose}>
       <div className="mb-4 grid grid-cols-2 rounded-xl bg-stone-100 p-1">
         <button type="button" className={`h-10 rounded-lg text-sm font-semibold ${mode === 'create' ? 'bg-white shadow-sm' : 'text-stone-500'}`} onClick={() => { setMode('create'); setError(''); }}>Create account</button>
-        <button type="button" className={`h-10 rounded-lg text-sm font-semibold ${mode === 'login' ? 'bg-white shadow-sm' : 'text-stone-500'}`} onClick={() => { setMode('login'); setError(''); }}>Already exist? Login</button>
+        <button type="button" className={`h-10 rounded-lg text-sm font-semibold ${mode === 'login' ? 'bg-white shadow-sm' : 'text-stone-500'}`} onClick={() => { setMode('login'); setError(''); }}>Sign in</button>
       </div>
       {error && <Alert text={error} />}
       {mode === 'create' ? (
@@ -667,6 +803,7 @@ export function PlayPanel() {
   const auth = useAuth();
   const reduce = useReducedMotion();
   const [prizes, setPrizes] = useState<PrizeSlice[]>([]);
+  const [boardLoading, setBoardLoading] = useState(true);
   const [result, setResult] = useState<PlayResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -675,6 +812,7 @@ export function PlayPanel() {
 
   useEffect(() => {
     setPrizes([]);
+    setBoardLoading(true);
     setResult(null);
     setSaveOpen(false);
     setWinOpen(false);
@@ -683,12 +821,14 @@ export function PlayPanel() {
 
   useEffect(() => {
     let alive = true;
+    setBoardLoading(true);
     api<{ prizes?: PrizeSlice[] }>(`/public/play/${encodeURIComponent(token)}/board?gameCode=${encodeURIComponent(playGame)}`, { quiet: true })
       .then((data) => {
         if (!alive || !data.prizes?.length) return;
         setPrizes(data.prizes);
       })
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => { if (alive) setBoardLoading(false); });
     return () => { alive = false; };
   }, [token, playGame]);
 
@@ -710,10 +850,11 @@ export function PlayPanel() {
   }
 
   const signedIn = isGuestCustomer(auth.user);
+  const showBoardSkeleton = boardLoading && playGame === 'SpinWheel' && !prizes.length;
 
   return (
     <>
-      <section className="mb-4 overflow-visible rounded-[28px] bg-[radial-gradient(ellipse_at_top,#fff,#fafaf9_46%,#e7e5e4)] px-3 py-6 shadow-[inset_0_1px_0_rgba(255,255,255,.9)] sm:px-6 sm:py-8">
+      <section className="relative mb-4 overflow-visible rounded-[28px] bg-[radial-gradient(ellipse_at_top,#fff,#fafaf9_46%,#e7e5e4)] px-3 py-6 shadow-[inset_0_1px_0_rgba(255,255,255,.9)] sm:px-6 sm:py-8">
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={playGame}
@@ -723,7 +864,13 @@ export function PlayPanel() {
             exit={reduce ? undefined : { opacity: 0, y: -8 }}
             transition={{ duration: 0.22, ease: 'easeOut' }}
           >
-            <GameStage game={playGame} prizes={prizes} busy={busy} onPlay={play} onReveal={(value) => { setResult(value); setWinOpen(true); }} accent={color} />
+            {showBoardSkeleton ? (
+              <div className="grid h-64 w-full max-w-sm place-items-center rounded-[28px] bg-stone-100/80" aria-busy="true" aria-label="Loading game board">
+                <div className="h-40 w-40 animate-pulse rounded-full bg-stone-200 motion-reduce:animate-none" />
+              </div>
+            ) : (
+              <GameStage game={playGame} prizes={prizes} busy={busy || (boardLoading && playGame === 'SpinWheel')} onPlay={play} onReveal={(value) => { setResult(value); setWinOpen(true); }} accent={color} />
+            )}
           </motion.div>
         </AnimatePresence>
       </section>
@@ -812,7 +959,7 @@ function OffersList() {
   }
   if (!offers.length) return null;
   return (
-    <section id="offers" className="mt-8 scroll-mt-6 border-t border-stone-100 pt-5">
+    <section id="offers" className="mt-8 border-t border-stone-100 pt-5" style={{ scrollMarginTop: 'calc(var(--shop-sticky-bar, 14rem) + 0.75rem)' }}>
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-base font-bold">Current offers</h2>
         {offers.length > 1 && <p className="text-xs font-semibold text-stone-400">{index + 1} of {offers.length}</p>}
@@ -1032,6 +1179,7 @@ export function MenuPanel() {
                 const configurable = options.length > 0 || addons.length > 0;
                 const simpleKey = cartKey(item.itemid);
                 const simple = cart.find((line) => line.key === simpleKey);
+                const configuredQty = cart.filter((line) => line.itemId === Number(item.itemid)).reduce((sum, line) => sum + line.qty, 0);
                 const from = options.length ? Math.min(...options.map((option) => Number(option.price))) : Number(item.price);
                 return (
                   <article key={item.itemid} className="flex items-start gap-3 rounded-2xl border border-stone-100 bg-white p-3 shadow-sm">
@@ -1053,7 +1201,12 @@ export function MenuPanel() {
                     </div>
                     <div className="shrink-0 self-center">
                       {configurable ? (
-                        <button type="button" className="rounded-full px-3 py-2 text-xs font-bold text-white shadow-md" style={{ background: color }} onClick={() => openItem(item)} aria-label={`Choose options for ${item.itemname}`}>Choose</button>
+                        <button type="button" className="relative min-h-11 rounded-full px-3.5 py-2 text-xs font-bold text-white shadow-md" style={{ background: color }} onClick={() => openItem(item)} aria-label={`Choose options for ${item.itemname}`}>
+                          {configuredQty > 0 ? 'Add more' : 'Choose'}
+                          {configuredQty > 0 && (
+                            <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-stone-950 px-1 text-[10px] font-bold text-white">{configuredQty}</span>
+                          )}
+                        </button>
                       ) : (
                         <QtyControl color={color} qty={simple?.qty || 0} onChange={(qty) => {
                           if (!simple && qty > 0) addLine({ key: simpleKey, itemId: item.itemid, name: item.itemname, unitPrice: Number(item.price), qty, addons: [] });
@@ -1068,6 +1221,12 @@ export function MenuPanel() {
           </section>
         ))}
         {!items.length && <p className="py-16 text-center text-stone-400">{copy.emptyGuest}</p>}
+        {!!items.length && !visible.length && (
+          <p className="py-16 text-center text-stone-400">
+            No items in this category.
+            <button type="button" className="mt-3 block w-full text-sm font-semibold text-orange-600" onClick={() => setFilter('all')}>{copy.guestAll || 'Show all'}</button>
+          </p>
+        )}
         <OffersList />
       </div>
 
@@ -1122,9 +1281,9 @@ export function MenuPanel() {
               ))}
               <div>
                 <p className="text-sm font-semibold text-stone-700">{copy.serveTitle}</p>
-                <div className={`mt-2 grid gap-2 ${copy.modes.length > 1 ? 'grid-cols-3' : 'grid-cols-1'}`}>
+                <div className={`mt-2 grid gap-2 ${copy.modes.length === 1 ? 'grid-cols-1' : copy.modes.length === 2 ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-3'}`}>
                   {copy.modes.map(([value, label]) => (
-                    <button key={value} type="button" className={`rounded-2xl border px-2 py-3 text-sm font-semibold ${fulfillment === value ? 'border-transparent text-white' : 'border-stone-200 bg-stone-50 text-stone-600'}`} style={fulfillment === value ? { background: color } : undefined} onClick={() => setFulfillment(value)}>{label}</button>
+                    <button key={value} type="button" className={`min-h-11 rounded-2xl border px-2 py-3 text-sm font-semibold ${fulfillment === value ? 'border-transparent text-white' : 'border-stone-200 bg-stone-50 text-stone-600'}`} style={fulfillment === value ? { background: color } : undefined} onClick={() => setFulfillment(value)}>{label}</button>
                   ))}
                 </div>
               </div>
@@ -1199,13 +1358,26 @@ export function BillPanel() {
     } finally { setBusy(false); }
   }
 
+  function resetForm() {
+    setDone('');
+    setAmount('');
+    setInvoice('');
+    setNote('');
+    setFile(null);
+  }
+
   return (
     <div className="space-y-4 pb-4">
       <div>
         <h2 className="text-lg font-bold">Bill payment</h2>
         <p className="mt-1 text-sm text-stone-500">Paid at the counter? Send the bill here. The shop confirms it and adds the coins.</p>
       </div>
-      {done ? <p className="rounded-2xl bg-emerald-50 px-3 py-3 text-sm text-emerald-700">{done}</p> : (
+      {done ? (
+        <div className="space-y-3 rounded-2xl bg-emerald-50 px-3 py-3">
+          <p className="text-sm text-emerald-700">{done}</p>
+          <Button kind="ghost" className="w-full" onClick={resetForm}>Submit another bill</Button>
+        </div>
+      ) : (
         <div className="space-y-3">
           <label className="block text-sm"><span className="mb-1.5 block font-medium">Name</span><input value={name} onChange={(event) => setName(event.target.value)} className="h-11 w-full rounded-xl border border-stone-200 px-3" /></label>
           <label className="block text-sm"><span className="mb-1.5 block font-medium">Mobile</span><input value={mobile} onChange={(event) => setMobile(digitsOnly(event.target.value))} inputMode="numeric" maxLength={10} placeholder="10-digit mobile" className="h-11 w-full rounded-xl border border-stone-200 px-3" /></label>

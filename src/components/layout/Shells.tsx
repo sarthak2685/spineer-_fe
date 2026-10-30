@@ -10,7 +10,7 @@ import { DemoModalHost, openDemo } from '../../features/public/demo-request';
 import { legalNav } from '../../features/public/legal-nav';
 import { bindSoundUnlock, getOrderSoundPrefs, playNotify, playOrderAlert, setOrderSoundPrefs, stopOrderAlert, unlockSound } from '../../lib/sounds';
 import { dismissToast, toastInfo } from '../../lib/toast';
-import { InboxCountProvider, useInboxCount } from '../../features/customer/inbox';
+import { InboxCountProvider, noticePath, useInboxCount, type Notice } from '../../features/customer/inbox';
 import { CustomerDock } from '../../features/customer/dock';
 import { OwnerPushPrompt } from '../../features/business/owner-push-prompt';
 
@@ -571,7 +571,12 @@ function CustomerAlerts() {
       if (id && recent.current.has(`id:${id}`)) return;
       recent.current.add(textKey);
       if (id) recent.current.add(`id:${id}`);
-      toastInfo(message || title, id ? `note-${id}` : textKey, { title, detail: message, href });
+      toastInfo(message || title, id ? `note-${id}` : textKey, {
+        title,
+        detail: message,
+        href,
+        autoClose: 6500,
+      });
     }
     function onMessage(event: MessageEvent) {
       if (event.data?.type !== 'push') return;
@@ -580,17 +585,20 @@ function CustomerAlerts() {
     navigator.serviceWorker?.addEventListener('message', onMessage);
     async function tick() {
       try {
-        const rows = await api<{ customernotificationid: number; title: string; message: string; notificationtype?: string }[]>('/customer/notifications?filter=Unread', { quiet: true });
+        const rows = await api<Notice[]>('/customer/notifications?filter=Unread', { quiet: true });
         inbox.setCount(rows.length);
         if (seen.current === null) {
           seen.current = new Set(rows.map((row) => row.customernotificationid));
           return;
         }
-        rows.forEach((row) => {
-          if (seen.current?.has(row.customernotificationid)) return;
-          seen.current?.add(row.customernotificationid);
-          announce(row.title, row.message, row.customernotificationid, '/customer/notifications');
-        });
+        const fresh = rows.filter((row) => !seen.current?.has(row.customernotificationid));
+        fresh.forEach((row) => seen.current?.add(row.customernotificationid));
+        if (fresh.length > 1) {
+          announce(`${fresh.length} new updates`, 'Open your inbox for the latest shop offers and order news.', undefined, '/customer/notifications');
+        } else if (fresh.length === 1) {
+          const row = fresh[0];
+          announce(row.title, row.message, row.customernotificationid, noticePath(row));
+        }
       } catch { /* a missed poll should not interrupt the wallet */ }
     }
     tick();

@@ -231,6 +231,7 @@ function Scratch({ busy, onPlay, onReveal, accent }: { busy: boolean; onPlay: ()
   const canvas = useRef<HTMLCanvasElement>(null);
   const last = useRef<{ x: number; y: number } | null>(null);
   const [prize, setPrize] = useState<PlayResult | null>(null);
+  const [preparing, setPreparing] = useState(false);
   const started = useRef(false);
   const arming = useRef(false);
   const revealed = useRef(false);
@@ -279,11 +280,12 @@ function Scratch({ busy, onPlay, onReveal, accent }: { busy: boolean; onPlay: ()
   async function scratch(event: PointerEvent<HTMLCanvasElement>) {
     const node = canvas.current;
     const ctx = node?.getContext('2d');
-    if (!node || !ctx || busy || revealed.current) return;
+    if (!node || !ctx || busy || revealed.current || preparing) return;
     if (event.type === 'pointerdown') node.setPointerCapture(event.pointerId);
     if (!started.current) {
       if (arming.current) return;
       arming.current = true;
+      setPreparing(true);
       try {
         const result = await onPlay();
         started.current = true;
@@ -291,7 +293,10 @@ function Scratch({ busy, onPlay, onReveal, accent }: { busy: boolean; onPlay: ()
         setPrize(result);
       } catch {
         arming.current = false;
+        setPreparing(false);
         return;
+      } finally {
+        setPreparing(false);
       }
     }
     const rect = node.getBoundingClientRect();
@@ -342,6 +347,11 @@ function Scratch({ busy, onPlay, onReveal, accent }: { busy: boolean; onPlay: ()
           </div>
         </div>
         <canvas ref={canvas} onPointerDown={scratch} onPointerMove={(event) => { if (event.buttons) scratch(event); }} onPointerUp={() => { last.current = null; }} className="absolute inset-0 h-full w-full touch-none" />
+        {preparing && (
+          <div className="absolute inset-0 z-10 grid place-items-center bg-stone-950/45 text-sm font-semibold text-white" aria-live="polite">
+            Preparing…
+          </div>
+        )}
       </div>
     </Cabinet>
   );

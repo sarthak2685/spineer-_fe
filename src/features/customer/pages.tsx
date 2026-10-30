@@ -103,9 +103,13 @@ function NotifyCard() {
     <Card className="mt-4 flex flex-wrap items-center justify-between gap-3">
       <div>
         <p className="font-semibold text-stone-950">Enable notifications</p>
-        <p className="mt-1 text-sm text-stone-500">{pushState === 'denied' ? 'Notifications are blocked in the browser. Allow them for this site, then come back.' : 'Turn these on so shop offers and order updates reach this phone. On iPhone, add Repeat Mate to the Home Screen first.'}</p>
+        <p className="mt-1 text-sm text-stone-500">{pushState === 'denied' ? 'Notifications are blocked for this site. Open your browser site settings, allow notifications, then reload this page.' : 'Turn these on so shop offers and order updates reach this phone. On iPhone, add Repeat Mate to the Home Screen first.'}</p>
       </div>
-      {pushState !== 'denied' && <Button onClick={enable}>Enable notifications</Button>}
+      {pushState === 'denied' ? (
+        <Button kind="ghost" onClick={() => window.location.reload()}>Reload after allowing</Button>
+      ) : (
+        <Button onClick={enable}>Enable notifications</Button>
+      )}
     </Card>
   );
 }

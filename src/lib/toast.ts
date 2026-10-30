@@ -25,7 +25,7 @@ function note(message: string, extra?: ToastExtra): ReactNode {
       actions.push(createElement(Link, {
         key: 'open',
         to: extra.href,
-        className: 'inline-flex text-sm font-semibold text-orange-600',
+        className: 'inline-flex min-h-10 items-center text-sm font-semibold text-orange-600',
         onClick: (event: { stopPropagation: () => void }) => {
           event.stopPropagation();
           // Stop chime without dismissing mid-tap (safer on iOS).

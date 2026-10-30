@@ -18,6 +18,19 @@
   padding: 0;
 }
 
+html.toast-guest-shop .Toastify__toast-container {
+  --toastify-toast-top: max(
+    calc(var(--shop-sticky-bar, 14rem) + 0.5rem),
+    calc(env(safe-area-inset-top) + 3.25rem)
+  );
+}
+
+html.toast-guest-shop .Toastify__toast-container--bottom-center,
+html.toast-guest-shop .Toastify__toast-container.Toastify__toast-container--bottom-center {
+  bottom: calc(6.75rem + env(safe-area-inset-bottom)) !important;
+  top: auto !important;
+}
+
 .Toastify__toast {
   width: 100%;
   min-height: 0;

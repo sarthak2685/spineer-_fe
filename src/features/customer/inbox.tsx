@@ -27,6 +27,9 @@ export const noticeFilters = [
   { id: 'OrderUpdate', label: 'Orders' },
 ];
 
+const primaryFilterIds = ['All', 'Unread', 'OrderUpdate', 'Offer'] as const;
+const moreFilterIds = ['PurchaseApproval', 'CoinExpiry', 'RewardUpdate'] as const;
+
 const InboxCountContext = createContext<{ count: number; bump: number; setCount: (count: number) => void }>({ count: 0, bump: 0, setCount: () => undefined });
 
 export function InboxCountProvider({ children }: { children: ReactNode }) {
@@ -81,6 +84,13 @@ export function noticeWhen(value?: string) {
   return then.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
+function noticeWhenTitle(value?: string) {
+  if (!value) return undefined;
+  const then = new Date(value);
+  if (!Number.isFinite(then.getTime())) return undefined;
+  return then.toLocaleString();
+}
+
 function noticeGroup(value?: string) {
   if (!value) return 'Earlier';
   const then = new Date(value);
@@ -110,6 +120,17 @@ function enterFrom(type: string) {
   return { y: 10, opacity: 0 };
 }
 
+function InboxFilterChip({ id, label, on, reduce, onPick }: { id: string; label: string; on: boolean; reduce: boolean | null; onPick: () => void }) {
+  return (
+    <button id={`inbox-filter-${id}`} type="button" onClick={onPick} className={`relative min-h-9 shrink-0 rounded-full px-3.5 py-1.5 text-sm font-semibold ${on ? 'text-white' : 'text-stone-600'}`}>
+      {on && !reduce && <motion.span layoutId="inbox-chip" className="absolute inset-0 rounded-full bg-orange-600" transition={{ type: 'spring', bounce: 0.18, duration: 0.4 }} />}
+      {on && reduce && <span className="absolute inset-0 rounded-full bg-orange-600" />}
+      {!on && <span className="absolute inset-0 rounded-full bg-white ring-1 ring-stone-200" />}
+      <span className="relative z-10">{label}</span>
+    </button>
+  );
+}
+
 export function NoticeRow({ row, onRead, compact = false }: { row: Notice; onRead?: (id: number) => void; compact?: boolean }) {
   const navigate = useNavigate();
   const reduce = useReducedMotion();
@@ -118,11 +139,18 @@ export function NoticeRow({ row, onRead, compact = false }: { row: Notice; onRea
   const origin = useRef<number | null>(null);
   const moved = useRef(false);
   const unread = !row.isread;
+  const whenTitle = noticeWhenTitle(row.createddate);
 
   function open() {
     if (moved.current) return;
     if (unread && !compact) onRead?.(row.customernotificationid);
-    navigate(compact ? '/customer/notifications' : noticePath(row));
+    navigate(noticePath(row));
+  }
+
+  function markRead(event?: { stopPropagation: () => void }) {
+    event?.stopPropagation();
+    if (unread) onRead?.(row.customernotificationid);
+    setShift(0);
   }
 
   return (
@@ -134,23 +162,31 @@ export function NoticeRow({ row, onRead, compact = false }: { row: Notice; onRea
       transition={{ type: 'spring', bounce: 0.18, duration: reduce ? 0 : 0.4 }}
       className="relative overflow-hidden rounded-2xl"
     >
-      {unread && onRead && <button type="button" className="absolute inset-y-0 right-0 w-24 bg-orange-600 text-sm font-semibold text-white sm:hidden" onClick={() => onRead(row.customernotificationid)}>Mark read</button>}
+      {unread && onRead && (
+        <button type="button" className="absolute inset-y-0 right-0 flex w-28 items-center justify-center bg-orange-600 text-sm font-semibold text-white sm:hidden" onClick={() => markRead()}>
+          Mark read
+        </button>
+      )}
       <div
-        className={`relative flex items-start gap-3 border p-4 text-left shadow-sm transition-colors duration-300 ${unread ? 'border-orange-200 bg-orange-50' : 'border-stone-200 bg-white'}`}
+        className={`relative flex items-start gap-3 border p-4 text-left shadow-sm transition-colors duration-300 touch-pan-y ${unread ? 'border-orange-200 bg-orange-50' : 'border-stone-200 bg-white'}`}
         style={{ transform: `translateX(${shift}px)`, transition: reduce || origin.current !== null ? 'none' : 'transform 280ms cubic-bezier(0.22, 1, 0.36, 1)' }}
         onPointerDown={(event) => {
-          if (reduce || event.pointerType === 'mouse' || !unread) return;
+          if (reduce || event.pointerType === 'mouse' || !unread || !onRead) return;
           origin.current = event.clientX;
           moved.current = false;
         }}
         onPointerMove={(event) => {
           if (origin.current === null) return;
-          const next = Math.max(-96, Math.min(0, event.clientX - origin.current));
+          const dx = event.clientX - origin.current;
+          if (Math.abs(dx) < 10) return;
+          // Prefer vertical scroll: ignore mostly-vertical moves.
+          if (Math.abs(event.movementY) > Math.abs(event.movementX) * 1.4) return;
+          const next = Math.max(-112, Math.min(0, dx));
           if (Math.abs(next) > 8) moved.current = true;
           setShift(next);
         }}
         onPointerUp={() => {
-          setShift((value) => (value < -48 ? -96 : 0));
+          setShift((value) => (value < -56 ? -112 : 0));
           origin.current = null;
           window.setTimeout(() => { moved.current = false; }, 0);
         }}
@@ -166,7 +202,7 @@ export function NoticeRow({ row, onRead, compact = false }: { row: Notice; onRea
                 <span className="block truncate text-xs font-semibold uppercase tracking-[0.14em] text-orange-600">{row.businessname || noticeLabel(row.notificationtype)}</span>
                 <span className="mt-0.5 block font-semibold text-stone-950">{row.title}</span>
               </span>
-              <span className="shrink-0 text-xs font-medium text-stone-400">{noticeWhen(row.createddate)}</span>
+              <span className="shrink-0 text-xs font-medium text-stone-400" title={whenTitle}>{noticeWhen(row.createddate)}</span>
             </span>
             <span className={`mt-1 block text-sm text-stone-500 ${more || compact ? '' : 'line-clamp-2'}`}>{row.message}</span>
           </span>
@@ -174,9 +210,13 @@ export function NoticeRow({ row, onRead, compact = false }: { row: Notice; onRea
         {!compact && (
           <span className="flex shrink-0 flex-col items-end gap-2">
             {row.message.length > 80 && (
-              <button type="button" className="text-xs font-semibold text-orange-600" onClick={() => setMore((value) => !value)}>{more ? 'Less' : 'More'}</button>
+              <button type="button" className="min-h-9 text-xs font-semibold text-orange-600" onClick={() => setMore((value) => !value)}>{more ? 'Less' : 'More'}</button>
             )}
-            {unread && <button type="button" className="hidden text-xs font-semibold text-orange-600 sm:inline" onClick={() => onRead?.(row.customernotificationid)}>Mark read</button>}
+            {unread && onRead && (
+              <button type="button" className="min-h-9 rounded-full bg-orange-100 px-3 text-xs font-semibold text-orange-700" onClick={() => markRead()}>
+                Mark read
+              </button>
+            )}
           </span>
         )}
       </div>
@@ -184,18 +224,44 @@ export function NoticeRow({ row, onRead, compact = false }: { row: Notice; onRea
   );
 }
 
+function InboxSkeleton() {
+  return (
+    <div className="space-y-3" aria-busy="true" aria-label="Loading notifications">
+      {Array.from({ length: 4 }, (_, index) => (
+        <div key={index} className="animate-pulse rounded-2xl border border-stone-200 bg-white p-4 motion-reduce:animate-none">
+          <div className="flex gap-3">
+            <div className="h-9 w-9 rounded-full bg-stone-100" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <div className="h-3 w-24 rounded-full bg-stone-100" />
+              <div className="h-4 w-3/4 rounded-full bg-stone-100" />
+              <div className="h-3 w-full rounded-full bg-stone-100" />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function NotificationsPage() {
   const reduce = useReducedMotion();
   const [rows, setRows] = useState<Notice[]>([]);
   const [filter, setFilter] = useState('All');
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [pull, setPull] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const startY = useRef<number | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async (next = filter) => {
-    const list = await api<Notice[]>(`/customer/notifications?filter=${next}`);
-    setRows(list);
+    setLoading(true);
+    try {
+      const list = await api<Notice[]>(`/customer/notifications?filter=${next}`);
+      setRows(list);
+    } finally {
+      setLoading(false);
+    }
   }, [filter]);
 
   useEffect(() => { void load(filter); }, [filter, load]);
@@ -214,31 +280,63 @@ export function NotificationsPage() {
     if (filter === 'Unread') window.setTimeout(() => setRows([]), 240);
     await api('/customer/notifications/read-all', { method: 'POST' });
   }, [filter]);
-  const headerAction = useMemo(() => <span className="hidden sm:block"><Button kind="ghost" onClick={() => void markAll()}>Mark all read</Button></span>, [markAll]);
+
+  const showMarkAll = rows.some((row) => !row.isread);
+  const headerAction = useMemo(
+    () => (showMarkAll ? <span className="hidden sm:block"><Button kind="ghost" onClick={() => void markAll()}>Mark all read</Button></span> : null),
+    [showMarkAll, markAll],
+  );
 
   const groups = ['Today', 'Yesterday', 'Earlier'].map((name) => ({ name, rows: rows.filter((row) => noticeGroup(row.createddate) === name) })).filter((group) => group.rows.length);
   const emptyLabel = noticeFilters.find((item) => item.id === filter)?.label || 'items';
+  const primaryFilters = noticeFilters.filter((item) => (primaryFilterIds as readonly string[]).includes(item.id));
+  const moreFilters = noticeFilters.filter((item) => (moreFilterIds as readonly string[]).includes(item.id));
+  const moreActive = moreFilters.some((item) => item.id === filter);
 
   return (
     <>
       <PageTitle title="Notifications" text="Inbox for shop offers and order updates." actions={headerAction} />
       <div className="mb-3 flex items-center justify-between gap-3 sm:hidden">
         <p className="text-sm text-stone-500">Shop offers and order updates.</p>
-        <Button kind="ghost" onClick={markAll}>Mark all read</Button>
+        {showMarkAll && <Button kind="ghost" onClick={markAll}>Mark all read</Button>}
       </div>
       <div className="relative mb-4">
-        <div className="flex gap-2 overflow-x-auto pb-1" style={{ maskImage: 'linear-gradient(90deg, transparent, black 8%, black 92%, transparent)', WebkitMaskImage: 'linear-gradient(90deg, transparent, black 8%, black 92%, transparent)' }}>
-          {noticeFilters.map((item) => {
-            const on = filter === item.id;
-            return (
-              <button id={`inbox-filter-${item.id}`} key={item.id} type="button" onClick={() => setFilter(item.id)} className={`relative shrink-0 rounded-full px-3 py-1.5 text-sm font-semibold ${on ? 'text-white' : 'text-stone-600'}`}>
-                {on && !reduce && <motion.span layoutId="inbox-chip" className="absolute inset-0 rounded-full bg-orange-600" transition={{ type: 'spring', bounce: 0.18, duration: 0.4 }} />}
-                {on && reduce && <span className="absolute inset-0 rounded-full bg-orange-600" />}
-                {!on && <span className="absolute inset-0 rounded-full bg-white ring-1 ring-stone-200" />}
-                <span className="relative z-10">{item.label}</span>
-              </button>
-            );
-          })}
+        <div className="flex flex-wrap gap-2">
+          {primaryFilters.map((item) => (
+            <InboxFilterChip
+              key={item.id}
+              id={item.id}
+              label={item.label}
+              on={filter === item.id}
+              reduce={reduce}
+              onPick={() => { setMoreOpen(false); setFilter(item.id); }}
+            />
+          ))}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setMoreOpen((open) => !open)}
+              className={`relative min-h-9 shrink-0 rounded-full px-3.5 py-1.5 text-sm font-semibold ${moreActive || moreOpen ? 'bg-orange-600 text-white' : 'bg-white text-stone-600 ring-1 ring-stone-200'}`}
+              aria-expanded={moreOpen}
+            >
+              More{moreActive ? ` · ${noticeFilters.find((item) => item.id === filter)?.label}` : ''}
+            </button>
+            {moreOpen && (
+              <div className="absolute left-0 top-full z-20 mt-2 flex min-w-[10rem] flex-col gap-1 rounded-2xl bg-white p-2 shadow-lg ring-1 ring-stone-200">
+                {moreFilters.map((item) => (
+                  <button
+                    key={item.id}
+                    id={`inbox-filter-${item.id}`}
+                    type="button"
+                    className={`rounded-xl px-3 py-2.5 text-left text-sm font-semibold ${filter === item.id ? 'bg-orange-50 text-orange-700' : 'text-stone-700 hover:bg-stone-50'}`}
+                    onClick={() => { setFilter(item.id); setMoreOpen(false); }}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
       <div
@@ -259,21 +357,27 @@ export function NotificationsPage() {
         }}
       >
         <div className="overflow-hidden text-center text-xs font-semibold text-orange-600" style={{ height: pull || refreshing ? 28 : 0 }}>{refreshing ? 'Refreshing' : pull > 48 ? 'Release to refresh' : pull > 8 ? 'Pull to refresh' : ''}</div>
-        {!rows.length && (
-          <Empty text={filter === 'All' ? 'Offers and order updates will show up here.' : filter === 'Unread' ? 'No unread updates.' : `No ${emptyLabel.toLowerCase()}.`} action={filter === 'All' ? <Link to="/customer/explore" className="inline-flex h-10 items-center rounded-full bg-orange-600 px-4 text-sm font-semibold text-white">Find a shop</Link> : undefined} />
+        {loading && !rows.length ? (
+          <InboxSkeleton />
+        ) : !rows.length ? (
+          <Empty
+            text={filter === 'All' ? 'Offers and order updates will show up here. Pull down to refresh.' : filter === 'Unread' ? 'No unread updates.' : `No ${emptyLabel.toLowerCase()}.`}
+            action={filter === 'All' ? <Link to="/customer/explore" className="inline-flex h-10 items-center rounded-full bg-orange-600 px-4 text-sm font-semibold text-white">Find a shop</Link> : undefined}
+          />
+        ) : (
+          <div className="space-y-6">
+            {groups.map((group) => (
+              <section key={group.name}>
+                <p className="mb-2 font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-stone-400">{group.name}</p>
+                <div className="space-y-2">
+                  <AnimatePresence initial={false}>
+                    {group.rows.map((row) => <NoticeRow key={row.customernotificationid} row={row} onRead={mark} />)}
+                  </AnimatePresence>
+                </div>
+              </section>
+            ))}
+          </div>
         )}
-        <div className="space-y-6">
-          {groups.map((group) => (
-            <section key={group.name}>
-              <p className="mb-2 font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-stone-400">{group.name}</p>
-              <div className="space-y-2">
-                <AnimatePresence initial={false}>
-                  {group.rows.map((row) => <NoticeRow key={row.customernotificationid} row={row} onRead={mark} />)}
-                </AnimatePresence>
-              </div>
-            </section>
-          ))}
-        </div>
       </div>
     </>
   );
