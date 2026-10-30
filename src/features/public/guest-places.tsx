@@ -1,13 +1,16 @@
 import { createContext, FormEvent, ReactNode, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, NavLink, useLocation, useParams } from 'react-router-dom';
-import { AnimatePresence, motion, useReducedMotion, useScroll, useTransform } from 'framer-motion';
+import { AnimatePresence, motion, useMotionValueEvent, useReducedMotion, useScroll, useTransform } from 'framer-motion';
 import { api, asset, client } from '../../api/client';
 import { useAuth } from '../../app/auth';
 import { ActionIcon, Alert, Button, Field, Form, IconButton, Modal } from '../../components/ui';
 import { catalogCopy } from '../../lib/catalog';
-import { digitsOnly, isTenDigitMobile } from '../../lib/mobile';
+import { isGuestCustomer } from '../../lib/guest-auth';
+import { digitsOnly, isTenDigitMobile, telHref, waHref } from '../../lib/mobile';
 import { scrollToShopContent, scrollToShopContentLater } from '../../lib/scroll';
+import { usePageSeo } from '../../lib/seo';
+import { socialHref, websiteHref } from '../../lib/social-links';
 import { useInstallApp } from '../../lib/use-install';
 import { toastErr, toastInfo, toastOk } from '../../lib/toast';
 import { GameStage, PrizeSlice, PlayResult } from './Games';
@@ -27,6 +30,10 @@ type GuestPlaceContext = {
   setHub: React.Dispatch<React.SetStateAction<GuestHub | null>>;
   color: string;
   business: Record<string, any>;
+  playGame: string;
+  setPlayGame: (game: string) => void;
+  menuFilter: number | 'all';
+  setMenuFilter: (filter: number | 'all') => void;
 };
 
 const GuestCtx = createContext<GuestPlaceContext | null>(null);
@@ -72,13 +79,13 @@ export function GuestError({ message }: { message: string }) {
   );
 }
 
-function shopFrame(play: boolean, height = typeof window === 'undefined' ? 720 : window.innerHeight, width = typeof window === 'undefined' ? 1200 : window.innerWidth) {
-  // Compact sticky bar for every tab — game picker lives in the play panel, not the header.
-  const bar = play ? 168 : 136;
+function shopFrame(tab: GuestTab, height = typeof window === 'undefined' ? 720 : window.innerHeight, width = typeof window === 'undefined' ? 1200 : window.innerWidth) {
+  // Sticky includes address + play/menu chips when those tabs are active.
+  const withChips = tab === 'play' || tab === 'menu';
   return {
     height,
     width,
-    bar,
+    bar: withChips ? 220 : 168,
     banner: 40,
     logoEnd: 44,
   };
@@ -95,56 +102,95 @@ function tabFromPath(pathname: string): GuestTab {
 }
 
 const tabOrder: GuestTab[] = ['play', 'menu', 'bill', 'review'];
+const gameNames: Record<string, string> = { SpinWheel: 'Spin wheel', ScratchCard: 'Scratch card', MysteryGiftBox: 'Mystery box', SlotMachine: 'Slots' };
 
 export function PlaceFrame({ business, token, current, children }: { business: Record<string, any>; token?: string; current: GuestTab; children: ReactNode }) {
   const auth = useAuth();
   const [loginOpen, setLoginOpen] = useState(false);
   const [wifiOpen, setWifiOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const signedIn = Boolean(auth.user && !auth.user.name.startsWith('Guest_'));
+  const [hintVisible, setHintVisible] = useState(true);
+  const [wifiPos, setWifiPos] = useState<{ top: number; left: number } | null>(null);
+  const wifiBtnRef = useRef<HTMLButtonElement>(null);
+  const signedIn = isGuestCustomer(auth.user);
   useEffect(() => {
     const open = () => setLoginOpen(true);
     window.addEventListener('rs-open-shop-signin', open);
     return () => window.removeEventListener('rs-open-shop-signin', open);
   }, []);
+  useEffect(() => {
+    if (!wifiOpen) {
+      setWifiPos(null);
+      return;
+    }
+    const place = () => {
+      const node = wifiBtnRef.current;
+      if (!node) return;
+      const box = node.getBoundingClientRect();
+      const width = 224;
+      setWifiPos({
+        top: box.bottom + 8,
+        left: Math.max(8, Math.min(box.right - width, window.innerWidth - width - 8)),
+      });
+    };
+    place();
+    const onPointer = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node | null;
+      if (wifiBtnRef.current?.contains(target)) return;
+      const pop = document.getElementById('shop-wifi-pop');
+      if (pop?.contains(target)) return;
+      setWifiOpen(false);
+    };
+    window.addEventListener('scroll', place, true);
+    window.addEventListener('resize', place);
+    window.addEventListener('mousedown', onPointer);
+    window.addEventListener('touchstart', onPointer);
+    return () => {
+      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('resize', place);
+      window.removeEventListener('mousedown', onPointer);
+      window.removeEventListener('touchstart', onPointer);
+    };
+  }, [wifiOpen]);
   const color = brandColor(business.themecolor);
   const shopName = business.businessname || 'Repeat Mate';
   const shopMark = String(shopName).trim().slice(0, 1).toUpperCase() || 'R';
   const heroRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  const playTab = current === 'play';
-  const frame = useRef(shopFrame(playTab));
+  const { hub, playGame, setPlayGame, menuFilter, setMenuFilter } = useGuestPlace();
+  const frame = useRef(shopFrame(current));
   const { scrollY } = useScroll();
+  const stickyOffset = () => frame.current.bar || (current === 'play' || current === 'menu' ? 220 : 168);
   const scrollToContent = (smooth = true) => {
     const full = heroRef.current?.offsetHeight || window.innerHeight;
-    frame.current = shopFrame(playTab, full, window.innerWidth);
-    scrollToShopContent(panelRef.current, smooth);
+    frame.current = shopFrame(current, full, window.innerWidth);
+    scrollToShopContent(panelRef.current, smooth, stickyOffset() + 12);
   };
   useEffect(() => {
     const onScrollRequest = () => {
-      // Wait for route + layout (header bar height differs on play vs menu).
-      scrollToShopContentLater(panelRef.current, true, 80);
+      // Wait for AnimatePresence exit/enter (~280ms) so scroll lands on the new panel.
+      scrollToShopContentLater(panelRef.current, true, 320);
     };
     window.addEventListener('rs-scroll-shop-content', onScrollRequest);
     return () => window.removeEventListener('rs-scroll-shop-content', onScrollRequest);
   }, []);
   useEffect(() => {
-    // Land on the shop panel for every tab, including play (collapsed header + content).
-    const id = window.setTimeout(() => scrollToContent(true), 120);
+    // Land on the shop panel after the tab panel transition settles.
+    const id = window.setTimeout(() => scrollToContent(true), 320);
     return () => window.clearTimeout(id);
   }, [current]);
   useLayoutEffect(() => {
     const measure = () => {
       const height = heroRef.current?.offsetHeight || window.innerHeight;
-      frame.current = shopFrame(playTab, height, window.innerWidth);
-      const current = scrollY.get();
-      scrollY.set(current + 0.01);
-      scrollY.set(current);
+      frame.current = shopFrame(current, height, window.innerWidth);
+      const currentY = scrollY.get();
+      scrollY.set(currentY + 0.01);
+      scrollY.set(currentY);
     };
     measure();
     window.addEventListener('resize', measure);
     return () => window.removeEventListener('resize', measure);
-  }, [scrollY, playTab]);
+  }, [scrollY, current]);
   const collapse = (value: number) => {
     const full = frame.current.height || window.innerHeight;
     const bar = frame.current.bar || Math.round(full * 0.33);
@@ -165,7 +211,9 @@ export function PlaceFrame({ business, token, current, children }: { business: R
     const width = frame.current.width || window.innerWidth;
     const centered = width / 2 - size / 2;
     const sheet = Math.min(width, 576);
-    const parked = (width - sheet) / 2 + 12;
+    // Match sticky identity + shop-panel inset (sm:px-4 = 16px on desktop).
+    const sidePad = width >= 640 ? 16 : 0;
+    const parked = (width - sheet) / 2 + sidePad + 12;
     const t = collapse(value);
     return centered * (1 - t) + parked * t;
   });
@@ -193,24 +241,33 @@ export function PlaceFrame({ business, token, current, children }: { business: R
   const coverOpacity = useTransform(scrollY, (value) => Math.max(0, 1 - collapse(value) / 0.42));
   const hintOpacity = useTransform(scrollY, (value) => Math.max(0, 1 - collapse(value) / 0.18));
   const hintPointer = useTransform(hintOpacity, (value) => (value > 0.25 ? 'auto' : 'none'));
-  const whatsapp = String(business.whatsappnumber || '').replace(/\D/g, '');
-  const wa = whatsapp.length === 10 ? `91${whatsapp}` : whatsapp;
+  useMotionValueEvent(hintOpacity, 'change', (value) => setHintVisible(value > 0.25));
+  const callHref = telHref(business.phone);
+  const wa = waHref(business.whatsappnumber || business.phone);
+  const ig = socialHref('instagram', business.instagramurl);
+  const fb = socialHref('facebook', business.facebookurl);
+  const tw = socialHref('twitter', business.twitterurl);
+  const yt = socialHref('youtube', business.youtubeurl);
+  const site = websiteHref(business.website);
+  const mapHref = websiteHref(business.googlemapurl);
   const link = (href: string, label: string, icon: ReactNode) => (
     <a href={href} target={href.startsWith('http') ? '_blank' : undefined} rel="noreferrer" aria-label={label} title={label} className="relative z-20 shrink-0 pointer-events-auto">
       {icon}
     </a>
   );
-  const web = (value?: string) => {
-    const text = String(value || '').trim();
-    if (!text) return '';
-    return /^https?:\/\//i.test(text) ? text : `https://${text}`;
-  };
   const wifiName = String(business.wifiname || '').trim();
   const wifiPassword = String(business.wifipassword || '').trim();
   const menuLabel = catalogCopy(business.businesstype).tab;
+  const menuCopy = catalogCopy(hub?.type?.typename || hub?.type?.typecode || business.businesstype);
   const compactIcon = 'h-8 w-8 [&_svg]:h-4 [&_svg]:w-4';
+  const reduce = useReducedMotion();
+  const gameOrder = ['SpinWheel', 'ScratchCard', 'MysteryGiftBox', 'SlotMachine'];
+  const availableGames = new Set(((hub?.games || []) as { gamecode: string }[]).map((item) => item.gamecode));
+  const playGames = (availableGames.size ? gameOrder.filter((code) => availableGames.has(code)) : gameOrder).map((gamecode) => ({ gamecode }));
+  const menuCategories = (hub?.categories || []) as { categoryid: number; categoryname: string }[];
+  const menuChip = (active: boolean) => (active ? { background: color, color: '#fff' } : { background: '#f1f5f9', color: '#475569' });
   return (
-    <div className="public-enter min-h-screen bg-orange-50 text-stone-900">
+    <div className="public-enter min-h-screen bg-orange-50 text-stone-900" style={{ scrollPaddingBottom: '8.5rem' }}>
       <div ref={heroRef} className="h-[100dvh]" aria-hidden="true" />
       {createPortal(
         <motion.header style={{ height: headerHeight }} className="fixed inset-x-0 top-0 z-20">
@@ -219,64 +276,118 @@ export function PlaceFrame({ business, token, current, children }: { business: R
             <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/20 to-black/25" />
           </div>
           <motion.div style={{ height: identityHeight }} className="pointer-events-none absolute inset-x-0 bottom-0 z-20 overflow-hidden bg-orange-50">
-            <div className="pointer-events-auto mx-auto flex h-full max-w-xl flex-col bg-white px-3 pb-2 pt-1.5 sm:rounded-t-[28px]">
-              <div className="flex min-h-11 shrink-0 items-center pl-14">
-                <div className="min-w-0 text-left">
-                  <h1 className="truncate text-base font-bold leading-tight text-stone-950">{shopName}</h1>
-                  <p className="truncate text-xs leading-tight text-stone-500">{business.tagline || business.description || 'Play, order, and review in one place.'}</p>
+            {/* Same max-w-xl + sm:px-4 as the shop panel so the two white cards share one edge. */}
+            <div className="pointer-events-auto mx-auto flex h-full max-w-xl sm:px-4">
+              <div className="flex h-full w-full flex-col bg-white px-3 pb-2 pt-1.5 sm:rounded-t-[28px]">
+                <div className="flex min-h-11 shrink-0 items-center pl-14">
+                  <div className="min-w-0 text-left">
+                    <h1 className="truncate text-base font-bold leading-tight text-stone-950">{shopName}</h1>
+                    <p className="truncate text-xs leading-tight text-stone-500">{business.tagline || business.description || 'Play, order, and review in one place.'}</p>
+                  </div>
                 </div>
-              </div>
-              <div className="relative z-20 mt-2 flex shrink-0 flex-nowrap justify-center gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {business.phone && link(`tel:${String(business.phone).replace(/\D/g, '')}`, 'Call', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-stone-700"><path d="M6.6 10.8a15 15 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11 11 0 0 0 3.5.55 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 7a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11 11 0 0 0 .55 3.5 1 1 0 0 1-.25 1L6.6 10.8z" /></svg></Icon>)}
-                {wa && link(`https://wa.me/${wa}`, 'WhatsApp', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-emerald-600"><path d="M12 3a9 9 0 0 0-7.8 13.5L3 21l4.7-1.2A9 9 0 1 0 12 3zm5 12.4c-.2.6-1.2 1.1-1.7 1.1-.4.1-.9.2-3-.8-2.5-1.2-4.1-3.6-4.2-3.8-.2-.2-1.2-1.6-1.2-3s.7-2.1 1-2.4c.2-.2.5-.3.8-.3h.6c.2 0 .4 0 .6.5.2.6.8 2 .8 2.1.1.1 0 .3-.1.5l-.4.5c-.1.2-.3.3-.1.6.2.3.7 1.2 1.5 1.9 1 .9 1.8 1.2 2.1 1.3.3.1.4.1.6-.1l.7-.8c.2-.2.4-.2.6-.1l2 .9c.2.1.4.2.4.4.1.2 0 .8-.2 1.3z" /></svg></Icon>)}
-                {business.instagramurl && link(web(business.instagramurl), 'Instagram', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-pink-600"><path d="M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4zm5 5a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm6.2-.9a1 1 0 1 0 0 2 1 1 0 0 0 0-2zM12 10a2 2 0 1 1 0 4 2 2 0 0 1 0-4z" /></svg></Icon>)}
-                {business.facebookurl && link(web(business.facebookurl), 'Facebook', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-blue-600"><path d="M14 9h3V6h-3c-2.2 0-4 1.8-4 4v2H8v3h2v7h3v-7h2.6l.4-3H13v-2c0-.6.4-1 1-1z" /></svg></Icon>)}
-                {business.twitterurl && link(web(business.twitterurl), 'X', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-stone-950"><path d="M14.7 4h2.4l-5.2 6 6.1 8h-4.8l-3.8-5-4.3 5H2.7l5.6-6.4L2.5 4h4.9l3.4 4.5L14.7 4zm-.8 12.6h1.3L7.2 5.3H5.8l8.1 11.3z" /></svg></Icon>)}
-                {business.youtubeurl && link(web(business.youtubeurl), 'YouTube', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-red-600"><path d="M23 12.2s0-3.2-.4-4.6c-.2-.9-.9-1.6-1.8-1.8C19.2 5.4 12 5.4 12 5.4s-7.2 0-8.8.4c-.9.2-1.6.9-1.8 1.8C1 9 1 12.2 1 12.2s0 3.2.4 4.6c.2.9.9 1.6 1.8 1.8 1.6.4 8.8.4 8.8.4s7.2 0 8.8-.4c.9-.2 1.6-.9 1.8-1.8.4-1.4.4-4.6.4-4.6zM9.8 15.5v-6.6l6.2 3.3-6.2 3.3z" /></svg></Icon>)}
-                {business.website && link(web(business.website), 'Website', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-orange-600" strokeWidth="1.8"><circle cx="12" cy="12" r="8" /><path d="M4 12h16M12 4c2.5 2.8 2.5 13.2 0 16M12 4c-2.5 2.8-2.5 13.2 0 16" /></svg></Icon>)}
-                {(wifiName || wifiPassword) && (
-                  <button type="button" onClick={() => setWifiOpen((open) => !open)} className="relative z-20 shrink-0 pointer-events-auto" aria-label="Wi-Fi" title="Wi-Fi" aria-expanded={wifiOpen}>
-                    <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-orange-600" strokeWidth="1.8" strokeLinecap="round"><path d="M5 12.5a10 10 0 0 1 14 0M8 15.2a6 6 0 0 1 8 0" /><circle cx="12" cy="18" r="1" fill="currentColor" stroke="none" /></svg></Icon>
-                  </button>
+                <div className="relative z-20 mt-1.5 flex shrink-0 flex-nowrap justify-center gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                  {callHref && link(callHref, 'Call', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-stone-700"><path d="M6.6 10.8a15 15 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11 11 0 0 0 3.5.55 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 7a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11 11 0 0 0 .55 3.5 1 1 0 0 1-.25 1L6.6 10.8z" /></svg></Icon>)}
+                  {wa && link(wa, 'WhatsApp', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-emerald-600"><path d="M12 3a9 9 0 0 0-7.8 13.5L3 21l4.7-1.2A9 9 0 1 0 12 3zm5 12.4c-.2.6-1.2 1.1-1.7 1.1-.4.1-.9.2-3-.8-2.5-1.2-4.1-3.6-4.2-3.8-.2-.2-1.2-1.6-1.2-3s.7-2.1 1-2.4c.2-.2.5-.3.8-.3h.6c.2 0 .4 0 .6.5.2.6.8 2 .8 2.1.1.1 0 .3-.1.5l-.4.5c-.1.2-.3.3-.1.6.2.3.7 1.2 1.5 1.9 1 .9 1.8 1.2 2.1 1.3.3.1.4.1.6-.1l.7-.8c.2-.2.4-.2.6-.1l2 .9c.2.1.4.2.4.4.1.2 0 .8-.2 1.3z" /></svg></Icon>)}
+                  {ig && link(ig, 'Instagram', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-pink-600"><path d="M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4zm5 5a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm6.2-.9a1 1 0 1 0 0 2 1 1 0 0 0 0-2zM12 10a2 2 0 1 1 0 4 2 2 0 0 1 0-4z" /></svg></Icon>)}
+                  {fb && link(fb, 'Facebook', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-blue-600"><path d="M14 9h3V6h-3c-2.2 0-4 1.8-4 4v2H8v3h2v7h3v-7h2.6l.4-3H13v-2c0-.6.4-1 1-1z" /></svg></Icon>)}
+                  {tw && link(tw, 'X', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-stone-950"><path d="M14.7 4h2.4l-5.2 6 6.1 8h-4.8l-3.8-5-4.3 5H2.7l5.6-6.4L2.5 4h4.9l3.4 4.5L14.7 4zm-.8 12.6h1.3L7.2 5.3H5.8l8.1 11.3z" /></svg></Icon>)}
+                  {yt && link(yt, 'YouTube', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-red-600"><path d="M23 12.2s0-3.2-.4-4.6c-.2-.9-.9-1.6-1.8-1.8C19.2 5.4 12 5.4 12 5.4s-7.2 0-8.8.4c-.9.2-1.6.9-1.8 1.8C1 9 1 12.2 1 12.2s0 3.2.4 4.6c.2.9.9 1.6 1.8 1.8 1.6.4 8.8.4 8.8.4s7.2 0 8.8-.4c.9-.2 1.6-.9 1.8-1.8.4-1.4.4-4.6.4-4.6zM9.8 15.5v-6.6l6.2 3.3-6.2 3.3z" /></svg></Icon>)}
+                  {site && link(site, 'Website', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-orange-600" strokeWidth="1.8"><circle cx="12" cy="12" r="8" /><path d="M4 12h16M12 4c2.5 2.8 2.5 13.2 0 16M12 4c-2.5 2.8-2.5 13.2 0 16" /></svg></Icon>)}
+                  {mapHref && link(mapHref, 'Directions', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-sky-600" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 21s7-5.2 7-11a7 7 0 1 0-14 0c0 5.8 7 11 7 11z" /><circle cx="12" cy="10" r="2.2" /></svg></Icon>)}
+                  {(wifiName || wifiPassword) && (
+                    <button
+                      ref={wifiBtnRef}
+                      type="button"
+                      onClick={() => setWifiOpen((open) => !open)}
+                      className="relative z-20 shrink-0 pointer-events-auto"
+                      aria-label="Wi-Fi"
+                      title="Wi-Fi"
+                      aria-expanded={wifiOpen}
+                    >
+                      <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-orange-600" strokeWidth="1.8" strokeLinecap="round"><path d="M5 12.5a10 10 0 0 1 14 0M8 15.2a6 6 0 0 1 8 0" /><circle cx="12" cy="18" r="1" fill="currentColor" stroke="none" /></svg></Icon>
+                    </button>
+                  )}
+                </div>
+                {business.address && <p className="mt-1.5 shrink-0 truncate text-center text-[11px] leading-tight text-stone-500">{business.address}</p>}
+                {current === 'play' && (
+                  <div className="mt-2 grid shrink-0 grid-cols-2 gap-1.5 sm:grid-cols-4">
+                    {playGames.map((item) => {
+                      const active = playGame === item.gamecode;
+                      return (
+                        <button
+                          key={item.gamecode}
+                          type="button"
+                          className={`relative flex h-9 w-full items-center justify-center rounded-full px-2 text-[11px] font-semibold leading-none shadow-sm ring-1 transition-colors duration-200 ${active ? 'text-white delay-100 ring-transparent' : 'bg-white text-stone-600 ring-stone-200'}`}
+                          onClick={() => setPlayGame(item.gamecode)}
+                        >
+                          {active && (
+                            <motion.span
+                              layoutId={reduce ? undefined : 'play-game-choice'}
+                              className="absolute inset-0 rounded-full"
+                              style={{ background: color }}
+                              transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                            />
+                          )}
+                          <span className="relative z-10 truncate">{gameNames[item.gamecode] || item.gamecode}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                {current === 'menu' && (
+                  <div className="mt-2 flex shrink-0 gap-1.5 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    <button type="button" className="whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold" style={menuChip(menuFilter === 'all')} onClick={() => setMenuFilter('all')}>{menuCopy.guestAll}</button>
+                    {menuCategories.map((category) => (
+                      <button key={category.categoryid} type="button" className="whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold" style={menuChip(menuFilter === category.categoryid)} onClick={() => setMenuFilter(category.categoryid)}>{category.categoryname}</button>
+                    ))}
+                  </div>
                 )}
               </div>
             </div>
           </motion.div>
-          <motion.div style={{ width: logoSize, height: logoSize, left: logoLeft, top: logoTop }} className="pointer-events-none absolute z-10 grid place-items-center overflow-hidden rounded-full bg-white shadow-lg ring-4 ring-white">
+          <motion.div style={{ width: logoSize, height: logoSize, left: logoLeft, top: logoTop }} className="pointer-events-none absolute z-30 grid place-items-center overflow-hidden rounded-full bg-white shadow-lg ring-4 ring-white">
             {business.logoimagepath ? <img alt="" src={asset(business.logoimagepath)} className="h-full w-full object-cover" /> : <span className="font-display text-[1.6rem] font-semibold text-orange-600">{shopMark}</span>}
           </motion.div>
-          <motion.div style={{ top: coverTop, opacity: coverOpacity }} className="pointer-events-none absolute inset-x-6 text-center text-white">
-            <h1 className="text-[1.7rem] font-bold leading-tight">{shopName}</h1>
+          <motion.div style={{ top: coverTop, opacity: coverOpacity }} className="pointer-events-none absolute inset-x-6 text-center text-white" aria-hidden="true">
+            <p className="text-[1.7rem] font-bold leading-tight">{shopName}</p>
             <p className="mt-2 text-sm leading-relaxed text-white/85">{business.tagline || business.description || 'Play, order, and review in one place.'}</p>
           </motion.div>
-          <motion.button
-            type="button"
-            style={{ opacity: hintOpacity, pointerEvents: hintPointer }}
-            onClick={() => scrollToContent()}
-            className="absolute bottom-[5.75rem] left-1/2 -translate-x-1/2 text-white/90"
-            aria-label="Scroll to content"
-          >
-            <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-              <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </motion.button>
+          {hintVisible && (
+            <motion.button
+              type="button"
+              style={{ opacity: hintOpacity, pointerEvents: hintPointer }}
+              onClick={() => scrollToContent()}
+              className="absolute bottom-[5.75rem] left-1/2 -translate-x-1/2 text-white/90"
+              aria-label="Scroll to content"
+            >
+              <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </motion.button>
+          )}
         </motion.header>,
         document.body,
       )}
-      <div className="relative z-10 mx-auto max-w-xl pb-52 sm:px-4">
+      {wifiOpen && wifiPos && (wifiName || wifiPassword) && createPortal(
+        <div
+          id="shop-wifi-pop"
+          role="dialog"
+          aria-label="Wi-Fi details"
+          className="fixed z-[60] w-56 rounded-2xl bg-orange-50 px-3 py-2 text-left text-xs text-stone-700 shadow-lg ring-1 ring-orange-100"
+          style={{ top: wifiPos.top, left: wifiPos.left }}
+        >
+          {wifiName && <p>Network <span className="font-semibold text-stone-950">{wifiName}</span></p>}
+          {wifiPassword && <p className="mt-0.5">Password <span className="font-semibold text-stone-950">{wifiPassword}</span></p>}
+          <button type="button" className="mt-1 text-[11px] font-semibold text-orange-600" onClick={() => { void navigator.clipboard?.writeText([wifiName, wifiPassword].filter(Boolean).join('\n')).then(() => setCopied(true)); }}>{copied ? 'Copied' : 'Copy details'}</button>
+        </div>,
+        document.body,
+      )}
+      <div className="relative z-10 mx-auto max-w-xl pb-[calc(13rem+env(safe-area-inset-bottom))] sm:px-4">
         <div
           id="shop-panel"
           ref={panelRef}
-          className="relative scroll-mt-28 bg-white px-5 pb-8 pt-3 shadow-xl shadow-stone-950/10 sm:rounded-b-[28px]"
+          className="relative scroll-mt-56 bg-white px-5 pb-10 pt-2 shadow-xl shadow-stone-950/10 sm:rounded-b-[28px]"
         >
-          {business.address && <p className="mb-3 text-center text-sm text-stone-500">{business.address}</p>}
-          {wifiOpen && (wifiName || wifiPassword) && (
-            <div className="mx-auto mb-3 max-w-xs rounded-2xl bg-orange-50 px-4 py-3 text-left text-sm text-stone-700">
-              {wifiName && <p>Network <span className="font-semibold text-stone-950">{wifiName}</span></p>}
-              {wifiPassword && <p className="mt-1">Password <span className="font-semibold text-stone-950">{wifiPassword}</span></p>}
-              <button type="button" className="mt-2 text-xs font-semibold text-orange-600" onClick={() => { void navigator.clipboard?.writeText([wifiName, wifiPassword].filter(Boolean).join('\n')).then(() => setCopied(true)); }}>{copied ? 'Copied' : 'Copy details'}</button>
-            </div>
-          )}
           {children}
         </div>
       </div>
@@ -303,7 +414,7 @@ function catalogGlyph(label: string): 'calendar' | 'list' {
 
 function ShopDock({ token, current, menuLabel }: { token?: string; current: GuestTab; menuLabel: string }) {
   const auth = useAuth();
-  const signedIn = Boolean(auth.user && auth.user.role === 'Customer' && !auth.user.name.startsWith('Guest_'));
+  const signedIn = isGuestCustomer(auth.user);
   const { install } = useInstallApp();
   const scrollIntoShop = () => window.dispatchEvent(new Event('rs-scroll-shop-content'));
   const item = (active: boolean) => `flex min-w-0 flex-1 flex-col items-center gap-0.5 px-0.5 py-1 text-[9px] font-semibold leading-none sm:text-[11px] ${active ? 'text-orange-600' : 'text-stone-400'}`;
@@ -340,6 +451,8 @@ export function GuestPlaceShell() {
   const [hub, setHub] = useState<GuestHub | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [playGame, setPlayGame] = useState('SpinWheel');
+  const [menuFilter, setMenuFilter] = useState<number | 'all'>('all');
 
   useEffect(() => {
     if (!token) return;
@@ -354,12 +467,21 @@ export function GuestPlaceShell() {
     return () => { alive = false; };
   }, [token]);
 
+  const shopTitle = hub?.business?.businessname
+    ? `${hub.business.businessname} · ${tab === 'menu' ? catalogCopy(hub.business.businesstype).tab : tab[0].toUpperCase() + tab.slice(1)}`
+    : undefined;
+  usePageSeo({
+    title: shopTitle,
+    description: hub?.business?.tagline || hub?.business?.description || undefined,
+    path: location.pathname,
+  });
+
   if (loading) return <GuestSkeleton />;
   if (loadError || !hub) return <GuestError message={loadError || 'This link is not available.'} />;
 
   const business = hub.business || {};
   const color = brandColor(business.themecolor);
-  const ctx: GuestPlaceContext = { token, hub, setHub, color, business };
+  const ctx: GuestPlaceContext = { token, hub, setHub, color, business, playGame, setPlayGame, menuFilter, setMenuFilter };
 
   // Always full-bleed shop UI (no wallet sidebar) so the hero/dock layout stays correct.
   return (
@@ -478,8 +600,6 @@ function QtyControl({ color, qty, onChange }: { color: string; qty: number; onCh
   );
 }
 
-const gameNames: Record<string, string> = { SpinWheel: 'Spin wheel', ScratchCard: 'Scratch card', MysteryGiftBox: 'Mystery box', SlotMachine: 'Slots' };
-
 function SaveCoinsModal({ onClose, token, coins = 0, prizeName = '' }: { onClose: () => void; token: string; coins?: number; prizeName?: string }) {
   const auth = useAuth();
   const [mode, setMode] = useState<'create' | 'login'>('create');
@@ -543,16 +663,34 @@ function SaveCoinsModal({ onClose, token, coins = 0, prizeName = '' }: { onClose
 }
 
 export function PlayPanel() {
-  const { token, hub, color, business } = useGuestPlace();
+  const { token, color, playGame } = useGuestPlace();
   const auth = useAuth();
   const reduce = useReducedMotion();
-  const [game, setGame] = useState('SpinWheel');
   const [prizes, setPrizes] = useState<PrizeSlice[]>([]);
   const [result, setResult] = useState<PlayResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [saveOpen, setSaveOpen] = useState(false);
   const [winOpen, setWinOpen] = useState(false);
+
+  useEffect(() => {
+    setPrizes([]);
+    setResult(null);
+    setSaveOpen(false);
+    setWinOpen(false);
+    setError('');
+  }, [playGame]);
+
+  useEffect(() => {
+    let alive = true;
+    api<{ prizes?: PrizeSlice[] }>(`/public/play/${encodeURIComponent(token)}/board?gameCode=${encodeURIComponent(playGame)}`, { quiet: true })
+      .then((data) => {
+        if (!alive || !data.prizes?.length) return;
+        setPrizes(data.prizes);
+      })
+      .catch(() => undefined);
+    return () => { alive = false; };
+  }, [token, playGame]);
 
   async function play() {
     setError('');
@@ -561,7 +699,7 @@ export function PlayPanel() {
     setWinOpen(false);
     setBusy(true);
     try {
-      const data = await api<PlayResult & { prizes?: PrizeSlice[]; accessToken?: string; user?: typeof auth.user }>(`/public/play`, { method: 'POST', body: JSON.stringify({ token, gameCode: game }) });
+      const data = await api<PlayResult & { prizes?: PrizeSlice[]; accessToken?: string; user?: typeof auth.user }>(`/public/play`, { method: 'POST', body: JSON.stringify({ token, gameCode: playGame }) });
       if (data.prizes?.length) setPrizes(data.prizes);
       if (data.accessToken && data.user) auth.setSession(data.user, data.accessToken);
       return data;
@@ -571,42 +709,21 @@ export function PlayPanel() {
     } finally { setBusy(false); }
   }
 
-  const signedIn = auth.user && !auth.user.name.startsWith('Guest_');
-  const gameOrder = ['SpinWheel', 'ScratchCard', 'MysteryGiftBox', 'SlotMachine'];
-  const available = new Set(((hub?.games || []) as { gamecode: string }[]).map((item) => item.gamecode));
-  const games = (available.size ? gameOrder.filter((code) => available.has(code)) : gameOrder).map((gamecode) => ({ gamecode }));
+  const signedIn = isGuestCustomer(auth.user);
 
   return (
     <>
-      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {games.map((item) => {
-          const active = game === item.gamecode;
-          return (
-            <button key={item.gamecode} type="button" className={`relative w-full rounded-full px-3 py-2.5 text-xs font-semibold leading-none shadow-sm transition-colors duration-200 ${active ? 'text-white delay-100' : 'bg-white text-stone-600 ring-1 ring-stone-200'}`} onClick={() => { setGame(item.gamecode); setResult(null); setSaveOpen(false); setWinOpen(false); }}>
-              {active && (
-                <motion.span
-                  layoutId={reduce ? undefined : 'play-game-choice'}
-                  className="absolute inset-0 rounded-full"
-                  style={{ background: color }}
-                  transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-                />
-              )}
-              <span className="relative">{gameNames[item.gamecode] || item.gamecode}</span>
-            </button>
-          );
-        })}
-      </div>
       <section className="mb-4 overflow-visible rounded-[28px] bg-[radial-gradient(ellipse_at_top,#fff,#fafaf9_46%,#e7e5e4)] px-3 py-6 shadow-[inset_0_1px_0_rgba(255,255,255,.9)] sm:px-6 sm:py-8">
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
-            key={game}
+            key={playGame}
             className="grid place-items-center"
             initial={reduce ? false : { opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={reduce ? undefined : { opacity: 0, y: -8 }}
             transition={{ duration: 0.22, ease: 'easeOut' }}
           >
-            <GameStage game={game} prizes={prizes} busy={busy} onPlay={play} onReveal={(value) => { setResult(value); setWinOpen(true); }} accent={color} />
+            <GameStage game={playGame} prizes={prizes} busy={busy} onPlay={play} onReveal={(value) => { setResult(value); setWinOpen(true); }} accent={color} />
           </motion.div>
         </AnimatePresence>
       </section>
@@ -623,7 +740,6 @@ export function PlayPanel() {
       )}
       {saveOpen && result && !signedIn && <SaveCoinsModal token={token} coins={result.coins} prizeName={result.prizeName} onClose={() => setSaveOpen(false)} />}
       <OffersList />
-      {!business && null}
     </>
   );
 }
@@ -652,7 +768,7 @@ function OffersList() {
   const { hub, business } = useGuestPlace();
   const location = useLocation();
   const auth = useAuth();
-  const signedIn = Boolean(auth.user && auth.user.role === 'Customer' && !auth.user.name.startsWith('Guest_'));
+  const signedIn = isGuestCustomer(auth.user);
   const offers = (hub?.offers || []) as { rewardid: number; rewardname: string; description?: string; coinsrequired: number; imagepath?: string }[];
   const [statuses, setStatuses] = useState<Record<number, string>>({});
   const businessId = business?.businessid;
@@ -667,7 +783,7 @@ function OffersList() {
       .catch(() => undefined);
   }, [signedIn, businessId]);
   useEffect(() => {
-    if (location.hash !== '#offers') return;
+    if (location.hash !== '#offers' || !offers.length) return;
     document.getElementById('offers')?.scrollIntoView({ block: 'start' });
   }, [location.hash, offers.length]);
   async function redeem(offer: { rewardid: number }) {
@@ -694,6 +810,7 @@ function OffersList() {
     if (!node) return;
     node.scrollTo({ left: next * node.clientWidth, behavior: 'smooth' });
   }
+  if (!offers.length) return null;
   return (
     <section id="offers" className="mt-8 scroll-mt-6 border-t border-stone-100 pt-5">
       <div className="flex items-center justify-between gap-3">
@@ -701,37 +818,34 @@ function OffersList() {
         {offers.length > 1 && <p className="text-xs font-semibold text-stone-400">{index + 1} of {offers.length}</p>}
       </div>
       <p className="mt-1 text-xs text-stone-400">Tap an offer to redeem it at this shop.</p>
-      {!offers.length && <p className="mt-3 rounded-2xl bg-stone-50 px-3 py-4 text-sm text-stone-400">No active offers right now.</p>}
-      {offers.length > 0 && (
-        <div className="mt-3">
-          <div ref={scroller} onScroll={onScroll} className="flex snap-x snap-mandatory overflow-x-auto scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {offers.map((offer) => {
-              const status = statuses[offer.rewardid];
-              const closed = status === 'Pending' || status === 'Approved';
-              return (
-                <div key={offer.rewardid} className="w-full shrink-0 snap-start">
-                  <button type="button" disabled={closed} className="flex h-[6.5rem] w-full items-center gap-3 rounded-2xl border border-amber-100 bg-amber-50/70 p-3 text-left disabled:opacity-70" onClick={() => redeem(offer)}>
-                    <OfferMark image={offer.imagepath} />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-semibold leading-snug text-stone-950">{offer.rewardname}</p>
-                      {offer.description && <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-stone-500">{offer.description}</p>}
-                      <p className="mt-1 text-xs font-semibold text-amber-700">{offer.coinsrequired} coins</p>
-                    </div>
-                    <span className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${closed ? 'bg-stone-200 text-stone-600' : 'bg-orange-600 text-white'}`}>{offerLabel(status)}</span>
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-          {offers.length > 1 && (
-            <div className="mt-3 flex justify-center gap-1.5" aria-label="Offer slides">
-              {offers.map((offer, dot) => (
-                <button key={offer.rewardid} type="button" aria-label={`Show offer ${dot + 1}`} className={`h-1.5 rounded-full ${dot === index ? 'w-4 bg-orange-600' : 'w-1.5 bg-stone-300'}`} onClick={() => go(dot)} />
-              ))}
-            </div>
-          )}
+      <div className="mt-3">
+        <div ref={scroller} onScroll={onScroll} className="flex snap-x snap-mandatory overflow-x-auto scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {offers.map((offer) => {
+            const status = statuses[offer.rewardid];
+            const closed = status === 'Pending' || status === 'Approved';
+            return (
+              <div key={offer.rewardid} className="w-full shrink-0 snap-start">
+                <button type="button" disabled={closed} className="flex h-[6.5rem] w-full items-center gap-3 rounded-2xl border border-amber-100 bg-amber-50/70 p-3 text-left disabled:opacity-70" onClick={() => redeem(offer)}>
+                  <OfferMark image={offer.imagepath} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-semibold leading-snug text-stone-950">{offer.rewardname}</p>
+                    {offer.description && <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-stone-500">{offer.description}</p>}
+                    <p className="mt-1 text-xs font-semibold text-amber-700">{offer.coinsrequired} coins</p>
+                  </div>
+                  <span className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${closed ? 'bg-stone-200 text-stone-600' : 'bg-orange-600 text-white'}`}>{offerLabel(status)}</span>
+                </button>
+              </div>
+            );
+          })}
         </div>
-      )}
+        {offers.length > 1 && (
+          <div className="mt-3 flex justify-center gap-1.5" aria-label="Offer slides">
+            {offers.map((offer, dot) => (
+              <button key={offer.rewardid} type="button" aria-label={`Show offer ${dot + 1}`} className={`h-1.5 rounded-full ${dot === index ? 'w-4 bg-orange-600' : 'w-1.5 bg-stone-300'}`} onClick={() => go(dot)} />
+            ))}
+          </div>
+        )}
+      </div>
     </section>
   );
 }
@@ -755,11 +869,21 @@ function cartKey(itemId: number, optionId?: number, addonIds: number[] = []) {
   return `${itemId}:${optionId || 0}:${[...addonIds].sort((a, b) => a - b).join('.')}`;
 }
 
+function readSessionCart(token: string): CartLine[] {
+  try {
+    const raw = sessionStorage.getItem(`rs-cart:${token}`);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 export function MenuPanel() {
-  const { token, hub, color, business } = useGuestPlace();
+  const { token, hub, color, business, menuFilter: filter, setMenuFilter: setFilter } = useGuestPlace();
   const auth = useAuth();
-  const [filter, setFilter] = useState<number | 'all'>('all');
-  const [cart, setCart] = useState<CartLine[]>([]);
+  const [cart, setCart] = useState<CartLine[]>(() => readSessionCart(token));
   const [fulfillment, setFulfillment] = useState<'DineIn' | 'Delivery' | 'Pickup'>(catalogCopy('').modes[0][0]);
   const [station, setStation] = useState('');
   const [address, setAddress] = useState('');
@@ -774,6 +898,16 @@ export function MenuPanel() {
   const [pickedAddons, setPickedAddons] = useState<number[]>([]);
 
   const copy = catalogCopy(hub?.type?.typename || hub?.type?.typecode || business?.businesstype);
+  useEffect(() => {
+    setCart(readSessionCart(token));
+  }, [token]);
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(`rs-cart:${token}`, JSON.stringify(cart));
+    } catch {
+      /* ignore quota / private mode */
+    }
+  }, [cart, token]);
   useEffect(() => {
     if (!copy.modes.some(([value]) => value === fulfillment)) setFulfillment(copy.modes[0][0]);
   }, [copy.kind]);
@@ -845,15 +979,18 @@ export function MenuPanel() {
     if (!cart.length) { toastErr(`Add something from the ${copy.tab.toLowerCase()} list first.`); return; }
     if (!isTenDigitMobile(mobile)) { toastErr('Enter a 10-digit mobile number.'); return; }
     if (fulfillment === 'Delivery' && !address.trim()) { toastErr('Delivery address is required.'); return; }
+    if (fulfillment === 'DineIn' && !station.trim()) {
+      toastErr(`Enter your ${String(hub?.settings?.stationlabel || 'table / room').toLowerCase()}.`);
+      return;
+    }
     setSending(true);
-    const popup = window.open('', '_blank');
     try {
       const result = await api<{ message: string; orderNumber: string; whatsappUrl?: string | null; accessToken?: string; user?: NonNullable<typeof auth.user> }>('/public/orders', {
         method: 'POST',
         body: JSON.stringify({
           token,
           fulfillment,
-          tableNumber: station.trim() || '0',
+          tableNumber: station.trim(),
           deliveryAddress: address,
           customerName: guestName,
           customerMobile: mobile,
@@ -863,38 +1000,28 @@ export function MenuPanel() {
       });
       if (result.accessToken && result.user && auth.user?.role !== 'BusinessAdmin' && auth.user?.role !== 'SuperAdmin') auth.setSession(result.user, result.accessToken);
       if (result.whatsappUrl) {
-        if (popup) popup.location.href = result.whatsappUrl;
         setWhatsappUrl(result.whatsappUrl);
-        toastOk(`Order ${result.orderNumber} placed. Send it on WhatsApp too.`);
+        toastOk(`Order ${result.orderNumber} placed. Open WhatsApp to send it.`);
       } else {
-        popup?.close();
         setWhatsappUrl('');
         toastOk(`Order ${result.orderNumber} is in the shop queue.`);
       }
       setCart([]);
       setNote('');
       setOpen(false);
-    } catch {
-      popup?.close();
+    } catch (err) {
+      toastErr(err instanceof Error ? err.message : 'Could not place the order.');
     } finally { setSending(false); }
   }
 
-  const chip = (active: boolean) => active ? { background: color, color: '#fff' } : { background: '#f1f5f9', color: '#475569' };
-
   return (
     <>
-      <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <button type="button" className="whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold" style={chip(filter === 'all')} onClick={() => setFilter('all')}>{copy.guestAll}</button>
-        {categories.map((category) => (
-          <button key={category.categoryid} type="button" className="whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold" style={chip(filter === category.categoryid)} onClick={() => setFilter(category.categoryid)}>{category.categoryname}</button>
-        ))}
-      </div>
       {whatsappUrl && (
         <p className="mt-4 rounded-2xl bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
           Order sent to the queue. <a className="font-semibold underline" href={whatsappUrl} target="_blank" rel="noreferrer">Open WhatsApp</a>
         </p>
       )}
-      <div className={`mt-4 space-y-8 ${count ? 'pb-28' : ''}`}>
+      <div className={`mt-4 space-y-8 ${count ? 'pb-36' : 'pb-4'}`}>
         {grouped.map(([categoryId, rows]) => (
           <section key={categoryId}>
             <h2 className="text-lg font-bold">{categories.find((category) => category.categoryid === categoryId)?.categoryname || copy.pageTitle}</h2>
@@ -915,7 +1042,7 @@ export function MenuPanel() {
                     ) : null}
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold leading-snug text-stone-950">{item.itemname}</p>
-                      {item.description && <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed text-stone-500">{item.description}</p>}
+                      {item.description && <p className="mt-1 line-clamp-3 whitespace-pre-wrap break-words text-sm leading-relaxed text-stone-500">{item.description}</p>}
                       <p className="mt-1.5 text-sm font-bold" style={{ color }}>{options.length ? `From ${rupee(from)}` : rupee(from)}</p>
                       {(options.length > 0 || addons.length > 0) && (
                         <p className="mt-1 flex flex-wrap gap-1 text-[11px] font-semibold">
@@ -926,7 +1053,7 @@ export function MenuPanel() {
                     </div>
                     <div className="shrink-0 self-center">
                       {configurable ? (
-                        <button type="button" className="grid h-10 w-10 place-items-center rounded-full text-lg font-bold text-white shadow-md" style={{ background: color }} onClick={() => openItem(item)} aria-label={`Customize ${item.itemname}`}>+</button>
+                        <button type="button" className="rounded-full px-3 py-2 text-xs font-bold text-white shadow-md" style={{ background: color }} onClick={() => openItem(item)} aria-label={`Choose options for ${item.itemname}`}>Choose</button>
                       ) : (
                         <QtyControl color={color} qty={simple?.qty || 0} onChange={(qty) => {
                           if (!simple && qty > 0) addLine({ key: simpleKey, itemId: item.itemid, name: item.itemname, unitPrice: Number(item.price), qty, addons: [] });
@@ -1035,7 +1162,6 @@ export function MenuPanel() {
         </div>,
         document.body,
       )}
-      {!business && null}
     </>
   );
 }
@@ -1068,11 +1194,13 @@ export function BillPanel() {
       const result = await api<{ message: string }>('/public/claims', { method: 'POST', body });
       setDone(result.message);
       toastOk(result.message);
+    } catch (err) {
+      toastErr(err instanceof Error ? err.message : 'Could not submit the bill.');
     } finally { setBusy(false); }
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-4">
       <div>
         <h2 className="text-lg font-bold">Bill payment</h2>
         <p className="mt-1 text-sm text-stone-500">Paid at the counter? Send the bill here. The shop confirms it and adds the coins.</p>
@@ -1190,7 +1318,7 @@ export function ReviewPanel() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 pb-4">
       <div>
         <p className="text-center text-sm font-medium text-stone-600">How was your visit?</p>
         <div className="mt-2 flex justify-center gap-2">

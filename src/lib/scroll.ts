@@ -1,3 +1,6 @@
+/** Sticky shop bar height (play ~168, other tabs ~136) + small buffer. */
+export const SHOP_STICKY_OFFSET = 176;
+
 /** Scroll the window to the top of the page. */
 export function scrollPageTop(smooth = true) {
   const behavior = smooth ? 'smooth' : 'auto';
@@ -11,18 +14,19 @@ export function scrollPageTop(smooth = true) {
 
 /**
  * Scroll a shop content panel into view after layout settles
- * (route change + AnimatePresence).
+ * (route change + AnimatePresence), clearing the sticky header.
  */
-export function scrollToShopContent(el: HTMLElement | null, smooth = true) {
+export function scrollToShopContent(el: HTMLElement | null, smooth = true, offsetPx = SHOP_STICKY_OFFSET) {
   const run = () => {
     const node = el || document.getElementById('shop-panel');
     if (!node) return;
-    node.scrollIntoView({ block: 'start', behavior: smooth ? 'smooth' : 'auto' });
+    const top = node.getBoundingClientRect().top + window.scrollY - offsetPx;
+    window.scrollTo({ top: Math.max(0, top), behavior: smooth ? 'smooth' : 'auto' });
   };
   requestAnimationFrame(() => requestAnimationFrame(run));
 }
 
-/** Same as scrollToShopContent, but waits for tab panel animation. */
-export function scrollToShopContentLater(el: HTMLElement | null, smooth = true, delayMs = 120) {
+/** Same as scrollToShopContent, but waits for tab panel animation (~280ms). */
+export function scrollToShopContentLater(el: HTMLElement | null, smooth = true, delayMs = 320) {
   window.setTimeout(() => scrollToShopContent(el, smooth), delayMs);
 }
