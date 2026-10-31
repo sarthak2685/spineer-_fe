@@ -279,11 +279,6 @@ export function Table({ columns, rows, empty = 'Nothing here yet.', variant = 'r
   const cell = (column: { key: string; render?: (row: any) => ReactNode }, row: any) => column.key === 'actions'
     ? <div className="inline-flex max-w-full flex-wrap items-center justify-end gap-1 rounded-full bg-orange-50 p-1 ring-1 ring-orange-100">{column.render?.(row)}</div>
     : (column.render ? column.render(row) : row[column.key] ?? '—');
-  const edge = (index: number) => {
-    if (index === 0) return 'rounded-l-2xl border-l';
-    if (index === columns.length - 1) return 'rounded-r-2xl border-r';
-    return '';
-  };
   const phoneRows = (articleClass: string) => list.map((row, index) => {
     const fields = columns.filter((column) => column.key !== 'actions');
     const actions = columns.filter((column) => column.key === 'actions');
@@ -315,14 +310,14 @@ export function Table({ columns, rows, empty = 'Nothing here yet.', variant = 'r
   });
   if (variant === 'card') {
     return (
-      <section className="overflow-hidden rounded-2xl border border-orange-100 bg-white shadow-sm">
+      <section className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
         {cardHead}
         <div className="hidden overflow-x-auto md:block">
-          <table className="w-full min-w-[720px] text-left">
+          <table className="w-full min-w-[720px] border-collapse text-left">
             <thead>
-              <tr className="border-b border-stone-100 bg-orange-50/70">
+              <tr className="border-b border-stone-200 bg-orange-50/70">
                 {columns.map((column) => (
-                  <th key={column.key} className={`px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-stone-400 ${column.key === 'actions' ? 'text-right' : ''}`}>
+                  <th key={column.key} className={`border-r border-stone-200 px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-stone-500 last:border-r-0 ${column.key === 'actions' ? 'text-right' : ''}`}>
                     {heading(column)}
                   </th>
                 ))}
@@ -330,9 +325,9 @@ export function Table({ columns, rows, empty = 'Nothing here yet.', variant = 'r
             </thead>
             <tbody>
               {list.map((row, index) => (
-                <tr key={rowKey(row, index)} className="border-b border-stone-100 last:border-b-0 hover:bg-orange-50/70">
+                <tr key={rowKey(row, index)} className="border-b border-stone-200 last:border-b-0 hover:bg-orange-50/70">
                   {columns.map((column, columnIndex) => (
-                    <td key={column.key} className={`px-5 py-3.5 align-middle text-sm text-stone-600 ${column.key === 'actions' ? 'text-right' : ''} ${columnIndex === 0 ? 'font-semibold text-stone-950' : ''}`}>
+                    <td key={column.key} className={`border-r border-stone-200 px-5 py-3.5 align-middle text-sm text-stone-600 last:border-r-0 ${column.key === 'actions' ? 'text-right' : ''} ${columnIndex === 0 ? 'font-semibold text-stone-950' : ''}`}>
                       {cell(column, row)}
                     </td>
                   ))}
@@ -341,18 +336,18 @@ export function Table({ columns, rows, empty = 'Nothing here yet.', variant = 'r
             </tbody>
           </table>
         </div>
-        <div className="grid gap-3 p-3 md:hidden">{phoneRows('rounded-2xl bg-orange-50/70 p-4')}</div>
+        <div className="grid gap-3 p-3 md:hidden">{phoneRows('rounded-2xl border border-stone-200 bg-orange-50/70 p-4')}</div>
       </section>
     );
   }
   return (
-    <div className="rounded-[28px] bg-orange-50/70 p-2 sm:p-3">
+    <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
       <div className="hidden overflow-x-auto md:block">
-        <table className="w-full min-w-[720px] border-separate border-spacing-x-0 border-spacing-y-2 text-left">
+        <table className="w-full min-w-[720px] border-collapse text-left">
           <thead>
-            <tr>
+            <tr className="border-b border-stone-200 bg-orange-50/70">
               {columns.map((column) => (
-                <th key={column.key} className={`px-4 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-400 ${column.key === 'actions' ? 'text-right' : ''}`}>
+                <th key={column.key} className={`border-r border-stone-200 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-500 last:border-r-0 ${column.key === 'actions' ? 'text-right' : ''}`}>
                   {heading(column)}
                 </th>
               ))}
@@ -360,9 +355,9 @@ export function Table({ columns, rows, empty = 'Nothing here yet.', variant = 'r
           </thead>
           <tbody>
             {list.map((row, index) => (
-              <tr key={rowKey(row, index)} className="group">
+              <tr key={rowKey(row, index)} className="border-b border-stone-200 last:border-b-0 hover:bg-orange-50/50">
                 {columns.map((column, columnIndex) => (
-                  <td key={column.key} className={`border-y border-white bg-white px-4 py-3.5 align-middle text-sm text-stone-600 shadow-sm shadow-orange-900/5 transition group-hover:border-orange-100 group-hover:bg-orange-50/50 ${edge(columnIndex)} ${column.key === 'actions' ? 'text-right' : ''} ${columnIndex === 0 ? 'font-semibold text-stone-950' : ''}`}>
+                  <td key={column.key} className={`border-r border-stone-200 bg-white px-4 py-3.5 align-middle text-sm text-stone-600 last:border-r-0 ${column.key === 'actions' ? 'text-right' : ''} ${columnIndex === 0 ? 'font-semibold text-stone-950' : ''}`}>
                     {cell(column, row)}
                   </td>
                 ))}
@@ -371,7 +366,7 @@ export function Table({ columns, rows, empty = 'Nothing here yet.', variant = 'r
           </tbody>
         </table>
       </div>
-      <div className="grid gap-3 md:hidden">{phoneRows('rounded-2xl border border-white bg-white p-4 shadow-sm shadow-orange-900/5')}</div>
+      <div className="grid gap-3 p-3 md:hidden">{phoneRows('rounded-2xl border border-stone-200 bg-white p-4')}</div>
     </div>
   );
 }
@@ -405,12 +400,12 @@ export function Modal({ title, text, onClose, children, wide = false }: { title:
   return createPortal(
     <div className="fixed inset-0 z-[80] flex h-dvh flex-col bg-white sm:grid sm:place-items-center sm:bg-transparent sm:p-6">
       <button type="button" className="absolute inset-0 hidden bg-stone-900/50 sm:block" onClick={onClose} aria-label="Close" />
-      <div className={`relative flex h-full min-h-0 w-full flex-col bg-white sm:h-auto sm:max-h-[min(92dvh,40rem)] sm:rounded-3xl sm:shadow-2xl ${wide ? 'sm:max-w-xl' : 'sm:max-w-md'}`}>
+      <div className={`relative flex h-full min-h-0 w-full flex-col bg-white sm:h-auto sm:rounded-3xl sm:shadow-2xl ${wide ? 'sm:max-h-[min(92dvh,52rem)] sm:max-w-3xl' : 'sm:max-h-[min(92dvh,40rem)] sm:max-w-md'}`}>
         <div className="flex items-start justify-between gap-3 border-b border-stone-100 px-5 pb-4 pt-5 sm:px-6 sm:pt-6">
           <div><h2 className="font-display text-xl font-semibold tracking-tight text-stone-950">{title}</h2>{text && <p className="mt-1 text-sm text-stone-500">{text}</p>}</div>
           <button type="button" onClick={onClose} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-stone-100 text-lg text-stone-600 transition hover:bg-stone-200">×</button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-6 [&_button]:relative [&_button]:z-10">
+        <div className={`min-h-0 flex-1 overflow-y-auto overscroll-contain pb-[max(1.25rem,env(safe-area-inset-bottom))] [&_button]:relative [&_button]:z-10 ${wide ? 'px-5 py-6 sm:px-8 sm:py-7' : 'px-5 py-5 sm:px-6'}`}>
           {children}
         </div>
       </div>

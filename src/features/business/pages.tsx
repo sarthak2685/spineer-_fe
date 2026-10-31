@@ -1204,8 +1204,8 @@ export function GameAdminPage() {
       ]}
     />
     {mode && (
-      <Modal title={mode === 'create' ? 'New configuration' : mode === 'edit' ? 'Edit configuration' : 'View configuration'} onClose={() => setMode(null)}>
-        <div className="grid gap-3">
+      <Modal wide title={mode === 'create' ? 'New configuration' : mode === 'edit' ? 'Edit configuration' : 'View configuration'} onClose={() => setMode(null)}>
+        <div className="grid gap-5">
           <label className="block text-sm">
             <span className="mb-1.5 block font-medium">Configuration name</span>
             <input value={name} onChange={(event) => setName(event.target.value)} disabled={readOnly} className="h-11 w-full rounded-xl border border-stone-200 px-3 disabled:bg-stone-50" />
@@ -1214,19 +1214,27 @@ export function GameAdminPage() {
             <p className="text-sm font-medium text-stone-700">Prizes</p>
             {!readOnly && <button type="button" className="text-sm font-semibold text-orange-600" onClick={() => setPrizes((current) => [...current, emptyPrize()])}>Add prize</button>}
           </div>
-          <div className="space-y-2">
-            {prizes.map((prize) => (
-              <div key={prize.key} className="grid gap-2 rounded-2xl border border-stone-100 bg-stone-50 p-3 sm:grid-cols-[1fr_5rem_5rem_auto]">
-                <input value={prize.prizeName} onChange={(event) => setPrizes((current) => current.map((row) => row.key === prize.key ? { ...row, prizeName: event.target.value } : row))} disabled={readOnly} placeholder="Prize name" className="h-10 rounded-xl border border-stone-200 px-3 disabled:bg-white" />
-                <input value={prize.coins} onChange={(event) => setPrizes((current) => current.map((row) => row.key === prize.key ? { ...row, coins: event.target.value.replace(/[^\d]/g, '') } : row))} disabled={readOnly} inputMode="numeric" placeholder="Coins" className="h-10 rounded-xl border border-stone-200 px-3 disabled:bg-white" />
-                <input value={prize.winningPercentage} onChange={(event) => setPrizes((current) => current.map((row) => row.key === prize.key ? { ...row, winningPercentage: event.target.value.replace(/[^\d]/g, '') } : row))} disabled={readOnly} inputMode="numeric" placeholder="%" className="h-10 rounded-xl border border-stone-200 px-3 disabled:bg-white" />
-                {!readOnly && (
-                  <IconButton type="button" kind="ghost" label="Remove prize" onClick={() => setPrizes((current) => current.length <= 1 ? current : current.filter((row) => row.key !== prize.key))}>
-                    <ActionIcon name="trash" />
-                  </IconButton>
-                )}
-              </div>
-            ))}
+          <div className="overflow-hidden rounded-2xl border border-stone-200">
+            <div className="hidden grid-cols-[1fr_7rem_7rem_auto] gap-3 border-b border-stone-200 bg-stone-50 px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.12em] text-stone-500 sm:grid">
+              <span>Prize name</span>
+              <span>Coins</span>
+              <span>Chance %</span>
+              <span className="w-8" />
+            </div>
+            <div className="divide-y divide-stone-200">
+              {prizes.map((prize) => (
+                <div key={prize.key} className="grid gap-2 px-4 py-3 sm:grid-cols-[1fr_7rem_7rem_auto] sm:items-center sm:gap-3">
+                  <input value={prize.prizeName} onChange={(event) => setPrizes((current) => current.map((row) => row.key === prize.key ? { ...row, prizeName: event.target.value } : row))} disabled={readOnly} placeholder="Prize name" className="h-11 rounded-xl border border-stone-200 px-3 disabled:bg-stone-50" />
+                  <input value={prize.coins} onChange={(event) => setPrizes((current) => current.map((row) => row.key === prize.key ? { ...row, coins: event.target.value.replace(/[^\d]/g, '') } : row))} disabled={readOnly} inputMode="numeric" placeholder="Coins" aria-label="Coins" className="h-11 rounded-xl border border-stone-200 px-3 disabled:bg-stone-50" />
+                  <input value={prize.winningPercentage} onChange={(event) => setPrizes((current) => current.map((row) => row.key === prize.key ? { ...row, winningPercentage: event.target.value.replace(/[^\d]/g, '') } : row))} disabled={readOnly} inputMode="numeric" placeholder="%" aria-label="Chance percent" className="h-11 rounded-xl border border-stone-200 px-3 disabled:bg-stone-50" />
+                  {!readOnly ? (
+                    <IconButton type="button" kind="ghost" label="Remove prize" onClick={() => setPrizes((current) => current.length <= 1 ? current : current.filter((row) => row.key !== prize.key))}>
+                      <ActionIcon name="trash" />
+                    </IconButton>
+                  ) : <span className="hidden sm:block w-8" />}
+                </div>
+              ))}
+            </div>
           </div>
           <p className={`text-sm ${total === 100 ? 'text-stone-500' : 'text-rose-600'}`}>Chances add up to {total}%.</p>
           {error && <Alert text={error} />}
