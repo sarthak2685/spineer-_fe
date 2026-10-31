@@ -1,13 +1,16 @@
 import { createContext, FormEvent, ReactNode, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, NavLink, useLocation, useParams } from 'react-router-dom';
-import { AnimatePresence, motion, useReducedMotion, useScroll, useTransform } from 'framer-motion';
+import { AnimatePresence, motion, useMotionValueEvent, useReducedMotion, useScroll, useTransform } from 'framer-motion';
 import { api, asset, client } from '../../api/client';
 import { useAuth } from '../../app/auth';
 import { ActionIcon, Alert, Button, Field, Form, IconButton, Modal } from '../../components/ui';
 import { catalogCopy } from '../../lib/catalog';
-import { digitsOnly, isTenDigitMobile } from '../../lib/mobile';
+import { isGuestCustomer } from '../../lib/guest-auth';
+import { digitsOnly, isTenDigitMobile, telHref, waHref } from '../../lib/mobile';
 import { scrollToShopContent, scrollToShopContentLater } from '../../lib/scroll';
+import { usePageSeo } from '../../lib/seo';
+import { socialHref, websiteHref } from '../../lib/social-links';
 import { useInstallApp } from '../../lib/use-install';
 import { toastErr, toastInfo, toastOk } from '../../lib/toast';
 import { GameStage, PrizeSlice, PlayResult } from './Games';
@@ -27,10 +30,13 @@ type GuestPlaceContext = {
   setHub: React.Dispatch<React.SetStateAction<GuestHub | null>>;
   color: string;
   business: Record<string, any>;
+  playGame: string;
+  setPlayGame: (game: string) => void;
+  menuFilter: number | 'all';
+  setMenuFilter: (filter: number | 'all') => void;
 };
 
 const GuestCtx = createContext<GuestPlaceContext | null>(null);
-const GameDockCtx = createContext<HTMLDivElement | null>(null);
 
 function useGuestPlace() {
   const ctx = useContext(GuestCtx);
@@ -48,8 +54,8 @@ export function GuestSkeleton() {
         <div className="mt-3 h-3 w-56 max-w-full rounded-full bg-white/50" />
       </div>
       <div className="fixed inset-x-0 bottom-0 z-30 px-2 pt-2" style={{ paddingBottom: 'max(0.55rem, env(safe-area-inset-bottom))' }}>
-        <div className="mx-auto flex max-w-md items-end justify-between rounded-[1.75rem] bg-white px-2 py-3 shadow-[0_-8px_30px_rgba(28,25,23,0.12)] ring-1 ring-stone-200">
-          {Array.from({ length: 6 }, (_, index) => (
+        <div className="mx-auto flex max-w-xl items-end justify-between rounded-[1.75rem] bg-white px-2 py-3 shadow-[0_-8px_30px_rgba(28,25,23,0.12)] ring-1 ring-stone-200">
+          {Array.from({ length: 5 }, (_, index) => (
             <div key={index} className="flex flex-1 flex-col items-center gap-1">
               <div className={`h-8 w-8 rounded-full ${index === 0 ? 'bg-orange-200' : 'bg-stone-100'} ${pulse}`} />
               <div className={`h-2 w-8 rounded-full bg-stone-100 ${pulse}`} />
@@ -73,15 +79,25 @@ export function GuestError({ message }: { message: string }) {
   );
 }
 
-function shopFrame(play: boolean, height = typeof window === 'undefined' ? 720 : window.innerHeight, width = typeof window === 'undefined' ? 1200 : window.innerWidth) {
-  const bar = play ? Math.round(height * 0.33) : 136;
+function shopFrame(tab: GuestTab, height = typeof window === 'undefined' ? 720 : window.innerHeight, width = typeof window === 'undefined' ? 1200 : window.innerWidth, barOverride?: number) {
+  // Sticky includes address + play/menu chips when those tabs are active.
+  const withChips = tab === 'play' || tab === 'menu';
   return {
     height,
     width,
-    bar,
-    banner: play ? Math.round(bar * 0.16) : 40,
+    bar: barOverride ?? (withChips ? 220 : 140),
+    banner: 40,
     logoEnd: 44,
   };
+}
+
+function publishStickyBar(px: number) {
+  document.documentElement.style.setProperty('--shop-sticky-bar', `${Math.round(px)}px`);
+}
+
+/** Layout width (excludes scrollbar) so parked logo matches the max-w-xl card. */
+function shopViewportWidth() {
+  return document.documentElement.clientWidth || window.innerWidth;
 }
 function Icon({ children, className = 'h-9 w-9' }: { children: ReactNode; className?: string }) {
   return <span className={`grid place-items-center rounded-full bg-stone-100 ring-1 ring-stone-100 ${className}`}>{children}</span>;
@@ -95,65 +111,179 @@ function tabFromPath(pathname: string): GuestTab {
 }
 
 const tabOrder: GuestTab[] = ['play', 'menu', 'bill', 'review'];
+const gameNames: Record<string, string> = { SpinWheel: 'Spin wheel', ScratchCard: 'Scratch card', MysteryGiftBox: 'Mystery box', SlotMachine: 'Slots' };
 
 export function PlaceFrame({ business, token, current, children }: { business: Record<string, any>; token?: string; current: GuestTab; children: ReactNode }) {
   const auth = useAuth();
   const [loginOpen, setLoginOpen] = useState(false);
   const [wifiOpen, setWifiOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [gameDock, setGameDock] = useState<HTMLDivElement | null>(null);
-  const signedIn = Boolean(auth.user && !auth.user.name.startsWith('Guest_'));
+  const [hintVisible, setHintVisible] = useState(true);
+  const [wifiPos, setWifiPos] = useState<{ top: number; left: number } | null>(null);
+  const [morePos, setMorePos] = useState<{ top: number; left: number } | null>(null);
+  const wifiBtnRef = useRef<HTMLButtonElement>(null);
+  const moreBtnRef = useRef<HTMLButtonElement>(null);
+  const stickyInnerRef = useRef<HTMLDivElement>(null);
+  const identityTextRef = useRef<HTMLDivElement>(null);
+  const logoParkY = useRef(46);
+  const signedIn = isGuestCustomer(auth.user);
   useEffect(() => {
     const open = () => setLoginOpen(true);
     window.addEventListener('rs-open-shop-signin', open);
     return () => window.removeEventListener('rs-open-shop-signin', open);
   }, []);
+  useEffect(() => {
+    if (!wifiOpen) {
+      setWifiPos(null);
+      setCopied(false);
+      return;
+    }
+    const place = () => {
+      const node = wifiBtnRef.current;
+      if (!node) return;
+      const box = node.getBoundingClientRect();
+      const width = 224;
+      setWifiPos({
+        top: box.bottom + 8,
+        left: Math.max(8, Math.min(box.right - width, window.innerWidth - width - 8)),
+      });
+    };
+    place();
+    const onPointer = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node | null;
+      if (wifiBtnRef.current?.contains(target)) return;
+      const pop = document.getElementById('shop-wifi-pop');
+      if (pop?.contains(target)) return;
+      setWifiOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setWifiOpen(false);
+    };
+    window.addEventListener('scroll', place, true);
+    window.addEventListener('resize', place);
+    window.addEventListener('mousedown', onPointer);
+    window.addEventListener('touchstart', onPointer);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('resize', place);
+      window.removeEventListener('mousedown', onPointer);
+      window.removeEventListener('touchstart', onPointer);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [wifiOpen]);
+  useEffect(() => {
+    if (!moreOpen) {
+      setMorePos(null);
+      return;
+    }
+    const place = () => {
+      const node = moreBtnRef.current;
+      if (!node) return;
+      const box = node.getBoundingClientRect();
+      const width = 200;
+      setMorePos({
+        top: box.bottom + 8,
+        left: Math.max(8, Math.min(box.right - width, window.innerWidth - width - 8)),
+      });
+    };
+    place();
+    const onPointer = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node | null;
+      if (moreBtnRef.current?.contains(target)) return;
+      const pop = document.getElementById('shop-more-pop');
+      if (pop?.contains(target)) return;
+      setMoreOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMoreOpen(false);
+    };
+    window.addEventListener('scroll', place, true);
+    window.addEventListener('resize', place);
+    window.addEventListener('mousedown', onPointer);
+    window.addEventListener('touchstart', onPointer);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('resize', place);
+      window.removeEventListener('mousedown', onPointer);
+      window.removeEventListener('touchstart', onPointer);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [moreOpen]);
   const color = brandColor(business.themecolor);
   const shopName = business.businessname || 'Repeat Mate';
   const shopMark = String(shopName).trim().slice(0, 1).toUpperCase() || 'R';
   const heroRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  const playTab = current === 'play';
-  const frame = useRef(shopFrame(playTab));
+  const { hub, playGame, setPlayGame, menuFilter, setMenuFilter } = useGuestPlace();
+  const frame = useRef(shopFrame(current));
   const { scrollY } = useScroll();
+  const stickyOffset = () => frame.current.bar || (current === 'play' || current === 'menu' ? 220 : 140);
   const scrollToContent = (smooth = true) => {
     const full = heroRef.current?.offsetHeight || window.innerHeight;
-    frame.current = shopFrame(playTab, full, window.innerWidth);
-    scrollToShopContent(panelRef.current, smooth);
+    frame.current = shopFrame(current, full, shopViewportWidth(), frame.current.bar);
+    scrollToShopContent(panelRef.current, smooth, stickyOffset() + 12);
   };
   useEffect(() => {
     const onScrollRequest = () => {
-      // Wait for route + layout (header bar height differs on play vs menu).
-      scrollToShopContentLater(panelRef.current, true, 80);
+      // Wait for AnimatePresence exit/enter (~280ms) so scroll lands on the new panel.
+      scrollToShopContentLater(panelRef.current, true, 320, stickyOffset() + 12);
     };
     window.addEventListener('rs-scroll-shop-content', onScrollRequest);
     return () => window.removeEventListener('rs-scroll-shop-content', onScrollRequest);
-  }, []);
+  }, [current]);
   useEffect(() => {
-    // Land on the shop panel for every tab, including play (collapsed header + content).
-    const id = window.setTimeout(() => scrollToContent(true), 120);
+    // Land on the shop panel after the tab panel transition settles.
+    const id = window.setTimeout(() => scrollToContent(true), 320);
     return () => window.clearTimeout(id);
   }, [current]);
   useLayoutEffect(() => {
     const measure = () => {
       const height = heroRef.current?.offsetHeight || window.innerHeight;
-      frame.current = shopFrame(playTab, height, window.innerWidth);
-      const current = scrollY.get();
-      scrollY.set(current + 0.01);
-      scrollY.set(current);
+      const banner = frame.current.banner || 40;
+      const contentH = stickyInnerRef.current?.scrollHeight || 0;
+      const withChips = current === 'play' || current === 'menu';
+      const minBar = withChips ? 200 : 128;
+      const maxBar = withChips ? 280 : 168;
+      const nextBar = Math.min(maxBar, Math.max(minBar, banner + contentH));
+      frame.current = shopFrame(current, height, shopViewportWidth(), nextBar);
+      publishStickyBar(nextBar);
+      // Vertically center parked logo against name + tagline + address.
+      const textH = identityTextRef.current?.offsetHeight || 44;
+      const logoEnd = frame.current.logoEnd || 44;
+      logoParkY.current = banner + 6 + Math.max(0, (textH - logoEnd) / 2);
+      const currentY = scrollY.get();
+      scrollY.set(currentY + 0.01);
+      scrollY.set(currentY);
     };
     measure();
+    const observer = new ResizeObserver(measure);
+    if (stickyInnerRef.current) observer.observe(stickyInnerRef.current);
+    if (identityTextRef.current) observer.observe(identityTextRef.current);
     window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
-  }, [scrollY, playTab]);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [scrollY, current, playGame, menuFilter, hub?.categories, business.address]);
+  const syncFrameSize = () => {
+    const height = heroRef.current?.offsetHeight || window.innerHeight;
+    const width = shopViewportWidth();
+    frame.current.height = height;
+    frame.current.width = width;
+    return frame.current;
+  };
   const collapse = (value: number) => {
-    const full = frame.current.height || window.innerHeight;
-    const bar = frame.current.bar || Math.round(full * 0.33);
-    return Math.min(1, Math.max(0, value / Math.max(full - bar, 1)));
+    const { height: full = window.innerHeight, bar = Math.round(full * 0.33) } = frame.current;
+    // Header is already at sticky bar height — treat as fully collapsed for logo park.
+    if (full - value <= bar + 2) return 1;
+    const raw = Math.min(1, Math.max(0, value / Math.max(full - bar, 1)));
+    return raw >= 0.96 ? 1 : raw;
   };
   const headerHeight = useTransform(scrollY, (value) => {
-    const full = frame.current.height || window.innerHeight;
-    const bar = frame.current.bar || Math.round(full * 0.33);
+    const { height: full = window.innerHeight, bar = Math.round(full * 0.33) } = syncFrameSize();
     return Math.max(bar, full - value);
   });
   const logoSize = useTransform(scrollY, (value) => {
@@ -162,27 +292,29 @@ export function PlaceFrame({ business, token, current, children }: { business: R
   });
   const logoLeft = useTransform(scrollY, (value) => {
     const end = frame.current.logoEnd || 44;
-    const size = 96 - collapse(value) * (96 - end);
-    const width = frame.current.width || window.innerWidth;
+    const t = collapse(value);
+    const size = 96 - t * (96 - end);
+    // Live clientWidth so parked logo tracks the card (not scrollbar-inflated innerWidth).
+    const width = shopViewportWidth();
     const centered = width / 2 - size / 2;
     const sheet = Math.min(width, 576);
-    const parked = (width - sheet) / 2 + 12;
-    const t = collapse(value);
+    // Match sticky identity + shop-panel inset (sm:px-4 = 16px on desktop, px-3 = 12px on card).
+    const sidePad = width >= 640 ? 16 : 0;
+    const parked = (width - sheet) / 2 + sidePad + 12;
     return centered * (1 - t) + parked * t;
   });
   const logoTop = useTransform(scrollY, (value) => {
-    const full = frame.current.height || window.innerHeight;
+    const { height: full = window.innerHeight } = frame.current;
     const t = collapse(value);
-    const banner = frame.current.banner || 44;
-    return full * 0.32 * (1 - t) + (banner + 6) * t;
+    const parkedTop = logoParkY.current;
+    return full * 0.32 * (1 - t) + parkedTop * t;
   });
   const coverTop = useTransform(scrollY, (value) => {
     const t = collapse(value);
-    const full = frame.current.height || window.innerHeight;
+    const { height: full = window.innerHeight } = frame.current;
     const end = frame.current.logoEnd || 44;
     const size = 96 - t * (96 - end);
-    const banner = frame.current.banner || 44;
-    const top = full * 0.32 * (1 - t) + (banner + 6) * t;
+    const top = full * 0.32 * (1 - t) + logoParkY.current * t;
     return top + size + 14;
   });
   const identityHeight = useTransform(scrollY, (value) => {
@@ -193,25 +325,43 @@ export function PlaceFrame({ business, token, current, children }: { business: R
   });
   const coverOpacity = useTransform(scrollY, (value) => Math.max(0, 1 - collapse(value) / 0.42));
   const hintOpacity = useTransform(scrollY, (value) => Math.max(0, 1 - collapse(value) / 0.18));
-  const whatsapp = String(business.whatsappnumber || '').replace(/\D/g, '');
-  const wa = whatsapp.length === 10 ? `91${whatsapp}` : whatsapp;
+  const hintPointer = useTransform(hintOpacity, (value) => (value > 0.25 ? 'auto' : 'none'));
+  useMotionValueEvent(hintOpacity, 'change', (value) => setHintVisible(value > 0.25));
+  const callHref = telHref(business.phone);
+  const wa = waHref(business.whatsappnumber || business.phone);
+  const ig = socialHref('instagram', business.instagramurl);
+  const fb = socialHref('facebook', business.facebookurl);
+  const tw = socialHref('twitter', business.twitterurl);
+  const yt = socialHref('youtube', business.youtubeurl);
+  const site = websiteHref(business.website);
+  const mapHref = websiteHref(business.googlemapurl);
   const link = (href: string, label: string, icon: ReactNode) => (
-    <a href={href} target={href.startsWith('http') ? '_blank' : undefined} rel="noreferrer" aria-label={label} title={label} className="shrink-0">
+    <a href={href} target={href.startsWith('http') ? '_blank' : undefined} rel="noreferrer" aria-label={label} title={label} className="relative z-20 grid h-11 w-11 shrink-0 place-items-center pointer-events-auto">
       {icon}
     </a>
   );
-  const web = (value?: string) => {
-    const text = String(value || '').trim();
-    if (!text) return '';
-    return /^https?:\/\//i.test(text) ? text : `https://${text}`;
-  };
   const wifiName = String(business.wifiname || '').trim();
   const wifiPassword = String(business.wifipassword || '').trim();
   const menuLabel = catalogCopy(business.businesstype).tab;
-  const compactIcon = 'h-8 w-8 [&_svg]:h-4 [&_svg]:w-4';
+  const menuCopy = catalogCopy(hub?.type?.typename || hub?.type?.typecode || business.businesstype);
+  const compactIcon = 'h-9 w-9 [&_svg]:h-4 [&_svg]:w-4';
+  const reduce = useReducedMotion();
+  const gameOrder = ['SpinWheel', 'ScratchCard', 'MysteryGiftBox', 'SlotMachine'];
+  const availableGames = new Set(((hub?.games || []) as { gamecode: string }[]).map((item) => item.gamecode));
+  const playGames = (availableGames.size ? gameOrder.filter((code) => availableGames.has(code)) : gameOrder).map((gamecode) => ({ gamecode }));
+  const menuCategories = (hub?.categories || []) as { categoryid: number; categoryname: string }[];
+  const menuChip = (active: boolean) => (active ? { background: color, color: '#fff' } : { background: '#f1f5f9', color: '#475569' });
+  const moreLinks = [
+    ig && { href: ig, label: 'Instagram' },
+    fb && { href: fb, label: 'Facebook' },
+    tw && { href: tw, label: 'X' },
+    yt && { href: yt, label: 'YouTube' },
+    site && { href: site, label: 'Website' },
+  ].filter(Boolean) as { href: string; label: string }[];
+  const addressText = String(business.address || '').trim();
+  const addressHref = mapHref || (addressText ? `https://maps.google.com/?q=${encodeURIComponent(addressText)}` : '');
   return (
-    <GameDockCtx.Provider value={gameDock}>
-    <div className="public-enter min-h-screen bg-orange-50 text-stone-900">
+    <div className="public-enter min-h-screen bg-orange-50 text-stone-900" style={{ scrollPaddingBottom: '8.5rem', scrollPaddingTop: 'var(--shop-sticky-bar, 14rem)' }}>
       <div ref={heroRef} className="h-[100dvh]" aria-hidden="true" />
       {createPortal(
         <motion.header style={{ height: headerHeight }} className="fixed inset-x-0 top-0 z-20">
@@ -219,73 +369,165 @@ export function PlaceFrame({ business, token, current, children }: { business: R
             {business.bannerimagepath && <img alt="" src={asset(business.bannerimagepath)} className="h-full w-full object-cover" />}
             <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/20 to-black/25" />
           </div>
-          <motion.div style={{ height: identityHeight }} className="absolute inset-x-0 bottom-0 overflow-hidden bg-orange-50">
-            <div className="mx-auto flex h-full max-w-xl flex-col bg-white px-3 pb-2 pt-1.5 sm:rounded-t-[28px]">
-              <div className="flex min-h-11 items-center pl-14">
-                <div className="min-w-0 text-left">
+          <motion.div style={{ height: identityHeight }} className="pointer-events-none absolute inset-x-0 bottom-0 z-20 overflow-hidden bg-orange-50">
+            {/* Same max-w-xl + sm:px-4 as the shop panel so the two white cards share one edge. */}
+            <div className="pointer-events-auto mx-auto flex h-full max-w-xl sm:px-4">
+              <div ref={stickyInnerRef} className="flex w-full flex-col justify-start bg-white px-3 pb-2 pt-1.5 sm:rounded-t-[28px]">
+                {/* pl-14 clears the 44px parked logo + gap; logo is vertically centered to this whole text block. */}
+                <div ref={identityTextRef} className="flex min-h-11 shrink-0 flex-col justify-center pl-14 text-left">
                   <h1 className="truncate text-base font-bold leading-tight text-stone-950">{shopName}</h1>
                   <p className="truncate text-xs leading-tight text-stone-500">{business.tagline || business.description || 'Play, order, and review in one place.'}</p>
+                  {addressText && (
+                    addressHref ? (
+                      <a href={addressHref} target="_blank" rel="noreferrer" title={addressText} className="mt-0.5 block truncate text-[11px] leading-tight text-stone-500 underline-offset-2 hover:underline">
+                        {addressText}
+                      </a>
+                    ) : (
+                      <p title={addressText} className="mt-0.5 truncate text-[11px] leading-tight text-stone-500">{addressText}</p>
+                    )
+                  )}
                 </div>
-              </div>
-              <div className="mt-2 flex flex-nowrap justify-center gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {business.phone && link(`tel:${business.phone}`, 'Call', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-stone-700"><path d="M6.6 10.8a15 15 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11 11 0 0 0 3.5.55 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 7a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11 11 0 0 0 .55 3.5 1 1 0 0 1-.25 1L6.6 10.8z" /></svg></Icon>)}
-                {wa && link(`https://wa.me/${wa}`, 'WhatsApp', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-emerald-600"><path d="M12 3a9 9 0 0 0-7.8 13.5L3 21l4.7-1.2A9 9 0 1 0 12 3zm5 12.4c-.2.6-1.2 1.1-1.7 1.1-.4.1-.9.2-3-.8-2.5-1.2-4.1-3.6-4.2-3.8-.2-.2-1.2-1.6-1.2-3s.7-2.1 1-2.4c.2-.2.5-.3.8-.3h.6c.2 0 .4 0 .6.5.2.6.8 2 .8 2.1.1.1 0 .3-.1.5l-.4.5c-.1.2-.3.3-.1.6.2.3.7 1.2 1.5 1.9 1 .9 1.8 1.2 2.1 1.3.3.1.4.1.6-.1l.7-.8c.2-.2.4-.2.6-.1l2 .9c.2.1.4.2.4.4.1.2 0 .8-.2 1.3z" /></svg></Icon>)}
-                {business.instagramurl && link(web(business.instagramurl), 'Instagram', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-pink-600"><path d="M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4zm5 5a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm6.2-.9a1 1 0 1 0 0 2 1 1 0 0 0 0-2zM12 10a2 2 0 1 1 0 4 2 2 0 0 1 0-4z" /></svg></Icon>)}
-                {business.facebookurl && link(web(business.facebookurl), 'Facebook', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-blue-600"><path d="M14 9h3V6h-3c-2.2 0-4 1.8-4 4v2H8v3h2v7h3v-7h2.6l.4-3H13v-2c0-.6.4-1 1-1z" /></svg></Icon>)}
-                {business.twitterurl && link(web(business.twitterurl), 'X', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-stone-950"><path d="M14.7 4h2.4l-5.2 6 6.1 8h-4.8l-3.8-5-4.3 5H2.7l5.6-6.4L2.5 4h4.9l3.4 4.5L14.7 4zm-.8 12.6h1.3L7.2 5.3H5.8l8.1 11.3z" /></svg></Icon>)}
-                {business.youtubeurl && link(web(business.youtubeurl), 'YouTube', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-red-600"><path d="M23 12.2s0-3.2-.4-4.6c-.2-.9-.9-1.6-1.8-1.8C19.2 5.4 12 5.4 12 5.4s-7.2 0-8.8.4c-.9.2-1.6.9-1.8 1.8C1 9 1 12.2 1 12.2s0 3.2.4 4.6c.2.9.9 1.6 1.8 1.8 1.6.4 8.8.4 8.8.4s7.2 0 8.8-.4c.9-.2 1.6-.9 1.8-1.8.4-1.4.4-4.6.4-4.6zM9.8 15.5v-6.6l6.2 3.3-6.2 3.3z" /></svg></Icon>)}
-                {business.website && link(web(business.website), 'Website', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-orange-600" strokeWidth="1.8"><circle cx="12" cy="12" r="8" /><path d="M4 12h16M12 4c2.5 2.8 2.5 13.2 0 16M12 4c-2.5 2.8-2.5 13.2 0 16" /></svg></Icon>)}
-                {(wifiName || wifiPassword) && (
-                  <button type="button" onClick={() => setWifiOpen((open) => !open)} className="shrink-0" aria-label="Wi-Fi" title="Wi-Fi" aria-expanded={wifiOpen}>
-                    <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-orange-600" strokeWidth="1.8" strokeLinecap="round"><path d="M5 12.5a10 10 0 0 1 14 0M8 15.2a6 6 0 0 1 8 0" /><circle cx="12" cy="18" r="1" fill="currentColor" stroke="none" /></svg></Icon>
-                  </button>
+                <div className="relative z-20 mt-1 flex shrink-0 flex-nowrap items-center justify-center gap-1">
+                  {callHref && link(callHref, 'Call', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-stone-700"><path d="M6.6 10.8a15 15 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11 11 0 0 0 3.5.55 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 7a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11 11 0 0 0 .55 3.5 1 1 0 0 1-.25 1L6.6 10.8z" /></svg></Icon>)}
+                  {wa && link(wa, 'WhatsApp', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-emerald-600"><path d="M12 3a9 9 0 0 0-7.8 13.5L3 21l4.7-1.2A9 9 0 1 0 12 3zm5 12.4c-.2.6-1.2 1.1-1.7 1.1-.4.1-.9.2-3-.8-2.5-1.2-4.1-3.6-4.2-3.8-.2-.2-1.2-1.6-1.2-3s.7-2.1 1-2.4c.2-.2.5-.3.8-.3h.6c.2 0 .4 0 .6.5.2.6.8 2 .8 2.1.1.1 0 .3-.1.5l-.4.5c-.1.2-.3.3-.1.6.2.3.7 1.2 1.5 1.9 1 .9 1.8 1.2 2.1 1.3.3.1.4.1.6-.1l.7-.8c.2-.2.4-.2.6-.1l2 .9c.2.1.4.2.4.4.1.2 0 .8-.2 1.3z" /></svg></Icon>)}
+                  {(wifiName || wifiPassword) && (
+                    <button
+                      ref={wifiBtnRef}
+                      type="button"
+                      onClick={() => { setMoreOpen(false); setWifiOpen((open) => !open); }}
+                      className="relative z-20 grid h-11 w-11 shrink-0 place-items-center pointer-events-auto"
+                      aria-label="Wi-Fi"
+                      title="Wi-Fi"
+                      aria-expanded={wifiOpen}
+                    >
+                      <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-orange-600" strokeWidth="1.8" strokeLinecap="round"><path d="M5 12.5a10 10 0 0 1 14 0M8 15.2a6 6 0 0 1 8 0" /><circle cx="12" cy="18" r="1" fill="currentColor" stroke="none" /></svg></Icon>
+                    </button>
+                  )}
+                  {mapHref && link(mapHref, 'Directions', <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-sky-600" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 21s7-5.2 7-11a7 7 0 1 0-14 0c0 5.8 7 11 7 11z" /><circle cx="12" cy="10" r="2.2" /></svg></Icon>)}
+                  {moreLinks.length > 0 && (
+                    <button
+                      ref={moreBtnRef}
+                      type="button"
+                      onClick={() => { setWifiOpen(false); setMoreOpen((open) => !open); }}
+                      className="relative z-20 grid h-11 w-11 shrink-0 place-items-center pointer-events-auto"
+                      aria-label="More links"
+                      title="More"
+                      aria-expanded={moreOpen}
+                    >
+                      <Icon className={compactIcon}><svg viewBox="0 0 24 24" className="h-4 w-4 fill-stone-600"><circle cx="6" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="18" cy="12" r="1.6" /></svg></Icon>
+                    </button>
+                  )}
+                </div>
+                {current === 'play' && (
+                  <div className="mt-2 grid shrink-0 grid-cols-2 gap-1.5 sm:grid-cols-4">
+                    {playGames.map((item) => {
+                      const active = playGame === item.gamecode;
+                      return (
+                        <button
+                          key={item.gamecode}
+                          type="button"
+                          className={`relative flex min-h-10 w-full items-center justify-center rounded-full px-2 text-[11px] font-semibold leading-none shadow-sm ring-1 transition-colors duration-200 ${active ? 'text-white delay-100 ring-transparent' : 'bg-white text-stone-600 ring-stone-200'}`}
+                          onClick={() => setPlayGame(item.gamecode)}
+                        >
+                          {active && (
+                            <motion.span
+                              layoutId={reduce ? undefined : 'play-game-choice'}
+                              className="absolute inset-0 rounded-full"
+                              style={{ background: color }}
+                              transition={{ type: 'spring', stiffness: 420, damping: 34 }}
+                            />
+                          )}
+                          <span className="relative z-10 truncate">{gameNames[item.gamecode] || item.gamecode}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                {current === 'menu' && (
+                  <div className="mt-2 flex shrink-0 gap-1.5 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    <button type="button" className="min-h-9 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold" style={menuChip(menuFilter === 'all')} onClick={() => setMenuFilter('all')}>{menuCopy.guestAll}</button>
+                    {menuCategories.map((category) => (
+                      <button key={category.categoryid} type="button" className="min-h-9 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold" style={menuChip(menuFilter === category.categoryid)} onClick={() => setMenuFilter(category.categoryid)}>{category.categoryname}</button>
+                    ))}
+                  </div>
                 )}
               </div>
-              {playTab && <div ref={setGameDock} className="mt-2 min-h-0 flex-1" />}
             </div>
           </motion.div>
-          <motion.div style={{ width: logoSize, height: logoSize, left: logoLeft, top: logoTop }} className="absolute z-10 grid place-items-center overflow-hidden rounded-full bg-white shadow-lg ring-4 ring-white">
+          <motion.div style={{ width: logoSize, height: logoSize, left: logoLeft, top: logoTop }} className="pointer-events-none absolute z-30 grid place-items-center overflow-hidden rounded-full bg-white shadow-lg ring-4 ring-white">
             {business.logoimagepath ? <img alt="" src={asset(business.logoimagepath)} className="h-full w-full object-cover" /> : <span className="font-display text-[1.6rem] font-semibold text-orange-600">{shopMark}</span>}
           </motion.div>
-          <motion.div style={{ top: coverTop, opacity: coverOpacity }} className="absolute inset-x-6 text-center text-white">
-            <h1 className="text-[1.7rem] font-bold leading-tight">{shopName}</h1>
+          <motion.div style={{ top: coverTop, opacity: coverOpacity }} className="pointer-events-none absolute inset-x-6 text-center text-white" aria-hidden="true">
+            <p className="text-[1.7rem] font-bold leading-tight">{shopName}</p>
             <p className="mt-2 text-sm leading-relaxed text-white/85">{business.tagline || business.description || 'Play, order, and review in one place.'}</p>
           </motion.div>
-          <motion.button
-            type="button"
-            style={{ opacity: hintOpacity }}
-            onClick={() => scrollToContent()}
-            className="absolute bottom-[5.75rem] left-1/2 -translate-x-1/2 text-white/90"
-            aria-label="Scroll to content"
-          >
-            <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-              <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </motion.button>
+          {hintVisible && (
+            <motion.button
+              type="button"
+              style={{ opacity: hintOpacity, pointerEvents: hintPointer }}
+              onClick={() => scrollToContent()}
+              className="absolute bottom-[5.75rem] left-1/2 -translate-x-1/2 text-white/90"
+              aria-label="Scroll to content"
+            >
+              <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </motion.button>
+          )}
         </motion.header>,
         document.body,
       )}
-      <div className="relative z-10 mx-auto max-w-xl pb-52 sm:px-4">
+      {wifiOpen && wifiPos && (wifiName || wifiPassword) && createPortal(
+        <div
+          id="shop-wifi-pop"
+          role="dialog"
+          aria-label="Wi-Fi details"
+          className="fixed z-[60] w-56 rounded-2xl bg-orange-50 px-3 py-2 text-left text-xs text-stone-700 shadow-lg ring-1 ring-orange-100"
+          style={{ top: wifiPos.top, left: wifiPos.left }}
+        >
+          {wifiName && <p>Network <span className="font-semibold text-stone-950">{wifiName}</span></p>}
+          {wifiPassword && <p className="mt-0.5">Password <span className="font-semibold text-stone-950">{wifiPassword}</span></p>}
+          <button type="button" className="mt-1 min-h-9 text-[11px] font-semibold text-orange-600" onClick={() => { void navigator.clipboard?.writeText([wifiName, wifiPassword].filter(Boolean).join('\n')).then(() => setCopied(true)); }}>{copied ? 'Copied' : 'Copy details'}</button>
+        </div>,
+        document.body,
+      )}
+      {moreOpen && morePos && moreLinks.length > 0 && createPortal(
+        <div
+          id="shop-more-pop"
+          role="menu"
+          aria-label="More shop links"
+          className="fixed z-[60] w-[12.5rem] rounded-2xl bg-white py-1.5 text-left shadow-lg ring-1 ring-stone-200"
+          style={{ top: morePos.top, left: morePos.left }}
+        >
+          {moreLinks.map((item) => (
+            <a
+              key={item.label}
+              href={item.href}
+              target="_blank"
+              rel="noreferrer"
+              role="menuitem"
+              className="block px-3 py-2.5 text-sm font-semibold text-stone-700 hover:bg-orange-50 hover:text-orange-700"
+              onClick={() => setMoreOpen(false)}
+            >
+              {item.label}
+            </a>
+          ))}
+        </div>,
+        document.body,
+      )}
+      <div className="relative z-10 mx-auto max-w-xl pb-[calc(13rem+env(safe-area-inset-bottom))] sm:px-4">
         <div
           id="shop-panel"
           ref={panelRef}
-          className="relative scroll-mt-28 bg-white px-5 pb-8 pt-3 shadow-xl shadow-stone-950/10 sm:rounded-b-[28px]"
+          className="relative bg-white px-5 pb-10 pt-2 shadow-xl shadow-stone-950/10 sm:rounded-b-[28px]"
+          style={{ scrollMarginTop: 'calc(var(--shop-sticky-bar, 14rem) + 0.75rem)' }}
         >
-          {business.address && <p className="mb-3 text-center text-sm text-stone-500">{business.address}</p>}
-          {wifiOpen && (wifiName || wifiPassword) && (
-            <div className="mx-auto mb-3 max-w-xs rounded-2xl bg-orange-50 px-4 py-3 text-left text-sm text-stone-700">
-              {wifiName && <p>Network <span className="font-semibold text-stone-950">{wifiName}</span></p>}
-              {wifiPassword && <p className="mt-1">Password <span className="font-semibold text-stone-950">{wifiPassword}</span></p>}
-              <button type="button" className="mt-2 text-xs font-semibold text-orange-600" onClick={() => { void navigator.clipboard?.writeText([wifiName, wifiPassword].filter(Boolean).join('\n')).then(() => setCopied(true)); }}>{copied ? 'Copied' : 'Copy details'}</button>
-            </div>
-          )}
           {children}
         </div>
       </div>
       <ShopDock token={token} current={current} menuLabel={menuLabel} />
       {loginOpen && !signedIn && token && <SaveCoinsModal token={token} onClose={() => setLoginOpen(false)} />}
     </div>
-    </GameDockCtx.Provider>
   );
 }
 
@@ -306,19 +548,21 @@ function catalogGlyph(label: string): 'calendar' | 'list' {
 
 function ShopDock({ token, current, menuLabel }: { token?: string; current: GuestTab; menuLabel: string }) {
   const auth = useAuth();
-  const signedIn = Boolean(auth.user && auth.user.role === 'Customer' && !auth.user.name.startsWith('Guest_'));
-  const { install } = useInstallApp();
+  const signedIn = isGuestCustomer(auth.user);
+  const { install, installed } = useInstallApp();
   const scrollIntoShop = () => window.dispatchEvent(new Event('rs-scroll-shop-content'));
-  const item = (active: boolean) => `flex min-w-0 flex-1 flex-col items-center gap-0.5 px-0.5 py-1 text-[9px] font-semibold leading-none sm:text-[11px] ${active ? 'text-orange-600' : 'text-stone-400'}`;
-  const bubble = (active: boolean) => `grid h-8 w-8 place-items-center rounded-full sm:h-10 sm:w-10 ${active ? 'bg-orange-600 text-white shadow-md shadow-orange-600/30' : 'bg-stone-100 text-stone-500'}`;
+  const item = (active: boolean) => `flex min-w-0 flex-1 flex-col items-center gap-0.5 px-0.5 py-1.5 text-[10px] font-semibold leading-none sm:text-[11px] ${active ? 'text-orange-600' : 'text-stone-400'}`;
+  const bubble = (active: boolean) => `grid h-9 w-9 place-items-center rounded-full sm:h-10 sm:w-10 ${active ? 'bg-orange-600 text-white shadow-md shadow-orange-600/30' : 'bg-stone-100 text-stone-500'}`;
   return createPortal(
-    <nav className="fixed inset-x-0 bottom-0 z-30 px-2 pt-2" style={{ paddingBottom: 'max(0.55rem, env(safe-area-inset-bottom))' }} aria-label="Shop">
-      <div className="mx-auto flex w-full max-w-md items-end justify-between rounded-[1.75rem] bg-white px-1 py-2 shadow-[0_-8px_30px_rgba(28,25,23,0.12)] ring-1 ring-stone-200">
+    <nav className="fixed inset-x-0 bottom-0 z-30 px-2 pt-2 sm:px-4" style={{ paddingBottom: 'max(0.55rem, env(safe-area-inset-bottom))' }} aria-label="Shop">
+      <div className="mx-auto flex w-full max-w-xl items-end justify-between rounded-[1.75rem] bg-white px-1.5 py-2 shadow-[0_-8px_30px_rgba(28,25,23,0.12)] ring-1 ring-stone-200">
         <NavLink to={`/play/${token}`} onClick={scrollIntoShop} className={item(current === 'play')}><span className={bubble(current === 'play')}><DockGlyph name="play" /></span><span className="max-w-full truncate">Play</span></NavLink>
         <NavLink to={`/menu/${token}`} onClick={scrollIntoShop} className={item(current === 'menu')}><span className={bubble(current === 'menu')}><DockGlyph name={catalogGlyph(menuLabel)} /></span><span className="max-w-full truncate">{menuLabel}</span></NavLink>
         <NavLink to={`/bill/${token}`} onClick={scrollIntoShop} className={item(current === 'bill')}><span className={bubble(current === 'bill')}><DockGlyph name="bill" /></span><span className="max-w-full truncate">Bill</span></NavLink>
         <NavLink to={`/review/${token}`} onClick={scrollIntoShop} className={item(current === 'review')}><span className={bubble(current === 'review')}><DockGlyph name="review" /></span><span className="max-w-full truncate">Review</span></NavLink>
-        <button type="button" className={item(false)} onClick={() => { void install(); }}><span className={bubble(false)}><DockGlyph name="app" /></span><span className="max-w-full truncate">Get app</span></button>
+        {!installed && (
+          <button type="button" className={item(false)} onClick={() => { void install(); }}><span className={bubble(false)}><DockGlyph name="app" /></span><span className="max-w-full truncate">Get app</span></button>
+        )}
         {signedIn ? (
           <NavLink to="/customer/dashboard" className={item(false)}><span className={bubble(false)}><DockGlyph name="user" /></span><span className="max-w-full truncate">Account</span></NavLink>
         ) : (
@@ -343,6 +587,8 @@ export function GuestPlaceShell() {
   const [hub, setHub] = useState<GuestHub | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [playGame, setPlayGame] = useState('SpinWheel');
+  const [menuFilter, setMenuFilter] = useState<number | 'all'>('all');
 
   useEffect(() => {
     if (!token) return;
@@ -357,12 +603,21 @@ export function GuestPlaceShell() {
     return () => { alive = false; };
   }, [token]);
 
+  const shopTitle = hub?.business?.businessname
+    ? `${hub.business.businessname} · ${tab === 'menu' ? catalogCopy(hub.business.businesstype).tab : tab[0].toUpperCase() + tab.slice(1)}`
+    : undefined;
+  usePageSeo({
+    title: shopTitle,
+    description: hub?.business?.tagline || hub?.business?.description || undefined,
+    path: location.pathname,
+  });
+
   if (loading) return <GuestSkeleton />;
   if (loadError || !hub) return <GuestError message={loadError || 'This link is not available.'} />;
 
   const business = hub.business || {};
   const color = brandColor(business.themecolor);
-  const ctx: GuestPlaceContext = { token, hub, setHub, color, business };
+  const ctx: GuestPlaceContext = { token, hub, setHub, color, business, playGame, setPlayGame, menuFilter, setMenuFilter };
 
   // Always full-bleed shop UI (no wallet sidebar) so the hero/dock layout stays correct.
   return (
@@ -463,7 +718,7 @@ function QtyControl({ color, qty, onChange }: { color: string; qty: number; onCh
     return (
       <button
         type="button"
-        className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full px-4 text-sm font-semibold text-white shadow-md transition hover:brightness-110 active:scale-[0.98]"
+        className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-full px-4 text-sm font-semibold text-white shadow-md transition hover:brightness-110 active:scale-[0.98]"
         style={{ background: color }}
         onClick={() => onChange(1)}
       >
@@ -473,15 +728,13 @@ function QtyControl({ color, qty, onChange }: { color: string; qty: number; onCh
     );
   }
   return (
-    <div className="inline-flex h-10 items-center gap-1 rounded-full border border-stone-200 bg-white p-1 shadow-sm">
-      <button type="button" className="grid h-8 w-8 place-items-center rounded-full bg-stone-100 text-base font-bold text-stone-700" onClick={() => onChange(Math.max(0, qty - 1))} aria-label="Decrease">−</button>
+    <div className="inline-flex h-11 items-center gap-1 rounded-full border border-stone-200 bg-white p-1 shadow-sm">
+      <button type="button" className="grid h-9 w-9 place-items-center rounded-full bg-stone-100 text-base font-bold text-stone-700" onClick={() => onChange(Math.max(0, qty - 1))} aria-label="Decrease">−</button>
       <span className="min-w-6 text-center text-sm font-bold text-stone-950">{qty}</span>
-      <button type="button" className="grid h-8 w-8 place-items-center rounded-full text-base font-bold text-white" style={{ background: color }} onClick={() => onChange(qty + 1)} aria-label="Increase">+</button>
+      <button type="button" className="grid h-9 w-9 place-items-center rounded-full text-base font-bold text-white" style={{ background: color }} onClick={() => onChange(qty + 1)} aria-label="Increase">+</button>
     </div>
   );
 }
-
-const gameNames: Record<string, string> = { SpinWheel: 'Spin wheel', ScratchCard: 'Scratch card', MysteryGiftBox: 'Mystery box', SlotMachine: 'Slots' };
 
 function SaveCoinsModal({ onClose, token, coins = 0, prizeName = '' }: { onClose: () => void; token: string; coins?: number; prizeName?: string }) {
   const auth = useAuth();
@@ -522,7 +775,7 @@ function SaveCoinsModal({ onClose, token, coins = 0, prizeName = '' }: { onClose
     <Modal title={coins > 0 ? `Save ${coins} coins` : 'Save these coins'} text={prizeName ? `${prizeName}. Keep it in a wallet, or sign in if you already have one.` : 'Keep the prize in a wallet, or sign in if you already have one.'} onClose={onClose}>
       <div className="mb-4 grid grid-cols-2 rounded-xl bg-stone-100 p-1">
         <button type="button" className={`h-10 rounded-lg text-sm font-semibold ${mode === 'create' ? 'bg-white shadow-sm' : 'text-stone-500'}`} onClick={() => { setMode('create'); setError(''); }}>Create account</button>
-        <button type="button" className={`h-10 rounded-lg text-sm font-semibold ${mode === 'login' ? 'bg-white shadow-sm' : 'text-stone-500'}`} onClick={() => { setMode('login'); setError(''); }}>Already exist? Login</button>
+        <button type="button" className={`h-10 rounded-lg text-sm font-semibold ${mode === 'login' ? 'bg-white shadow-sm' : 'text-stone-500'}`} onClick={() => { setMode('login'); setError(''); }}>Sign in</button>
       </div>
       {error && <Alert text={error} />}
       {mode === 'create' ? (
@@ -546,11 +799,11 @@ function SaveCoinsModal({ onClose, token, coins = 0, prizeName = '' }: { onClose
 }
 
 export function PlayPanel() {
-  const { token, hub, color, business } = useGuestPlace();
+  const { token, color, playGame } = useGuestPlace();
   const auth = useAuth();
   const reduce = useReducedMotion();
-  const [game, setGame] = useState('SpinWheel');
   const [prizes, setPrizes] = useState<PrizeSlice[]>([]);
+  const [boardLoading, setBoardLoading] = useState(true);
   const [result, setResult] = useState<PlayResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -558,12 +811,26 @@ export function PlayPanel() {
   const [winOpen, setWinOpen] = useState(false);
 
   useEffect(() => {
-    const rows = ((hub?.prizes || []) as { gamecode?: string; prizename?: string; name?: string; coins?: number | string }[])
-      .filter((row) => row.gamecode === game)
-      .map((row) => ({ name: String(row.prizename || row.name || ''), coins: Number(row.coins || 0) }))
-      .filter((row) => row.name);
-    setPrizes(rows);
-  }, [hub, game]);
+    setPrizes([]);
+    setBoardLoading(true);
+    setResult(null);
+    setSaveOpen(false);
+    setWinOpen(false);
+    setError('');
+  }, [playGame]);
+
+  useEffect(() => {
+    let alive = true;
+    setBoardLoading(true);
+    api<{ prizes?: PrizeSlice[] }>(`/public/play/${encodeURIComponent(token)}/board?gameCode=${encodeURIComponent(playGame)}`, { quiet: true })
+      .then((data) => {
+        if (!alive || !data.prizes?.length) return;
+        setPrizes(data.prizes);
+      })
+      .catch(() => undefined)
+      .finally(() => { if (alive) setBoardLoading(false); });
+    return () => { alive = false; };
+  }, [token, playGame]);
 
   async function play() {
     setError('');
@@ -572,7 +839,7 @@ export function PlayPanel() {
     setWinOpen(false);
     setBusy(true);
     try {
-      const data = await api<PlayResult & { prizes?: PrizeSlice[]; accessToken?: string; user?: typeof auth.user }>(`/public/play`, { method: 'POST', body: JSON.stringify({ token, gameCode: game }) });
+      const data = await api<PlayResult & { prizes?: PrizeSlice[]; accessToken?: string; user?: typeof auth.user }>(`/public/play`, { method: 'POST', body: JSON.stringify({ token, gameCode: playGame }) });
       if (data.prizes?.length) setPrizes(data.prizes);
       if (data.accessToken && data.user) auth.setSession(data.user, data.accessToken);
       return data;
@@ -582,46 +849,28 @@ export function PlayPanel() {
     } finally { setBusy(false); }
   }
 
-  const signedIn = auth.user && !auth.user.name.startsWith('Guest_');
-  const gameDock = useContext(GameDockCtx);
-  const gameOrder = ['SpinWheel', 'ScratchCard', 'MysteryGiftBox', 'SlotMachine'];
-  const available = new Set(((hub?.games || []) as { gamecode: string }[]).map((item) => item.gamecode));
-  const games = (available.size ? gameOrder.filter((code) => available.has(code)) : gameOrder).map((gamecode) => ({ gamecode }));
-  const chooser = (
-    <div className="grid h-full grid-cols-2 content-center gap-1.5">
-      {games.map((item) => {
-        const active = game === item.gamecode;
-        return (
-          <button key={item.gamecode} type="button" className={`relative w-full rounded-full px-2 py-1.5 text-xs font-semibold leading-none shadow-sm transition-colors duration-200 ${active ? 'text-white delay-100' : 'bg-white text-stone-600 ring-1 ring-stone-200'}`} onClick={() => { setGame(item.gamecode); setResult(null); setSaveOpen(false); setWinOpen(false); }}>
-            {active && (
-              <motion.span
-                layoutId={reduce ? undefined : 'play-game-choice'}
-                className="absolute inset-0 rounded-full"
-                style={{ background: color }}
-                transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-              />
-            )}
-            <span className="relative">{gameNames[item.gamecode] || item.gamecode}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
+  const signedIn = isGuestCustomer(auth.user);
+  const showBoardSkeleton = boardLoading && playGame === 'SpinWheel' && !prizes.length;
 
   return (
     <>
-      {gameDock ? createPortal(chooser, gameDock) : chooser}
-      <section className="mb-4 overflow-visible rounded-[28px] bg-[radial-gradient(ellipse_at_top,#fff,#fafaf9_46%,#e7e5e4)] px-3 py-6 shadow-[inset_0_1px_0_rgba(255,255,255,.9)] sm:px-6 sm:py-8">
+      <section className="relative mb-4 overflow-visible rounded-[28px] bg-[radial-gradient(ellipse_at_top,#fff,#fafaf9_46%,#e7e5e4)] px-3 py-6 shadow-[inset_0_1px_0_rgba(255,255,255,.9)] sm:px-6 sm:py-8">
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
-            key={game}
+            key={playGame}
             className="grid place-items-center"
             initial={reduce ? false : { opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={reduce ? undefined : { opacity: 0, y: -8 }}
             transition={{ duration: 0.22, ease: 'easeOut' }}
           >
-            <GameStage game={game} prizes={prizes} busy={busy} onPlay={play} onReveal={(value) => { setResult(value); setWinOpen(true); }} accent={color} />
+            {showBoardSkeleton ? (
+              <div className="grid h-64 w-full max-w-sm place-items-center rounded-[28px] bg-stone-100/80" aria-busy="true" aria-label="Loading game board">
+                <div className="h-40 w-40 animate-pulse rounded-full bg-stone-200 motion-reduce:animate-none" />
+              </div>
+            ) : (
+              <GameStage game={playGame} prizes={prizes} busy={busy || (boardLoading && playGame === 'SpinWheel')} onPlay={play} onReveal={(value) => { setResult(value); setWinOpen(true); }} accent={color} />
+            )}
           </motion.div>
         </AnimatePresence>
       </section>
@@ -638,7 +887,6 @@ export function PlayPanel() {
       )}
       {saveOpen && result && !signedIn && <SaveCoinsModal token={token} coins={result.coins} prizeName={result.prizeName} onClose={() => setSaveOpen(false)} />}
       <OffersList />
-      {!business && null}
     </>
   );
 }
@@ -667,7 +915,7 @@ function OffersList() {
   const { hub, business } = useGuestPlace();
   const location = useLocation();
   const auth = useAuth();
-  const signedIn = Boolean(auth.user && auth.user.role === 'Customer' && !auth.user.name.startsWith('Guest_'));
+  const signedIn = isGuestCustomer(auth.user);
   const offers = (hub?.offers || []) as { rewardid: number; rewardname: string; description?: string; coinsrequired: number; imagepath?: string }[];
   const [statuses, setStatuses] = useState<Record<number, string>>({});
   const businessId = business?.businessid;
@@ -682,7 +930,7 @@ function OffersList() {
       .catch(() => undefined);
   }, [signedIn, businessId]);
   useEffect(() => {
-    if (location.hash !== '#offers') return;
+    if (location.hash !== '#offers' || !offers.length) return;
     document.getElementById('offers')?.scrollIntoView({ block: 'start' });
   }, [location.hash, offers.length]);
   async function redeem(offer: { rewardid: number }) {
@@ -709,44 +957,42 @@ function OffersList() {
     if (!node) return;
     node.scrollTo({ left: next * node.clientWidth, behavior: 'smooth' });
   }
+  if (!offers.length) return null;
   return (
-    <section id="offers" className="mt-8 scroll-mt-6 border-t border-stone-100 pt-5">
+    <section id="offers" className="mt-8 border-t border-stone-100 pt-5" style={{ scrollMarginTop: 'calc(var(--shop-sticky-bar, 14rem) + 0.75rem)' }}>
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-base font-bold">Current offers</h2>
         {offers.length > 1 && <p className="text-xs font-semibold text-stone-400">{index + 1} of {offers.length}</p>}
       </div>
       <p className="mt-1 text-xs text-stone-400">Tap an offer to redeem it at this shop.</p>
-      {!offers.length && <p className="mt-3 rounded-2xl bg-stone-50 px-3 py-4 text-sm text-stone-400">No active offers right now.</p>}
-      {offers.length > 0 && (
-        <div className="mt-3">
-          <div ref={scroller} onScroll={onScroll} className="flex snap-x snap-mandatory overflow-x-auto scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {offers.map((offer) => {
-              const status = statuses[offer.rewardid];
-              const closed = status === 'Pending' || status === 'Approved';
-              return (
-                <div key={offer.rewardid} className="w-full shrink-0 snap-start">
-                  <button type="button" disabled={closed} className="flex w-full items-start gap-3 rounded-2xl border border-amber-100 bg-amber-50/70 p-3 text-left disabled:opacity-70" onClick={() => redeem(offer)}>
-                    <OfferMark image={offer.imagepath} />
-                    <div className="min-w-0 flex-1">
-                      <p className="whitespace-pre-wrap break-words font-semibold leading-snug text-stone-950">{offer.rewardname}</p>
-                      {offer.description && <p className="mt-0.5 whitespace-pre-wrap break-words text-xs leading-relaxed text-stone-500">{offer.description}</p>}
-                      <p className="mt-1 text-xs font-semibold text-amber-700">{offer.coinsrequired} coins</p>
-                    </div>
-                    <span className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${closed ? 'bg-stone-200 text-stone-600' : 'bg-orange-600 text-white'}`}>{offerLabel(status)}</span>
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-          {offers.length > 1 && (
-            <div className="mt-3 flex justify-center gap-1.5" aria-label="Offer slides">
-              {offers.map((offer, dot) => (
-                <button key={offer.rewardid} type="button" aria-label={`Show offer ${dot + 1}`} className={`h-1.5 rounded-full ${dot === index ? 'w-4 bg-orange-600' : 'w-1.5 bg-stone-300'}`} onClick={() => go(dot)} />
-              ))}
-            </div>
-          )}
+      <div className="mt-3">
+        <div ref={scroller} onScroll={onScroll} className="flex snap-x snap-mandatory overflow-x-auto scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {offers.map((offer) => {
+            const status = statuses[offer.rewardid];
+            const closed = status === 'Pending' || status === 'Approved';
+            return (
+              <div key={offer.rewardid} className="w-full shrink-0 snap-start">
+                <button type="button" disabled={closed} className="flex min-h-[6.5rem] w-full items-start gap-3 rounded-2xl border border-amber-100 bg-amber-50/70 p-3 text-left disabled:opacity-70" onClick={() => redeem(offer)}>
+                  <OfferMark image={offer.imagepath} />
+                  <div className="min-w-0 flex-1">
+                    <p className="whitespace-pre-wrap break-words font-semibold leading-snug text-stone-950">{offer.rewardname}</p>
+                    {offer.description && <p className="mt-0.5 line-clamp-2 whitespace-pre-wrap break-words text-xs leading-relaxed text-stone-500">{offer.description}</p>}
+                    <p className="mt-1 text-xs font-semibold text-amber-700">{offer.coinsrequired} coins</p>
+                  </div>
+                  <span className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${closed ? 'bg-stone-200 text-stone-600' : 'bg-orange-600 text-white'}`}>{offerLabel(status)}</span>
+                </button>
+              </div>
+            );
+          })}
         </div>
-      )}
+        {offers.length > 1 && (
+          <div className="mt-3 flex justify-center gap-1.5" aria-label="Offer slides">
+            {offers.map((offer, dot) => (
+              <button key={offer.rewardid} type="button" aria-label={`Show offer ${dot + 1}`} className={`h-1.5 rounded-full ${dot === index ? 'w-4 bg-orange-600' : 'w-1.5 bg-stone-300'}`} onClick={() => go(dot)} />
+            ))}
+          </div>
+        )}
+      </div>
     </section>
   );
 }
@@ -770,11 +1016,21 @@ function cartKey(itemId: number, optionId?: number, addonIds: number[] = []) {
   return `${itemId}:${optionId || 0}:${[...addonIds].sort((a, b) => a - b).join('.')}`;
 }
 
+function readSessionCart(token: string): CartLine[] {
+  try {
+    const raw = sessionStorage.getItem(`rs-cart:${token}`);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 export function MenuPanel() {
-  const { token, hub, color, business } = useGuestPlace();
+  const { token, hub, color, business, menuFilter: filter, setMenuFilter: setFilter } = useGuestPlace();
   const auth = useAuth();
-  const [filter, setFilter] = useState<number | 'all'>('all');
-  const [cart, setCart] = useState<CartLine[]>([]);
+  const [cart, setCart] = useState<CartLine[]>(() => readSessionCart(token));
   const [fulfillment, setFulfillment] = useState<'DineIn' | 'Delivery' | 'Pickup'>(catalogCopy('').modes[0][0]);
   const [station, setStation] = useState('');
   const [address, setAddress] = useState('');
@@ -789,6 +1045,16 @@ export function MenuPanel() {
   const [pickedAddons, setPickedAddons] = useState<number[]>([]);
 
   const copy = catalogCopy(hub?.type?.typename || hub?.type?.typecode || business?.businesstype);
+  useEffect(() => {
+    setCart(readSessionCart(token));
+  }, [token]);
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(`rs-cart:${token}`, JSON.stringify(cart));
+    } catch {
+      /* ignore quota / private mode */
+    }
+  }, [cart, token]);
   useEffect(() => {
     if (!copy.modes.some(([value]) => value === fulfillment)) setFulfillment(copy.modes[0][0]);
   }, [copy.kind]);
@@ -860,15 +1126,18 @@ export function MenuPanel() {
     if (!cart.length) { toastErr(`Add something from the ${copy.tab.toLowerCase()} list first.`); return; }
     if (!isTenDigitMobile(mobile)) { toastErr('Enter a 10-digit mobile number.'); return; }
     if (fulfillment === 'Delivery' && !address.trim()) { toastErr('Delivery address is required.'); return; }
+    if (fulfillment === 'DineIn' && !station.trim()) {
+      toastErr(`Enter your ${String(hub?.settings?.stationlabel || 'table / room').toLowerCase()}.`);
+      return;
+    }
     setSending(true);
-    const popup = window.open('', '_blank');
     try {
       const result = await api<{ message: string; orderNumber: string; whatsappUrl?: string | null; accessToken?: string; user?: NonNullable<typeof auth.user> }>('/public/orders', {
         method: 'POST',
         body: JSON.stringify({
           token,
           fulfillment,
-          tableNumber: station.trim() || '0',
+          tableNumber: station.trim(),
           deliveryAddress: address,
           customerName: guestName,
           customerMobile: mobile,
@@ -878,38 +1147,28 @@ export function MenuPanel() {
       });
       if (result.accessToken && result.user && auth.user?.role !== 'BusinessAdmin' && auth.user?.role !== 'SuperAdmin') auth.setSession(result.user, result.accessToken);
       if (result.whatsappUrl) {
-        if (popup) popup.location.href = result.whatsappUrl;
         setWhatsappUrl(result.whatsappUrl);
-        toastOk(`Order ${result.orderNumber} placed. Send it on WhatsApp too.`);
+        toastOk(`Order ${result.orderNumber} placed. Open WhatsApp to send it.`);
       } else {
-        popup?.close();
         setWhatsappUrl('');
         toastOk(`Order ${result.orderNumber} is in the shop queue.`);
       }
       setCart([]);
       setNote('');
       setOpen(false);
-    } catch {
-      popup?.close();
+    } catch (err) {
+      toastErr(err instanceof Error ? err.message : 'Could not place the order.');
     } finally { setSending(false); }
   }
 
-  const chip = (active: boolean) => active ? { background: color, color: '#fff' } : { background: '#f1f5f9', color: '#475569' };
-
   return (
     <>
-      <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <button type="button" className="whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold" style={chip(filter === 'all')} onClick={() => setFilter('all')}>{copy.guestAll}</button>
-        {categories.map((category) => (
-          <button key={category.categoryid} type="button" className="whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold" style={chip(filter === category.categoryid)} onClick={() => setFilter(category.categoryid)}>{category.categoryname}</button>
-        ))}
-      </div>
       {whatsappUrl && (
         <p className="mt-4 rounded-2xl bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
           Order sent to the queue. <a className="font-semibold underline" href={whatsappUrl} target="_blank" rel="noreferrer">Open WhatsApp</a>
         </p>
       )}
-      <div className={`mt-4 space-y-8 ${count ? 'pb-28' : ''}`}>
+      <div className={`mt-4 space-y-8 ${count ? 'pb-36' : 'pb-4'}`}>
         {grouped.map(([categoryId, rows]) => (
           <section key={categoryId}>
             <h2 className="text-lg font-bold">{categories.find((category) => category.categoryid === categoryId)?.categoryname || copy.pageTitle}</h2>
@@ -920,6 +1179,7 @@ export function MenuPanel() {
                 const configurable = options.length > 0 || addons.length > 0;
                 const simpleKey = cartKey(item.itemid);
                 const simple = cart.find((line) => line.key === simpleKey);
+                const configuredQty = cart.filter((line) => line.itemId === Number(item.itemid)).reduce((sum, line) => sum + line.qty, 0);
                 const from = options.length ? Math.min(...options.map((option) => Number(option.price))) : Number(item.price);
                 return (
                   <article key={item.itemid} className="flex items-start gap-3 rounded-2xl border border-stone-100 bg-white p-3 shadow-sm">
@@ -930,7 +1190,7 @@ export function MenuPanel() {
                     ) : null}
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold leading-snug text-stone-950">{item.itemname}</p>
-                      {item.description && <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed text-stone-500">{item.description}</p>}
+                      {item.description && <p className="mt-1 line-clamp-3 whitespace-pre-wrap break-words text-sm leading-relaxed text-stone-500">{item.description}</p>}
                       <p className="mt-1.5 text-sm font-bold" style={{ color }}>{options.length ? `From ${rupee(from)}` : rupee(from)}</p>
                       {(options.length > 0 || addons.length > 0) && (
                         <p className="mt-1 flex flex-wrap gap-1 text-[11px] font-semibold">
@@ -941,7 +1201,12 @@ export function MenuPanel() {
                     </div>
                     <div className="shrink-0 self-center">
                       {configurable ? (
-                        <button type="button" className="grid h-10 w-10 place-items-center rounded-full text-lg font-bold text-white shadow-md" style={{ background: color }} onClick={() => openItem(item)} aria-label={`Customize ${item.itemname}`}>+</button>
+                        <button type="button" className="relative min-h-11 rounded-full px-3.5 py-2 text-xs font-bold text-white shadow-md" style={{ background: color }} onClick={() => openItem(item)} aria-label={`Choose options for ${item.itemname}`}>
+                          {configuredQty > 0 ? 'Add more' : 'Choose'}
+                          {configuredQty > 0 && (
+                            <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-stone-950 px-1 text-[10px] font-bold text-white">{configuredQty}</span>
+                          )}
+                        </button>
                       ) : (
                         <QtyControl color={color} qty={simple?.qty || 0} onChange={(qty) => {
                           if (!simple && qty > 0) addLine({ key: simpleKey, itemId: item.itemid, name: item.itemname, unitPrice: Number(item.price), qty, addons: [] });
@@ -956,6 +1221,12 @@ export function MenuPanel() {
           </section>
         ))}
         {!items.length && <p className="py-16 text-center text-stone-400">{copy.emptyGuest}</p>}
+        {!!items.length && !visible.length && (
+          <p className="py-16 text-center text-stone-400">
+            No items in this category.
+            <button type="button" className="mt-3 block w-full text-sm font-semibold text-orange-600" onClick={() => setFilter('all')}>{copy.guestAll || 'Show all'}</button>
+          </p>
+        )}
         <OffersList />
       </div>
 
@@ -1010,9 +1281,9 @@ export function MenuPanel() {
               ))}
               <div>
                 <p className="text-sm font-semibold text-stone-700">{copy.serveTitle}</p>
-                <div className={`mt-2 grid gap-2 ${copy.modes.length > 1 ? 'grid-cols-3' : 'grid-cols-1'}`}>
+                <div className={`mt-2 grid gap-2 ${copy.modes.length === 1 ? 'grid-cols-1' : copy.modes.length === 2 ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-3'}`}>
                   {copy.modes.map(([value, label]) => (
-                    <button key={value} type="button" className={`rounded-2xl border px-2 py-3 text-sm font-semibold ${fulfillment === value ? 'border-transparent text-white' : 'border-stone-200 bg-stone-50 text-stone-600'}`} style={fulfillment === value ? { background: color } : undefined} onClick={() => setFulfillment(value)}>{label}</button>
+                    <button key={value} type="button" className={`min-h-11 rounded-2xl border px-2 py-3 text-sm font-semibold ${fulfillment === value ? 'border-transparent text-white' : 'border-stone-200 bg-stone-50 text-stone-600'}`} style={fulfillment === value ? { background: color } : undefined} onClick={() => setFulfillment(value)}>{label}</button>
                   ))}
                 </div>
               </div>
@@ -1050,7 +1321,6 @@ export function MenuPanel() {
         </div>,
         document.body,
       )}
-      {!business && null}
     </>
   );
 }
@@ -1078,15 +1348,25 @@ export function BillPanel() {
       if (invoice.trim()) body.set('invoiceNumber', invoice.trim());
       if (note.trim()) body.set('remarks', note.trim());
       if (file) body.set('file', file);
-      await api('/customer/claims', { method: 'POST', body });
-      const message = 'Bill submitted. The shop will confirm your coins.';
+      const result = await api<{ message?: string }>('/customer/claims', { method: 'POST', body });
+      const message = result.message || 'Bill submitted. The shop will confirm your coins.';
       setDone(message);
       toastOk(message);
+    } catch (err) {
+      toastErr(err instanceof Error ? err.message : 'Could not submit the bill.');
     } finally { setBusy(false); }
   }
 
+  function resetForm() {
+    setDone('');
+    setAmount('');
+    setInvoice('');
+    setNote('');
+    setFile(null);
+  }
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-4">
       <div>
         <h2 className="text-lg font-bold">Bill payment</h2>
         <p className="mt-1 text-sm text-stone-500">Paid at the counter? Send the bill here. Coins go to your signed-in wallet after the shop confirms.</p>
@@ -1096,7 +1376,12 @@ export function BillPanel() {
           <p>Sign in to submit a bill and earn coins in your account.</p>
           <Button className="w-full" onClick={() => setLoginOpen(true)}>Sign in</Button>
         </div>
-      ) : done ? <p className="rounded-2xl bg-emerald-50 px-3 py-3 text-sm text-emerald-700">{done}</p> : (
+      ) : done ? (
+        <div className="space-y-3 rounded-2xl bg-emerald-50 px-3 py-3">
+          <p className="text-sm text-emerald-700">{done}</p>
+          <Button kind="ghost" className="w-full" onClick={resetForm}>Submit another bill</Button>
+        </div>
+      ) : (
         <div className="space-y-3">
           <label className="block text-sm"><span className="mb-1.5 block font-medium">Bill amount</span><input value={amount} onChange={(event) => setAmount(event.target.value.replace(/[^\d.]/g, ''))} inputMode="decimal" placeholder="₹" className="h-11 w-full rounded-xl border border-stone-200 px-3" /></label>
           <label className="block text-sm"><span className="mb-1.5 block font-medium">Invoice number</span><input value={invoice} onChange={(event) => setInvoice(event.target.value)} className="h-11 w-full rounded-xl border border-stone-200 px-3" /></label>
@@ -1208,7 +1493,7 @@ export function ReviewPanel() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 pb-4">
       <div>
         <p className="text-center text-sm font-medium text-stone-600">How was your visit?</p>
         <div className="mt-2 flex justify-center gap-2">

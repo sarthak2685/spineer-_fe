@@ -76,7 +76,7 @@ export function catalogCopy(type?: string | null) {
       addonLabel: 'Add-ons',
       addButton: 'Add to cart',
       stationError: 'Table or room number is required for dine in.',
-      stationNote: 'No table or room? Leave blank.',
+      stationNote: 'Enter your table or room so the shop can find you.',
     };
   }
   if (kind === 'salon') {
@@ -112,7 +112,7 @@ export function catalogCopy(type?: string | null) {
       addButton: 'Add service',
       added: 'Service added',
       stationError: 'Add the chair or seat so the salon knows where to book you.',
-      stationNote: 'No chair or seat? Leave blank.',
+      stationNote: 'Enter the chair or seat number for your booking.',
     };
   }
   if (kind === 'gym') {
@@ -148,7 +148,7 @@ export function catalogCopy(type?: string | null) {
       addButton: 'Add plan',
       added: 'Plan added',
       stationError: 'Add the batch or trainer so the gym knows which slot you want.',
-      stationNote: 'No batch or trainer? Leave blank.',
+      stationNote: 'Enter the batch or trainer for your slot.',
     };
   }
   if (kind === 'clinic') {
@@ -184,7 +184,7 @@ export function catalogCopy(type?: string | null) {
       addButton: 'Add visit',
       added: 'Visit added',
       stationError: 'Add the cabin or patient reference so the clinic can place the appointment.',
-      stationNote: 'No cabin or patient ID? Leave blank.',
+      stationNote: 'Enter the cabin or patient reference for your visit.',
     };
   }
   if (kind === 'retail') {
@@ -217,7 +217,7 @@ export function catalogCopy(type?: string | null) {
       addButton: 'Add to bag',
       added: 'Added to bag',
       stationError: 'Add the counter or pickup spot.',
-      stationNote: 'No counter or pickup spot? Leave blank.',
+      stationNote: 'Enter the counter or pickup spot if the shop asks for it.',
     };
   }
   return shared;
