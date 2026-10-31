@@ -96,6 +96,10 @@ export function SuperBusinesses() {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<'All' | 'Active' | 'Inactive' | 'Expired'>('All');
   const [renewing, setRenewing] = useState<any>(null);
+  const [passwordRow, setPasswordRow] = useState<any>(null);
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [passwordBusy, setPasswordBusy] = useState(false);
   const [days, setDays] = useState('30');
   const [onboard, setOnboard] = useState(false);
   function load() { api<any[]>('/super/businesses').then(setRows); }
@@ -120,6 +124,23 @@ export function SuperBusinesses() {
     setRenewing(null);
     load();
   }
+  async function savePassword(event: FormEvent) {
+    event.preventDefault();
+    if (password.length < 6) { toastErr('Password must be at least 6 characters.'); return; }
+    if (password !== confirm) { toastErr('Passwords do not match.'); return; }
+    setPasswordBusy(true);
+    try {
+      await api(`/super/businesses/${passwordRow.businessid}/password`, { method: 'POST', body: JSON.stringify({ password, confirm }) });
+      toastOk('Owner password updated.');
+      setPasswordRow(null);
+      setPassword('');
+      setConfirm('');
+    } catch {
+      /* api toasts */
+    } finally {
+      setPasswordBusy(false);
+    }
+  }
   return <Frame>
     <PageTitle kicker="Platform" title="Businesses" text="Pause a shop, extend its period, or onboard a new one." />
     <div className="mb-4"><Button type="button" onClick={() => setOnboard(true)}>Onboard</Button></div>
@@ -142,6 +163,7 @@ export function SuperBusinesses() {
       { key: 'isactive', label: 'Status', render: (row) => <Status value={shopState(row)} /> },
       { key: 'actions', label: 'Actions', render: (row) => <RowMenu items={[
         { label: 'Renew', onClick: () => { setDays('30'); setRenewing(row); } },
+        { label: 'Change password', onClick: () => { setPassword(''); setConfirm(''); setPasswordRow(row); } },
         { label: row.isactive ? 'Pause' : 'Resume', onClick: () => toggle(row) },
         ...((row.publicslug || row.businesstoken) ? [{ label: 'Open guest page', to: `/play/${row.publicslug || row.businesstoken}` }] : []),
       ]} /> },
@@ -151,6 +173,15 @@ export function SuperBusinesses() {
         <Form onSubmit={renew} className="space-y-3">
           <Field label="More days" value={days} inputMode="numeric" onChange={(event) => setDays(event.target.value.replace(/\D/g, '').slice(0, 4))} required />
           <Button type="submit" className="w-full">Extend period</Button>
+        </Form>
+      </Modal>
+    )}
+    {passwordRow && (
+      <Modal title={`Change password · ${passwordRow.businessname}`} text="Sets a new login password for this shop’s owner. Current password is not shown." onClose={() => setPasswordRow(null)}>
+        <Form onSubmit={savePassword} className="space-y-3">
+          <Field label="New password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
+          <Field label="Confirm password" type="password" value={confirm} onChange={(event) => setConfirm(event.target.value)} required />
+          <Button type="submit" className="w-full" busy={passwordBusy}>Update password</Button>
         </Form>
       </Modal>
     )}

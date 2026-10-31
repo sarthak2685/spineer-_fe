@@ -72,10 +72,7 @@ function Wheel({ prizes, busy, onPlay, onReveal, accent }: { prizes: PrizeSlice[
   const frameRef = useRef(0);
   const spinningRef = useRef(false);
   const [locked, setLocked] = useState(false);
-  const slices = prizes.length ? prizes : [
-    { name: 'Try again', coins: 0 }, { name: '10 coins', coins: 10 }, { name: '25 coins', coins: 25 },
-    { name: '50 coins', coins: 50 }, { name: '5 coins', coins: 5 }, { name: '100 coins', coins: 100 },
-  ];
+  const slices = prizes;
   const sliceKey = slices.map((slice) => `${slice.coins}|${slice.name}`).join('||');
 
   function draw(drawn: PrizeSlice[]) {
@@ -136,6 +133,10 @@ function Wheel({ prizes, busy, onPlay, onReveal, accent }: { prizes: PrizeSlice[
 
   useEffect(() => {
     if (spinningRef.current) return;
+    if (!sliceKey) {
+      draw([]);
+      return;
+    }
     const drawn = sliceKey.split('||').map((part) => {
       const splitAt = part.indexOf('|');
       return { coins: Number(part.slice(0, splitAt)), name: part.slice(splitAt + 1) };
@@ -153,13 +154,14 @@ function Wheel({ prizes, busy, onPlay, onReveal, accent }: { prizes: PrizeSlice[
   }
 
   async function spin() {
-    if (busy || locked || spinningRef.current) return;
+    if (busy || locked || spinningRef.current || !slices.length) return;
     setLocked(true);
     spinningRef.current = true;
     playSpin();
     try {
       const result = await onPlay();
       const board = result.prizes?.length ? result.prizes : slices;
+      if (!board.length) throw new Error('No prizes configured.');
       const nextKey = board.map((slice) => `${slice.coins}|${slice.name}`).join('||');
       if (nextKey !== sliceKey) draw(board);
       const arc = 360 / board.length;
@@ -222,7 +224,7 @@ function Wheel({ prizes, busy, onPlay, onReveal, accent }: { prizes: PrizeSlice[
           <canvas ref={canvas} className="h-full w-full rounded-full will-change-transform" style={{ transform: 'translate3d(0,0,0)' }} />
         </div>
       </div>
-      <button type="button" disabled={busy || locked} onClick={spin} className="absolute z-20 grid h-16 w-16 place-items-center rounded-full text-xs font-bold tracking-[0.16em] text-white shadow-[0_10px_24px_rgba(0,0,0,.28)] ring-4 ring-amber-200 disabled:opacity-70 sm:h-[4.5rem] sm:w-[4.5rem] sm:text-sm" style={{ background: accent }}>{busy || locked ? <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-r-transparent" /> : 'SPIN'}</button>
+      <button type="button" disabled={busy || locked || !slices.length} onClick={spin} className="absolute z-20 grid h-16 w-16 place-items-center rounded-full text-xs font-bold tracking-[0.16em] text-white shadow-[0_10px_24px_rgba(0,0,0,.28)] ring-4 ring-amber-200 disabled:opacity-70 sm:h-[4.5rem] sm:w-[4.5rem] sm:text-sm" style={{ background: accent }}>{busy || locked ? <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-r-transparent" /> : 'SPIN'}</button>
     </div>
   );
 }

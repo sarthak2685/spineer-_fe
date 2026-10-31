@@ -761,7 +761,7 @@ export function BusinessProfilePage() {
     <Frame>
       <PageTitle title="Business profile" text="Keep shop details, links, and images up to date for guests and your QR page." />
 
-      <div className="mb-4 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="mb-4 flex w-full min-w-0 max-w-full gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {PROFILE_SECTIONS.map((section) => (
           <button
             key={section.id}
@@ -954,7 +954,7 @@ export function OrdersPage() {
     <ListToolbar from={list.from} to={list.to} onApply={list.applyDates}>
       <CsvButton path="/business/menu/orders" from={list.from} to={list.to} extra={`&status=${encodeURIComponent(status)}`} filename="orders.csv" />
     </ListToolbar>
-    <div className="mb-4 flex gap-2 overflow-x-auto">{filters.map((item) => <button key={item} className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-semibold ${status === item ? 'bg-orange-600 text-white' : 'bg-white text-stone-500 ring-1 ring-stone-200'}`} onClick={() => setStatus(item)}>{item}</button>)}</div>
+    <div className="mb-4 flex w-full min-w-0 max-w-full gap-2 overflow-x-auto">{filters.map((item) => <button key={item} className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-semibold ${status === item ? 'bg-orange-600 text-white' : 'bg-white text-stone-500 ring-1 ring-stone-200'}`} onClick={() => setStatus(item)}>{item}</button>)}</div>
     <Table empty={list.loading ? 'Loading…' : 'No orders for this filter.'} rows={list.rows} columns={[
       { key: 'ordernumber', label: 'Order', render: (row) => <span className="inline-flex flex-wrap items-center gap-2"><Link className="font-medium text-orange-600" to={`/business/menu/orders/${row.orderid}`}>{row.ordernumber}</Link><Status value={row.status} /></span> },
       { key: 'customername', label: 'Customer' },
@@ -1070,95 +1070,168 @@ export function PushPage() {
     <div className="space-y-2">{(Array.isArray(rows) ? rows : []).map((row) => <Card key={row.notificationid || row.templateid}><p className="font-medium text-stone-950">{row.title}</p><p className="mt-1 text-sm text-stone-500">{row.message}</p>{row.recipientcount != null && <p className="mt-2 text-xs font-medium text-stone-400">{row.recipientcount} in the inbox · {pushSegments.find((item) => item.value === row.targetsegment)?.label || row.targetsegment}</p>}</Card>)}{!(Array.isArray(rows) && rows.length) && <Card><p className="text-sm text-stone-500">No messages sent yet.</p></Card>}</div>
   </Frame>;
 }
+type PrizeDraft = { key: string; id?: number; prizeName: string; coins: string; winningPercentage: string };
+
+function emptyPrize(): PrizeDraft {
+  return { key: `new-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, prizeName: '', coins: '0', winningPercentage: '0' };
+}
+
 export function GameAdminPage() {
   const { code = 'SpinWheel' } = useParams();
   const [configs, setConfigs] = useState<any[]>([]);
-  const [prizes, setPrizes] = useState<any[]>([]);
-  const [configId, setConfigId] = useState<number | null>(null);
-  const [addOpen, setAddOpen] = useState(false);
+  const [mode, setMode] = useState<'create' | 'edit' | 'view' | null>(null);
+  const [editing, setEditing] = useState<any>(null);
+  const [name, setName] = useState('');
+  const [prizes, setPrizes] = useState<PrizeDraft[]>([emptyPrize()]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
   const tabs = ['SpinWheel', 'ScratchCard', 'MysteryGiftBox', 'SlotMachine'];
-  const total = prizes.reduce((sum, prize) => sum + Number(prize.winningpercentage || 0), 0);
+  const total = prizes.reduce((sum, prize) => sum + Number(prize.winningPercentage || 0), 0);
+  const readOnly = mode === 'view';
 
-  async function load(prefer?: number | null) {
+  async function load() {
     const data = await api<any>(`/business/games/${code}`);
-    const rows = Array.isArray(data) ? data : data.configs || [];
-    setConfigs(rows);
-    const picked = rows.find((row: { gameconfigurationid: number }) => row.gameconfigurationid === prefer) || rows[0];
-    if (!picked) {
-      setConfigId(null);
-      setPrizes([]);
-      return;
-    }
-    setConfigId(picked.gameconfigurationid);
-    setPrizes(await api(`/business/prizes/${picked.gameconfigurationid}`));
+    setConfigs(Array.isArray(data) ? data : data.configs || []);
   }
 
-  useEffect(() => { load().catch(() => { setConfigs([]); setPrizes([]); }); }, [code]);
+  useEffect(() => { load().catch(() => setConfigs([])); setMode(null); }, [code]);
 
-  async function openConfig(id: number) {
-    setConfigId(id);
-    setPrizes(await api(`/business/prizes/${id}`));
+  function openCreate() {
+    setEditing(null);
+    setName(`New ${code.replace(/([A-Z])/g, ' $1').trim()}`);
+    setPrizes([emptyPrize()]);
+    setError('');
+    setMode('create');
+  }
+
+  async function openModal(row: any, next: 'edit' | 'view') {
+    const rows = await api<any[]>(`/business/prizes/${row.gameconfigurationid}`);
+    setEditing(row);
+    setName(String(row.configurationname || ''));
+    setPrizes(rows.length
+      ? rows.map((prize) => ({
+          key: String(prize.prizeconfigurationid),
+          id: Number(prize.prizeconfigurationid),
+          prizeName: String(prize.prizename || ''),
+          coins: String(Number(prize.coins || 0)),
+          winningPercentage: String(Number(prize.winningpercentage || 0)),
+        }))
+      : [emptyPrize()]);
+    setError('');
+    setMode(next);
+  }
+
+  async function save() {
+    const cleaned = name.trim();
+    if (!cleaned) { setError('Enter a configuration name.'); return; }
+    const lines = prizes.filter((prize) => prize.prizeName.trim());
+    if (!lines.length) { setError('Add at least one prize.'); return; }
+    if (total !== 100) { setError('Winning percentages must add up to 100.'); return; }
+    setBusy(true);
+    setError('');
+    try {
+      if (mode === 'create') {
+        const created = await api<{ id: number }>(`/business/games/${code}`, { method: 'POST', body: JSON.stringify({ name: cleaned }) });
+        for (const prize of lines) {
+          await api('/business/prizes', { method: 'POST', body: JSON.stringify({ configId: created.id, prizeName: prize.prizeName.trim(), coins: prize.coins, winningPercentage: prize.winningPercentage }) });
+        }
+        toastOk('Configuration created.');
+      } else if (mode === 'edit' && editing) {
+        if (cleaned !== String(editing.configurationname || '')) {
+          await api(`/business/games/${editing.gameconfigurationid}/rename`, { method: 'POST', body: JSON.stringify({ name: cleaned }) });
+        }
+        const keep = new Set(lines.filter((prize) => prize.id).map((prize) => prize.id!));
+        const existing = await api<any[]>(`/business/prizes/${editing.gameconfigurationid}`);
+        for (const prize of existing) {
+          if (!keep.has(Number(prize.prizeconfigurationid))) {
+            await api(`/business/prizes/${prize.prizeconfigurationid}/delete`, { method: 'POST' });
+          }
+        }
+        for (const prize of lines) {
+          await api('/business/prizes', {
+            method: 'POST',
+            body: JSON.stringify({
+              id: prize.id,
+              configId: editing.gameconfigurationid,
+              prizeName: prize.prizeName.trim(),
+              coins: prize.coins,
+              winningPercentage: prize.winningPercentage,
+            }),
+          });
+        }
+        toastOk('Configuration updated.');
+      }
+      setMode(null);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save configuration.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   return <Frame>
-    <PageTitle title="Games" text="The percentages on the configuration marked In use are the chances a customer gets. They should add up to 100." actions={configId ? <Button onClick={() => setAddOpen(true)}>Add sector</Button> : undefined} />
-    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-      <div className="flex gap-1 overflow-x-auto rounded-2xl bg-white p-1 shadow-sm ring-1 ring-stone-200">{tabs.map((tab) => <Link key={tab} to={`/business/games/${tab}`} className={`shrink-0 rounded-xl px-3 py-2 text-sm font-semibold ${tab === code ? 'bg-orange-600 text-white' : 'text-stone-500 hover:bg-stone-100'}`}>{tab.replace(/([A-Z])/g, ' $1').trim()}</Link>)}</div>
-      <Button kind="ghost" onClick={async () => { const created = await api<{ id: number }>(`/business/games/${code}`, { method: 'POST', body: JSON.stringify({ name: `New ${code}` }) }); await load(created.id); }}>New configuration</Button>
-    </div>
-    <div className="space-y-2">{configs.map((config) => (
-      <Card key={config.gameconfigurationid} className={config.gameconfigurationid === configId ? 'ring-2 ring-orange-600' : ''}>
-        <div className="flex items-center justify-between gap-3">
-          <button type="button" className="min-w-0 flex-1 text-left" onClick={() => openConfig(config.gameconfigurationid)}>
-            <p className="font-medium text-stone-950">{config.configurationname}</p>
-            <p className="text-xs text-stone-500">{config.isactive ? 'In use on the shop' : 'Saved, not in use'}</p>
-          </button>
-          <div className="flex shrink-0 items-center gap-2">
-            {!config.isactive && <Button type="button" kind="ghost" className="!h-8 px-3" onClick={() => api(`/business/games/${config.gameconfigurationid}/active`, { method: 'POST', body: JSON.stringify({ isActive: true }) }).then(() => load(config.gameconfigurationid))}>Use this</Button>}
-            <IconButton type="button" kind="ghost" label={`Delete ${config.configurationname}`} onClick={() => { if (!window.confirm(`Delete ${config.configurationname}? Its sectors are removed too.`)) return; return api(`/business/games/${config.gameconfigurationid}/delete`, { method: 'POST' }).then(() => load(config.gameconfigurationid === configId ? null : configId)); }}><ActionIcon name="trash" /></IconButton>
+    <PageTitle title="Games" text="One Active configuration runs on the shop for each game. Percentages in a config must add up to 100." actions={<Button onClick={openCreate}>New configuration</Button>} />
+    <div className="mb-4 flex w-full min-w-0 max-w-full gap-1 overflow-x-auto rounded-2xl bg-white p-1 shadow-sm ring-1 ring-stone-200">{tabs.map((tab) => <Link key={tab} to={`/business/games/${tab}`} className={`shrink-0 rounded-xl px-3 py-2 text-sm font-semibold ${tab === code ? 'bg-orange-600 text-white' : 'text-stone-500 hover:bg-stone-100'}`}>{tab.replace(/([A-Z])/g, ' $1').trim()}</Link>)}</div>
+    <Table
+      empty="No configurations yet."
+      rows={configs}
+      columns={[
+        {
+          key: 'configurationname',
+          label: 'Configuration name',
+          render: (row) => (
+            <span className="inline-flex flex-wrap items-center gap-2">
+              <span className="font-medium text-stone-950">{row.configurationname}</span>
+              <span title={row.isactive ? 'Active — live on the shop for this game' : 'Inactive — saved, not live'}>
+                <Status value={row.isactive ? 'Active' : 'Inactive'} />
+              </span>
+            </span>
+          ),
+        },
+        {
+          key: 'actions',
+          label: 'Action',
+          render: (row) => (
+            <RowMenu items={[
+              ...(!row.isactive ? [{ label: 'Use this', onClick: () => api(`/business/games/${row.gameconfigurationid}/active`, { method: 'POST', body: JSON.stringify({ isActive: true }) }).then(() => { toastOk('This configuration is now Active.'); return load(); }) }] : []),
+              { label: 'View', onClick: () => openModal(row, 'view') },
+              { label: 'Edit', onClick: () => openModal(row, 'edit') },
+              { label: 'Delete', danger: true, onClick: () => { if (!window.confirm(`Delete ${row.configurationname}? Its prizes are removed too.`)) return; return api(`/business/games/${row.gameconfigurationid}/delete`, { method: 'POST' }).then(() => { toastOk('Configuration deleted.'); return load(); }); } },
+            ]} />
+          ),
+        },
+      ]}
+    />
+    {mode && (
+      <Modal title={mode === 'create' ? 'New configuration' : mode === 'edit' ? 'Edit configuration' : 'View configuration'} onClose={() => setMode(null)}>
+        <div className="grid gap-3">
+          <label className="block text-sm">
+            <span className="mb-1.5 block font-medium">Configuration name</span>
+            <input value={name} onChange={(event) => setName(event.target.value)} disabled={readOnly} className="h-11 w-full rounded-xl border border-stone-200 px-3 disabled:bg-stone-50" />
+          </label>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-sm font-medium text-stone-700">Prizes</p>
+            {!readOnly && <button type="button" className="text-sm font-semibold text-orange-600" onClick={() => setPrizes((current) => [...current, emptyPrize()])}>Add prize</button>}
           </div>
+          <div className="space-y-2">
+            {prizes.map((prize) => (
+              <div key={prize.key} className="grid gap-2 rounded-2xl border border-stone-100 bg-stone-50 p-3 sm:grid-cols-[1fr_5rem_5rem_auto]">
+                <input value={prize.prizeName} onChange={(event) => setPrizes((current) => current.map((row) => row.key === prize.key ? { ...row, prizeName: event.target.value } : row))} disabled={readOnly} placeholder="Prize name" className="h-10 rounded-xl border border-stone-200 px-3 disabled:bg-white" />
+                <input value={prize.coins} onChange={(event) => setPrizes((current) => current.map((row) => row.key === prize.key ? { ...row, coins: event.target.value.replace(/[^\d]/g, '') } : row))} disabled={readOnly} inputMode="numeric" placeholder="Coins" className="h-10 rounded-xl border border-stone-200 px-3 disabled:bg-white" />
+                <input value={prize.winningPercentage} onChange={(event) => setPrizes((current) => current.map((row) => row.key === prize.key ? { ...row, winningPercentage: event.target.value.replace(/[^\d]/g, '') } : row))} disabled={readOnly} inputMode="numeric" placeholder="%" className="h-10 rounded-xl border border-stone-200 px-3 disabled:bg-white" />
+                {!readOnly && (
+                  <IconButton type="button" kind="ghost" label="Remove prize" onClick={() => setPrizes((current) => current.length <= 1 ? current : current.filter((row) => row.key !== prize.key))}>
+                    <ActionIcon name="trash" />
+                  </IconButton>
+                )}
+              </div>
+            ))}
+          </div>
+          <p className={`text-sm ${total === 100 ? 'text-stone-500' : 'text-rose-600'}`}>Chances add up to {total}%.</p>
+          {error && <Alert text={error} />}
+          {readOnly ? <Button type="button" className="w-full" onClick={() => setMode(null)}>Close</Button> : <Button type="button" className="w-full" busy={busy} onClick={save}>{mode === 'create' ? 'Create configuration' : 'Save changes'}</Button>}
         </div>
-      </Card>
-    ))}</div>
-    {!!prizes.length && <p className={`mb-2 mt-4 text-sm ${total === 100 ? 'text-stone-500' : 'text-rose-600'}`}>Chances add up to {total}%. {total === 100 ? 'A customer’s spin uses these odds.' : 'Set them to 100 so every spin lands on a sector you chose.'}</p>}
-    <div className={`space-y-2 ${prizes.length ? '' : 'mt-4'}`}>{prizes.map((prize) => (
-      <Card key={prize.prizeconfigurationid}>
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="font-semibold text-stone-950">{prize.prizename}</p>
-            <p className="text-sm text-stone-500">{Number(prize.coins)} coins</p>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <label className="flex items-center gap-1 text-sm font-semibold text-stone-700">
-              <input
-                key={`${prize.prizeconfigurationid}-${prize.winningpercentage}`}
-                type="number"
-                min={0}
-                max={100}
-                defaultValue={Number(prize.winningpercentage)}
-                aria-label={`Winning chance for ${prize.prizename}`}
-                className="h-9 w-16 rounded-xl border border-stone-200 px-2 text-right"
-                onBlur={(event) => {
-                  const next = Number(event.target.value);
-                  if (!Number.isFinite(next) || next === Number(prize.winningpercentage)) return;
-                  api('/business/prizes', { method: 'POST', body: JSON.stringify({ id: prize.prizeconfigurationid, configId, prizeName: prize.prizename, coins: prize.coins, winningPercentage: next }) }).then(() => { if (configId) return api(`/business/prizes/${configId}`).then(setPrizes); });
-                }}
-              />
-              %
-            </label>
-            <IconButton type="button" kind="ghost" label={`Delete ${prize.prizename}`} onClick={() => api(`/business/prizes/${prize.prizeconfigurationid}/delete`, { method: 'POST' }).then(() => { if (configId) return api(`/business/prizes/${configId}`).then(setPrizes); })}><ActionIcon name="trash" /></IconButton>
-          </div>
-        </div>
-      </Card>
-    ))}</div>
-    {addOpen && configId && (
-      <Modal title="Add sector" onClose={() => setAddOpen(false)}>
-        <Form className="grid gap-3" onSubmit={(e) => { e.preventDefault(); const form = Object.fromEntries(new FormData(e.currentTarget).entries()); return api('/business/prizes', { method: 'POST', body: JSON.stringify({ ...form, configId }) }).then(() => { setAddOpen(false); api(`/business/prizes/${configId}`).then(setPrizes); }); }}>
-          <Field label="Prize" name="prizeName" required />
-          <Field label="Coins" name="coins" />
-          <Field label="Winning %" name="winningPercentage" />
-          <Button type="submit" className="w-full">Add sector</Button>
-        </Form>
       </Modal>
     )}
   </Frame>;

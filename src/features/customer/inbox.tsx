@@ -227,7 +227,7 @@ export function NotificationsPage() {
         <Button kind="ghost" onClick={markAll}>Mark all read</Button>
       </div>
       <div className="relative mb-4">
-        <div className="flex gap-2 overflow-x-auto pb-1" style={{ maskImage: 'linear-gradient(90deg, transparent, black 8%, black 92%, transparent)', WebkitMaskImage: 'linear-gradient(90deg, transparent, black 8%, black 92%, transparent)' }}>
+        <div className="flex w-full min-w-0 max-w-full gap-2 overflow-x-auto pb-1" style={{ maskImage: 'linear-gradient(90deg, transparent, black 8%, black 92%, transparent)', WebkitMaskImage: 'linear-gradient(90deg, transparent, black 8%, black 92%, transparent)' }}>
           {noticeFilters.map((item) => {
             const on = filter === item.id;
             return (

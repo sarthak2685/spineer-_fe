@@ -557,6 +557,14 @@ export function PlayPanel() {
   const [saveOpen, setSaveOpen] = useState(false);
   const [winOpen, setWinOpen] = useState(false);
 
+  useEffect(() => {
+    const rows = ((hub?.prizes || []) as { gamecode?: string; prizename?: string; name?: string; coins?: number | string }[])
+      .filter((row) => row.gamecode === game)
+      .map((row) => ({ name: String(row.prizename || row.name || ''), coins: Number(row.coins || 0) }))
+      .filter((row) => row.name);
+    setPrizes(rows);
+  }, [hub, game]);
+
   async function play() {
     setError('');
     setResult(null);
@@ -717,11 +725,11 @@ function OffersList() {
               const closed = status === 'Pending' || status === 'Approved';
               return (
                 <div key={offer.rewardid} className="w-full shrink-0 snap-start">
-                  <button type="button" disabled={closed} className="flex h-[6.5rem] w-full items-center gap-3 rounded-2xl border border-amber-100 bg-amber-50/70 p-3 text-left disabled:opacity-70" onClick={() => redeem(offer)}>
+                  <button type="button" disabled={closed} className="flex w-full items-start gap-3 rounded-2xl border border-amber-100 bg-amber-50/70 p-3 text-left disabled:opacity-70" onClick={() => redeem(offer)}>
                     <OfferMark image={offer.imagepath} />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-semibold leading-snug text-stone-950">{offer.rewardname}</p>
-                      {offer.description && <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-stone-500">{offer.description}</p>}
+                      <p className="whitespace-pre-wrap break-words font-semibold leading-snug text-stone-950">{offer.rewardname}</p>
+                      {offer.description && <p className="mt-0.5 whitespace-pre-wrap break-words text-xs leading-relaxed text-stone-500">{offer.description}</p>}
                       <p className="mt-1 text-xs font-semibold text-amber-700">{offer.coinsrequired} coins</p>
                     </div>
                     <span className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${closed ? 'bg-stone-200 text-stone-600' : 'bg-orange-600 text-white'}`}>{offerLabel(status)}</span>
@@ -1049,8 +1057,9 @@ export function MenuPanel() {
 
 export function BillPanel() {
   const { token } = useGuestPlace();
-  const [name, setName] = useState('');
-  const [mobile, setMobile] = useState('');
+  const auth = useAuth();
+  const signedIn = Boolean(auth.user && auth.user.role === 'Customer' && !auth.user.name.startsWith('Guest_'));
+  const [loginOpen, setLoginOpen] = useState(false);
   const [amount, setAmount] = useState('');
   const [invoice, setInvoice] = useState('');
   const [note, setNote] = useState('');
@@ -1059,22 +1068,20 @@ export function BillPanel() {
   const [done, setDone] = useState('');
 
   async function submit() {
-    if (!name.trim()) { toastErr('Enter your name.'); return; }
-    if (!isTenDigitMobile(mobile)) { toastErr('Enter a 10-digit mobile number.'); return; }
+    if (!signedIn) { setLoginOpen(true); return; }
     if (!(Number(amount) > 0)) { toastErr('Enter the bill amount.'); return; }
     setBusy(true);
     try {
       const body = new FormData();
       body.set('token', token);
-      body.set('customerName', name.trim());
-      body.set('mobile', mobile);
       body.set('amount', amount);
       if (invoice.trim()) body.set('invoiceNumber', invoice.trim());
       if (note.trim()) body.set('remarks', note.trim());
       if (file) body.set('file', file);
-      const result = await api<{ message: string }>('/public/claims', { method: 'POST', body });
-      setDone(result.message);
-      toastOk(result.message);
+      await api('/customer/claims', { method: 'POST', body });
+      const message = 'Bill submitted. The shop will confirm your coins.';
+      setDone(message);
+      toastOk(message);
     } finally { setBusy(false); }
   }
 
@@ -1082,12 +1089,15 @@ export function BillPanel() {
     <div className="space-y-4">
       <div>
         <h2 className="text-lg font-bold">Bill payment</h2>
-        <p className="mt-1 text-sm text-stone-500">Paid at the counter? Send the bill here. The shop confirms it and adds the coins.</p>
+        <p className="mt-1 text-sm text-stone-500">Paid at the counter? Send the bill here. Coins go to your signed-in wallet after the shop confirms.</p>
       </div>
-      {done ? <p className="rounded-2xl bg-emerald-50 px-3 py-3 text-sm text-emerald-700">{done}</p> : (
+      {!signedIn ? (
+        <div className="space-y-3 rounded-2xl bg-amber-50 px-3 py-3 text-sm text-amber-900">
+          <p>Sign in to submit a bill and earn coins in your account.</p>
+          <Button className="w-full" onClick={() => setLoginOpen(true)}>Sign in</Button>
+        </div>
+      ) : done ? <p className="rounded-2xl bg-emerald-50 px-3 py-3 text-sm text-emerald-700">{done}</p> : (
         <div className="space-y-3">
-          <label className="block text-sm"><span className="mb-1.5 block font-medium">Name</span><input value={name} onChange={(event) => setName(event.target.value)} className="h-11 w-full rounded-xl border border-stone-200 px-3" /></label>
-          <label className="block text-sm"><span className="mb-1.5 block font-medium">Mobile</span><input value={mobile} onChange={(event) => setMobile(digitsOnly(event.target.value))} inputMode="numeric" maxLength={10} placeholder="10-digit mobile" className="h-11 w-full rounded-xl border border-stone-200 px-3" /></label>
           <label className="block text-sm"><span className="mb-1.5 block font-medium">Bill amount</span><input value={amount} onChange={(event) => setAmount(event.target.value.replace(/[^\d.]/g, ''))} inputMode="decimal" placeholder="₹" className="h-11 w-full rounded-xl border border-stone-200 px-3" /></label>
           <label className="block text-sm"><span className="mb-1.5 block font-medium">Invoice number</span><input value={invoice} onChange={(event) => setInvoice(event.target.value)} className="h-11 w-full rounded-xl border border-stone-200 px-3" /></label>
           <label className="block text-sm"><span className="mb-1.5 block font-medium">Note</span><textarea value={note} onChange={(event) => setNote(event.target.value)} rows={3} className="w-full rounded-xl border border-stone-200 px-3 py-2" /></label>
@@ -1098,6 +1108,7 @@ export function BillPanel() {
           <Button className="w-full" busy={busy} onClick={submit}>Submit bill</Button>
         </div>
       )}
+      {loginOpen && !signedIn && <SaveCoinsModal token={token} onClose={() => setLoginOpen(false)} />}
       <OffersList />
     </div>
   );

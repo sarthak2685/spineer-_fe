@@ -245,7 +245,7 @@ export function HistoryPage() {
   const games = ['All', 'SpinWheel', 'ScratchCard', 'MysteryGiftBox', 'SlotMachine'];
   return <Frame>
     <PageTitle title="Play history" />
-    <div className="mb-4 flex gap-2 overflow-x-auto">{games.map((item) => <button key={item} type="button" className={`shrink-0 rounded-full px-3 py-1.5 text-sm font-semibold ${game === item ? 'bg-orange-600 text-white' : 'bg-white text-stone-600 ring-1 ring-stone-200'}`} onClick={() => { setGame(item); load(item); }}>{item === 'All' ? 'All' : item.replace(/([A-Z])/g, ' $1').trim()}</button>)}</div>
+    <div className="mb-4 flex w-full min-w-0 max-w-full gap-2 overflow-x-auto">{games.map((item) => <button key={item} type="button" className={`shrink-0 rounded-full px-3 py-1.5 text-sm font-semibold ${game === item ? 'bg-orange-600 text-white' : 'bg-white text-stone-600 ring-1 ring-stone-200'}`} onClick={() => { setGame(item); load(item); }}>{item === 'All' ? 'All' : item.replace(/([A-Z])/g, ' $1').trim()}</button>)}</div>
     <Table empty="No plays yet." rows={rows} columns={[{ key: 'businessname', label: 'Business' }, { key: 'gamecode', label: 'Game', render: (row) => <Status value={row.gamecode} /> }, { key: 'coinswon', label: 'Coins', render: (row) => `${row.coinswon} coins` }]} />
   </Frame>;
 }

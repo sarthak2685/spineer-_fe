@@ -293,7 +293,7 @@ export function Workspace({ groups, children, title, variant = 'default', bleed 
   }
   return (
     <PageMetaContext.Provider value={setMeta}>
-      <div className="min-h-screen bg-orange-50 lg:grid lg:grid-cols-[240px_1fr]">
+      <div className="min-h-screen overflow-x-clip bg-orange-50 lg:grid lg:grid-cols-[240px_1fr]">
         <aside className="sticky top-0 hidden h-dvh min-h-0 flex-col border-r border-stone-200 bg-white lg:flex">
           <Sidebar />
         </aside>
@@ -305,9 +305,9 @@ export function Workspace({ groups, children, title, variant = 'default', bleed 
             </aside>
           </div>
         )}
-        <div className="min-w-0">
+        <div className="min-w-0 max-w-full overflow-x-clip">
           <header className="sticky top-0 z-20 border-b border-stone-200 bg-white/95 px-4 py-2.5 shadow-[0_1px_0_rgba(0,0,0,0.04)] backdrop-blur sm:px-6">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-2">
               <div className="flex min-w-0 flex-1 items-center gap-3">
                 <button type="button" className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-stone-200 bg-white text-stone-700 lg:hidden" aria-label="Open menu" onClick={() => { setAccountOpen(false); setMenuOpen(true); }}>
                   <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
@@ -350,7 +350,7 @@ export function Workspace({ groups, children, title, variant = 'default', bleed 
               </div>
             </div>
           </header>
-          <main className={bleed ? bottom : platform ? `px-4 pt-6 sm:px-6 ${bottom}` : `mx-auto max-w-6xl px-4 pt-6 sm:px-8 ${bottom}`}><Rise key={location.pathname}>{children ?? <Outlet />}</Rise></main>
+          <main className={`min-w-0 max-w-full overflow-x-clip ${bleed ? bottom : platform ? `px-4 pt-6 sm:px-6 ${bottom}` : `mx-auto max-w-6xl px-4 pt-6 sm:px-8 ${bottom}`}`}><Rise key={location.pathname}>{children ?? <Outlet />}</Rise></main>
         </div>
       </div>
     </PageMetaContext.Provider>
